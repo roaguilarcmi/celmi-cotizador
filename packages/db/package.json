@@ -11,7 +11,9 @@
     "migrar": "node --env-file=.env.local scripts/migrar.ts",
     "test": "vitest run",
     "typecheck": "tsc -p .",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "primer-admin": "node --env-file=.env.local scripts/primer-administrador.ts",
+    "verificar": "node --env-file=.env.local scripts/verificar.ts"
   },
   "dependencies": {
     "postgres": "3.4.9"
