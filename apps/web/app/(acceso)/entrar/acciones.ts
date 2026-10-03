@@ -25,13 +25,20 @@ export async function iniciarSesion(_previo: EstadoEntrar, datos: FormData): Pro
 
   if (error || !data.user) {
     await registrarAcceso('fallido', { correo });
+    // Sólo el código del error (nunca la contraseña) para poder diagnosticar desde la consola del servidor.
+    console.warn(
+      `[entrar] inicio rechazado · código=${error?.code ?? 'sin_usuario'} · estado=${error?.status ?? '—'}`,
+    );
+    if (error?.code === 'over_request_rate_limit') {
+      return { error: 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.' };
+    }
+    if (error && error.code !== 'invalid_credentials') {
+      return {
+        error: `No pudimos iniciar tu sesión (código ${error.code ?? error.status}). Avisa a un administrador.`,
+      };
+    }
     // Mensaje genérico: no revela si el correo existe.
-    return {
-      error:
-        error?.code === 'over_request_rate_limit'
-          ? 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.'
-          : 'Correo o contraseña incorrectos.',
-    };
+    return { error: 'Correo o contraseña incorrectos.' };
   }
 
   const { data: perfil } = await clienteAdmin()
