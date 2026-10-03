@@ -1,0 +1,10 @@
+node_modules
+.next
+.expo
+dist
+package-lock.json
+packages/ui/src/theme.css
+apps/mobile/dist
+apps/mobile/AGENTS.md
+.claude
+apps/web/next-env.d.ts

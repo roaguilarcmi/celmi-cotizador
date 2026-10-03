@@ -1,0 +1,14 @@
+{
+  "name": "@celmi/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Esquema de base de datos (PostgreSQL) y migraciones versionadas. Se construye en la Fase 1.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "lint": "eslint ."
+  }
+}

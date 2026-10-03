@@ -1,0 +1,21 @@
+{
+  "name": "@celmi/validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Esquemas de validación (Zod) compartidos entre web, Android y servidor.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p .",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}

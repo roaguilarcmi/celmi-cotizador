@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Cotizador CELMI",
+    "slug": "celmi-cotizador",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "mx.com.celmi.cotizador"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#29235C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "mx.com.celmi.cotizador"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "celmi"
+  }
+}

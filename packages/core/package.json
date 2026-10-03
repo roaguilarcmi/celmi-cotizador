@@ -1,0 +1,20 @@
+{
+  "name": "@celmi/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lógica de negocio compartida: costos, monedas, utilidad, precios, IVA, redondeos, folios e importe con letra.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures/epoxemex": "./src/fixtures/epoxemex.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p .",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}

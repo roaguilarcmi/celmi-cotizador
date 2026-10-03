@@ -1,0 +1,120 @@
+/* GENERADO por packages/ui/scripts/gen-css.ts a partir de tokens.ts. No editar a mano. */
+
+:root {
+  color-scheme: light;
+  --c-fondo: #F4F5FA;
+  --c-superficie: #FFFFFF;
+  --c-superficie-2: #F7F8FC;
+  --c-texto: #16133A;
+  --c-texto-suave: #55536E;
+  --c-borde: #E3E4EE;
+  --c-nav: #29235C;
+  --c-nav-texto: #CBC8E6;
+  --c-nav-activo: #3B3580;
+  --c-acento: #0064EC;
+  --c-acento-texto: #0052C9;
+  --c-acento-suave: #E6F0FE;
+  --c-sobre-acento: #FFFFFF;
+  --c-paso: #29235C;
+  --c-exito: #0F7A47;
+  --c-exito-suave: #E3F4EB;
+  --c-aviso: #9A5800;
+  --c-aviso-suave: #FDF0DC;
+  --c-peligro: #B42318;
+  --c-peligro-suave: #FDE8E6;
+  --c-info: #5B3FC4;
+  --c-info-suave: #EEEAFB;
+  --c-neutro: #475467;
+  --c-neutro-suave: #EEF1F5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --c-fondo: #0F0E1F;
+    --c-superficie: #17152D;
+    --c-superficie-2: #1E1B38;
+    --c-texto: #ECEBF7;
+    --c-texto-suave: #A6A3C2;
+    --c-borde: #2C2950;
+    --c-nav: #121029;
+    --c-nav-texto: #A6A3C2;
+    --c-nav-activo: #2A2660;
+    --c-acento: #3D8BFF;
+    --c-acento-texto: #7EB2FF;
+    --c-acento-suave: #14244A;
+    --c-sobre-acento: #04122E;
+    --c-paso: #3B3580;
+    --c-exito: #4ADE9B;
+    --c-exito-suave: #0F2E22;
+    --c-aviso: #F5B544;
+    --c-aviso-suave: #35280E;
+    --c-peligro: #FF8A7A;
+    --c-peligro-suave: #3A1A16;
+    --c-info: #B4A2FF;
+    --c-info-suave: #241D4A;
+    --c-neutro: #B4B8C8;
+    --c-neutro-suave: #24223D;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-fondo: #0F0E1F;
+  --c-superficie: #17152D;
+  --c-superficie-2: #1E1B38;
+  --c-texto: #ECEBF7;
+  --c-texto-suave: #A6A3C2;
+  --c-borde: #2C2950;
+  --c-nav: #121029;
+  --c-nav-texto: #A6A3C2;
+  --c-nav-activo: #2A2660;
+  --c-acento: #3D8BFF;
+  --c-acento-texto: #7EB2FF;
+  --c-acento-suave: #14244A;
+  --c-sobre-acento: #04122E;
+  --c-paso: #3B3580;
+  --c-exito: #4ADE9B;
+  --c-exito-suave: #0F2E22;
+  --c-aviso: #F5B544;
+  --c-aviso-suave: #35280E;
+  --c-peligro: #FF8A7A;
+  --c-peligro-suave: #3A1A16;
+  --c-info: #B4A2FF;
+  --c-info-suave: #241D4A;
+  --c-neutro: #B4B8C8;
+  --c-neutro-suave: #24223D;
+}
+
+@theme inline {
+  --color-fondo: var(--c-fondo);
+  --color-superficie: var(--c-superficie);
+  --color-superficie-2: var(--c-superficie-2);
+  --color-texto: var(--c-texto);
+  --color-texto-suave: var(--c-texto-suave);
+  --color-borde: var(--c-borde);
+  --color-nav: var(--c-nav);
+  --color-nav-texto: var(--c-nav-texto);
+  --color-nav-activo: var(--c-nav-activo);
+  --color-acento: var(--c-acento);
+  --color-acento-texto: var(--c-acento-texto);
+  --color-acento-suave: var(--c-acento-suave);
+  --color-sobre-acento: var(--c-sobre-acento);
+  --color-paso: var(--c-paso);
+  --color-exito: var(--c-exito);
+  --color-exito-suave: var(--c-exito-suave);
+  --color-aviso: var(--c-aviso);
+  --color-aviso-suave: var(--c-aviso-suave);
+  --color-peligro: var(--c-peligro);
+  --color-peligro-suave: var(--c-peligro-suave);
+  --color-info: var(--c-info);
+  --color-info-suave: var(--c-info-suave);
+  --color-neutro: var(--c-neutro);
+  --color-neutro-suave: var(--c-neutro-suave);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --font-sans: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
+}

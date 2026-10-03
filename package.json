@@ -1,0 +1,32 @@
+{
+  "name": "celmi-cotizador",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @celmi/web",
+    "dev:web": "npm run dev -w @celmi/web",
+    "build": "npm run build -w @celmi/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "audit": "npm audit --audit-level=high",
+    "check:exe": "node scripts/sin-ejecutables.mjs",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run check:exe",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0"
+  },
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ]
+}
