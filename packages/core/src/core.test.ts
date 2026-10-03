@@ -9,6 +9,7 @@ import {
   formatearFolio,
   formatearMXN,
   importeConLetra,
+  mejoraDePrecio,
   precioUnitario,
 } from './index';
 
@@ -80,6 +81,20 @@ describe('precios', () => {
       total: 3826951n,
     });
     expect(calcularTotales([])).toEqual({ subtotal: 0n, iva: 0n, total: 0n });
+  });
+});
+
+describe('mejora de precio', () => {
+  it('calcula ahorro y porcentaje contra el precio anterior (casos EPOXEMEX)', () => {
+    expect(mejoraDePrecio('19306.67', '14533.46')).toEqual({ ahorro: 477321n, porcentaje: '24.7' });
+    expect(mejoraDePrecio('25920.00', '23145.54')).toEqual({ ahorro: 277446n, porcentaje: '10.7' });
+    expect(mejoraDePrecio('16426.67', '16224.21')).toEqual({ ahorro: 20246n, porcentaje: '1.2' });
+    expect(mejoraDePrecio('26133.33', '23975.56')).toEqual({ ahorro: 215777n, porcentaje: '8.3' });
+  });
+
+  it('reporta aumentos como porcentaje negativo y rechaza un precio anterior de cero', () => {
+    expect(mejoraDePrecio('100', '110')).toEqual({ ahorro: -1000n, porcentaje: '-10.0' });
+    expect(() => mejoraDePrecio('0', '10')).toThrow();
   });
 });
 

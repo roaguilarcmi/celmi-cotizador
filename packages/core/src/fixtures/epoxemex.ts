@@ -1,13 +1,25 @@
 /**
  * Caso real: cotización CELMISOLUTIONS-2026001253 (EPOXEMEX, laptops Dell, 28 sep 2026).
- * Costos tomados de la corrida "FORMATO CORRIDA COTIZACIÓN EPOXEMEX LAPTOPS.xlsx" y montos esperados
- * tomados del PDF enviado al cliente. Sirve como prueba de regresión del motor de cálculo.
+ * Datos de la corrida «FORMATO CORRIDA COTIZACIÓN EPOXEMEX LAPTOPS.xlsx» (costos, marca, mayorista,
+ * entrega, unidad, descripción) y de la solicitud de precios (precio anterior). Los montos esperados
+ * son los impresos en el PDF enviado al cliente. Sirve como prueba de regresión del motor de cálculo.
+ * Se corrigieron tres erratas del Excel original: «Memoriia», «fator» e «instlación».
  */
 export interface PartidaFixture {
+  /** Modelo / SKU del fabricante. */
   sku: string;
+  /** Primera línea de la descripción (título del equipo). */
   descripcion: string;
+  /** Viñetas de la descripción. */
+  especificaciones: string[];
+  marca: string;
   mayorista: string;
+  entrega: string;
+  unidad: string;
+  moneda: 'MXN' | 'USD';
   costoUnitario: string;
+  /** Costo de la solicitud original, antes de la mejora de precio del mayorista. */
+  costoAnterior?: string;
   cantidad: number;
 }
 
@@ -23,6 +35,10 @@ export interface PropuestaFixture {
 
 export const UTILIDAD_EPOXEMEX = '13.5';
 
+const GARANTIA = 'Garantía de 1 año directamente con fabricante';
+const ULTRA7 = 'Procesador Intel Core Ultra 7 255U (12 núcleos hasta 5.2 GHz + 12 TOPS NPU)';
+const CORE7 = 'Procesador Intel Core 7 150U (10 núcleos hasta 5.4 GHz)';
+
 export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
   {
     nombre: 'Propuesta 1',
@@ -32,8 +48,21 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
       {
         sku: '2GHTM',
         descripcion: 'Laptop Dell Pro 14 Essential de 14 pulgadas color plata',
+        especificaciones: [
+          CORE7,
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 512 GB',
+          'Sin puerto Ethernet',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'Ingram Micro',
+        entrega: '2 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '14533.46',
+        costoAnterior: '19306.67',
         cantidad: 2,
       },
     ],
@@ -53,8 +82,20 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
       {
         sku: '2HWN3',
         descripcion: 'Laptop Dell Pro 14 de 14 pulgadas color negro',
+        especificaciones: [
+          ULTRA7,
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 512 GB',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'Ingram Micro',
+        entrega: '2 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '23145.54',
+        costoAnterior: '25920.00',
         cantidad: 2,
       },
     ],
@@ -73,8 +114,19 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
     partidas: [
       {
         sku: '197435946',
-        descripcion: 'Laptop Dell Pro 14 de 14 pulgadas color negro, SSD 1 TB',
+        descripcion: 'Laptop Dell Pro 14 de 14 pulgadas color negro',
+        especificaciones: [
+          ULTRA7,
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 1 TB',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'Ingram Micro',
+        entrega: '1 DÍA',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '30169.61',
         cantidad: 2,
       },
@@ -95,8 +147,21 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
       {
         sku: '9KP97',
         descripcion: 'Laptop Dell Pro 15 Essential de 15.6 pulgadas color plata',
+        especificaciones: [
+          'Procesador Intel Core i7 1355U (10 núcleos hasta 5.0 GHz)',
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 512 GB',
+          'Sin puerto Ethernet',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'CT Internacional',
+        entrega: '2 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '16224.21',
+        costoAnterior: '16426.67',
         cantidad: 2,
       },
     ],
@@ -116,7 +181,18 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
       {
         sku: 'CTV12',
         descripcion: 'Laptop Dell Pro 16 de 16 pulgadas color negro',
+        especificaciones: [
+          CORE7,
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 512 GB',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'CVA',
+        entrega: '2 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '24106.67',
         cantidad: 2,
       },
@@ -136,13 +212,25 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
     partidas: [
       {
         sku: 'XF5PC',
-        descripcion: 'Laptop Dell Pro 16 de 16 pulgadas color negro, Core Ultra 7',
+        descripcion: 'Laptop Dell Pro 16 de 16 pulgadas color negro',
+        especificaciones: [
+          ULTRA7,
+          'Memoria RAM de 16 GB',
+          'Almacenamiento SSD de 512 GB',
+          'Windows 11 Pro',
+          GARANTIA,
+        ],
+        marca: 'DELL',
         mayorista: 'Ingram Micro',
+        entrega: '2 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '23975.56',
+        costoAnterior: '26133.33',
         cantidad: 2,
       },
     ],
-    // El PDF original decía por error "SESENTA Y TRES MIL PESOS CIENTO TREINTA Y DOS PESOS"; aquí va la forma correcta.
+    // El PDF original decía por error «SESENTA Y TRES MIL PESOS CIENTO TREINTA Y DOS PESOS»; aquí va la forma correcta.
     esperado: {
       precioUnitario: '27212.26',
       subtotal: '54424.52',
@@ -158,15 +246,28 @@ export const PROPUESTAS_EPOXEMEX: PropuestaFixture[] = [
     partidas: [
       {
         sku: 'SNV3SM3/1T0',
-        descripcion: 'Unidad de estado sólido Kingston NV3 de 1 TB, M.2 2230',
+        descripcion: 'Unidad de estado sólido Kingston de 1 TB',
+        especificaciones: [
+          'Factor de forma M.2 2230, interfaz NVMe PCIe 4.0',
+          'Lectura: 6,000 MB/s, Escritura 4,000 MB/s',
+        ],
+        marca: 'KINGSTON',
         mayorista: 'Amazon',
+        entrega: '5 DÍAS',
+        unidad: 'PIEZA',
+        moneda: 'MXN',
         costoUnitario: '4376.02',
         cantidad: 2,
       },
       {
         sku: 'N/A',
-        descripcion: 'Servicio de instalación y clonación de unidad',
-        mayorista: 'Centro de servicio',
+        descripcion: 'Clonación e instalación de unidad de disco duro',
+        especificaciones: [],
+        marca: 'N/A',
+        mayorista: '—',
+        entrega: '5 DÍAS',
+        unidad: 'SERVICIO',
+        moneda: 'MXN',
         costoUnitario: '600',
         cantidad: 2,
       },

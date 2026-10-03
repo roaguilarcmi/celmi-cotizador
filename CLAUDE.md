@@ -141,12 +141,26 @@ npm run audit                # vulnerabilidades de severidad alta
 | 2026-10-02 | Folio: `CELMISOLUTIONS-` + año + consecutivo de 6 dígitos (`CELMISOLUTIONS-2026001253`). El consecutivo se reinicia cada año y lo asigna el servidor.                                                                                                                                                          |
 | 2026-10-02 | Si aparece un mejor costo con otro mayorista, se registra como una **Rev** dentro del mismo proyecto; no se sobrescribe.                                                                                                                                                                                       |
 | 2026-10-02 | En el dashboard, «monto cotizado» y «en negociación» toman la **propuesta de menor monto** de cada cotización.                                                                                                                                                                                                 |
+| 2026-10-03 | Aclaración: cambiar de mayorista es poco común. Lo usual es obtener una **mejora de precio**. El costo previo se muestra como **«Precio anterior»** (tachado, con el % de mejora calculado por `mejoraDePrecio` en `packages/core`), nunca como «otro mayorista».                                              |
+| 2026-10-03 | Cuando el mayorista mejora su precio **sí se crea una nueva Rev**.                                                                                                                                                                                                                                             |
+
+## Pantalla de autorización (corrida de precios)
+
+- Debe parecerse lo más posible al «FORMATO CORRIDA COTIZACIÓN» de Excel que ya usa Alejandro: mismas columnas, mismo orden y fila de totales.
+- **Columnas, en grupos con banda de color:**
+  - Producto: marca, mayorista, modelo, tiempo de entrega, unidad, cantidad.
+  - Costo: unitario sin IVA, moneda, T.C., unitario final sin IVA, costo compra sin/con IVA.
+  - Utilidad: %, $ unitaria, total sin/con IVA.
+  - Precio de venta: unitario sin/con IVA, total sin/con IVA.
+- **Columnas personalizables** (menú «Columnas»): vistas rápidas «Como la corrida», «Sin IVA» y «Esencial». «Utilidad en %» siempre visible. Hoy la elección se guarda en el navegador; en la Fase 1 pasa al perfil del usuario.
+- Las columnas «con IVA» por fila son informativas (`conIva`). El IVA que se cobra se calcula sobre el subtotal de cada propuesta.
+- **Menú lateral compactable** (botón «Compactar menú»): queda en barra de íconos para dar más espacio al módulo; se recuerda sin parpadeo (`<html data-menu="compacto">` + variante Tailwind `compacto:`).
 
 ## Decisiones pendientes (no implementar sin confirmación)
 
 Surgidas del análisis:
 
-- ¿Una Rev creada por mejor costo vuelve a pasar por autorización, o hereda la utilidad autorizada?
+- ¿Una Rev creada por una mejora de precio vuelve a pasar por autorización, o hereda la utilidad autorizada?
 - ¿Los adicionales (tipo Accesorio) cuentan como alternativa en el «menor monto», se suman o se excluyen? Hoy se excluyen y la interfaz lo indica.
 - Significado de las columnas «Precio mínimo» y «Precio máximo» de la solicitud de precios.
 - **Moneda extranjera:**

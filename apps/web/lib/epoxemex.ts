@@ -11,14 +11,6 @@ export { PROPUESTAS_EPOXEMEX, UTILIDAD_EPOXEMEX } from '@celmi/core/fixtures/epo
 
 export const FOLIO_EPOXEMEX = 'CELMISOLUTIONS-2026001253';
 
-/** Costos de otros mayoristas que aparecían en la solicitud original (sólo referencia visual). */
-export const OTRAS_COTIZACIONES: Record<string, string> = {
-  '2GHTM': 'CVA $19,306.67',
-  '2HWN3': 'CVA $25,920.00',
-  '9KP97': 'CVA $16,426.67',
-  XF5PC: 'CVA $26,133.33',
-};
-
 export interface PropuestaCalculada {
   propuesta: PropuestaFixture;
   partidas: ResultadoPartida[];

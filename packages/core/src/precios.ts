@@ -80,6 +80,27 @@ export function calcularPartida(entrada: EntradaPartida): ResultadoPartida {
   };
 }
 
+export interface MejoraDePrecio {
+  /** Lo que bajó el costo unitario (negativo si subió). */
+  ahorro: Centavos;
+  /** Porcentaje respecto al precio anterior, con un decimal: "24.7". */
+  porcentaje: string;
+}
+
+/**
+ * Compara el costo unitario actual con el «precio anterior» (aclaración de CELMI, 2026-10-03:
+ * lo usual es obtener una mejora de precio, no cambiar de mayorista).
+ */
+export function mejoraDePrecio(anterior: string, actual: string): MejoraDePrecio {
+  const a = aEscalado(anterior, ESCALA_DINERO);
+  const b = aEscalado(actual, ESCALA_DINERO);
+  if (a <= 0n) throw new Error('El precio anterior debe ser mayor que cero');
+  const ahorro = a - b;
+  const decimas = dividirRedondeando(ahorro * 1000n, a);
+  const abs = decimas < 0n ? -decimas : decimas;
+  return { ahorro, porcentaje: `${decimas < 0n ? '-' : ''}${abs / 10n}.${abs % 10n}` };
+}
+
 export interface LineaCliente {
   precioUnitario: Centavos;
   cantidad: number;
@@ -109,6 +130,15 @@ export interface Totales {
 
 /** Tasa de IVA confirmada: 16 %, aplicada sobre el subtotal de cada propuesta. */
 export const TASA_IVA_GENERAL = '16';
+
+/**
+ * Monto con IVA de una columna informativa (como «Costo compra con IVA» de la corrida), redondeado a centavos.
+ * El IVA que se cobra al cliente se calcula sobre el subtotal de la propuesta con `calcularTotales`.
+ */
+export function conIva(c: Centavos, tasaIvaPct: string = TASA_IVA_GENERAL): Centavos {
+  const tasa = aEscalado(tasaIvaPct, ESCALA_PORCENTAJE);
+  return dividirRedondeando(c * (CIEN_POR_CIENTO + tasa), CIEN_POR_CIENTO);
+}
 
 export function calcularTotales(
   lineas: readonly { importe: Centavos }[],

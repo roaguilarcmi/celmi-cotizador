@@ -44,6 +44,3 @@ export function BotonTema() {
     </button>
   );
 }
-
-/** Script previo a la hidratación para aplicar el tema guardado sin parpadeo. */
-export const SCRIPT_TEMA = `try{var t=localStorage.getItem('celmi-tema');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}`;

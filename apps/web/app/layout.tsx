@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
-import { SCRIPT_TEMA } from '@/components/BotonTema';
 import { MenuLateral } from '@/components/MenuLateral';
+import { SCRIPT_INICIAL } from '@/lib/scripts-iniciales';
 import './globals.css';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' });
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es-MX" className={jakarta.variable} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_INICIAL }} />
       </head>
       <body className="min-h-dvh">
         <div className="flex min-h-dvh flex-col lg:flex-row">

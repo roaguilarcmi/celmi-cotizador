@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import '@celmi/ui/theme.css';
 
+/* Menú lateral compacto: <html data-menu="compacto"> */
+@custom-variant compacto (&:where([data-menu='compacto'], [data-menu='compacto'] *));
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

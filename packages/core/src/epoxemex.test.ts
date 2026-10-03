@@ -3,6 +3,7 @@ import {
   calcularPartida,
   calcularTotales,
   centavosADecimal,
+  conIva,
   consolidarLinea,
   importeConLetra,
 } from './index';
@@ -46,5 +47,7 @@ describe('Cotización real EPOXEMEX (CELMISOLUTIONS-2026001253)', () => {
     expect(centavosADecimal(costo)).toBe('274262.14');
     expect(centavosADecimal(venta)).toBe('311287.54');
     expect(centavosADecimal(venta - costo)).toBe('37025.40');
+    // «Costo compra con IVA» total de la corrida (celda M10): 318,144.08.
+    expect(centavosADecimal(conIva(costo))).toBe('318144.08');
   });
 });
