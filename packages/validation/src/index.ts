@@ -40,5 +40,56 @@ export const altaUsuarioSchema = z.object({
 });
 
 export type AltaUsuario = z.infer<typeof altaUsuarioSchema>;
+
+const textoOpcional = (max: number) => z.string().trim().max(max).default('');
+
+/** Cliente (razón social y datos generales). */
+export const clienteSchema = z.object({
+  razon_social: z.string().trim().min(2, 'Escribe la razón social o empresa').max(200),
+  rfc: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(13, 'El RFC tiene a lo más 13 caracteres')
+    .default('')
+    .transform((v) => v || null),
+  direccion: textoOpcional(300),
+  ciudad: textoOpcional(120),
+});
+
+/** Persona de contacto de un cliente. */
+export const contactoSchema = z.object({
+  tratamiento: textoOpcional(20),
+  nombre: z.string().trim().min(2, 'Escribe el nombre del contacto').max(160),
+  puesto: textoOpcional(120),
+  correo: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(200)
+    .default('')
+    .refine((v) => v === '' || z.email().safeParse(v).success, 'Escribe un correo válido'),
+  telefono: textoOpcional(40),
+});
+
+/** Datos de una oportunidad (paso 1 del wizard). */
+export const oportunidadSchema = z.object({
+  cliente_id: z.uuid('Elige un cliente'),
+  contacto_id: z.uuid().nullable().default(null),
+  nombre: z.string().trim().min(3, 'Escribe el nombre o descripción del proyecto').max(200),
+  esquema_id: z.string().trim().min(1).nullable().default(null),
+  ciudad_entrega: textoOpcional(160),
+  observaciones_internas: textoOpcional(2000),
+});
+
+/** Nota de seguimiento. */
+export const notaSchema = z.object({
+  tipo: z.enum(['nota', 'llamada', 'visita', 'correo']),
+  texto: z.string().trim().min(2, 'Escribe la nota').max(2000),
+});
+
+export type Cliente = z.infer<typeof clienteSchema>;
+export type Contacto = z.infer<typeof contactoSchema>;
+export type DatosOportunidad = z.infer<typeof oportunidadSchema>;
 export type CostoPartida = z.infer<typeof costoPartidaSchema>;
 export type AutorizacionPartida = z.infer<typeof autorizacionPartidaSchema>;

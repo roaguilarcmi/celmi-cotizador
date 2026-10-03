@@ -178,6 +178,9 @@ npm run audit                # vulnerabilidades de severidad alta
 | 2026-10-03 | Ejecutivos y Cotizador **ven costos**; la **utilidad solo la ve quien autoriza**.                                                                                                                                                                                                                              |
 | 2026-10-03 | **Rodrigo Rivera también es administrador**, además de Alejandro Bonilla.                                                                                                                                                                                                                                      |
 | 2026-10-03 | **2FA obligatoria para todos.**                                                                                                                                                                                                                                                                                |
+| 2026-10-03 | El **estado** de una oportunidad lo cambian **su ejecutivo y los administradores** (no los colaboradores); reasignar a otro ejecutivo, sólo administradores. Cada cambio queda en la bitácora `seguimiento`.                                                                                                   |
+| 2026-10-03 | Los **ejecutivos pueden editar clientes** y contactos (auditado).                                                                                                                                                                                                                                              |
+| 2026-10-03 | Los clientes **se capturan conforme se usan** (sin carga masiva inicial).                                                                                                                                                                                                                                      |
 
 ## Base de datos (Fase 1)
 
@@ -270,4 +273,5 @@ Del RFP §39, aún abiertos:
 - [x] **Fase 1 — Arquitectura (2026-10-03):** modelo de datos con RLS, auditoría y folio; roles y permisos; inicio de sesión con 2FA obligatoria; administración de usuarios sin correo; navegación por permisos.
   - Supabase en uso: proyecto `celmi-cotizador` (us-west-2), migraciones 0001-0005 aplicadas y `npm run verificar -w @celmi/db` en orden. Rodrigo es administrador con 2FA.
   - Pendiente: dar de alta al resto del equipo (cuando Rodrigo lo decida) y passkeys (beta de Supabase, opcional).
-- [ ] Fases 2–11: ver RFP §37.
+- [ ] **Fase 2 — Clientes y oportunidades (en revisión):** clientes con búsqueda y ficha, oportunidades (tablero/tabla, arrastrar entre estados), paso 1 del wizard, bitácora de seguimiento, catálogos editables y dashboard con datos reales.
+- [ ] Fases 3–11: ver RFP §37.
