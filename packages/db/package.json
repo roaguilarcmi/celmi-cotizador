@@ -1,14 +1,24 @@
 {
   "name": "@celmi/db",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Esquema de base de datos (PostgreSQL) y migraciones versionadas. Se construye en la Fase 1.",
+  "description": "Esquema de PostgreSQL (Supabase): migraciones SQL versionadas, permisos por fila y auditoría.",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
+    "migrar": "node --env-file=.env.local scripts/migrar.ts",
+    "test": "vitest run",
     "typecheck": "tsc -p .",
     "lint": "eslint ."
+  },
+  "dependencies": {
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@types/node": "26.6.4",
+    "vitest": "5.0.3"
   }
 }

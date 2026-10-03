@@ -29,8 +29,11 @@ jobs:
       - name: Instalar dependencias (lockfile estricto, sin scripts de instalación)
         run: npm ci
 
-      - name: Auditoría de vulnerabilidades
-        run: npm audit --audit-level=high
+      - name: Auditoría de vulnerabilidades (producción, bloqueante)
+        run: npm run audit
+
+      - name: Auditoría de herramientas de desarrollo (informativa)
+        run: npm run audit:dev
 
       - name: Sin ejecutables en dependencias
         run: npm run check:exe

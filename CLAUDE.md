@@ -49,6 +49,24 @@ La ciberseguridad del equipo y el cumplimiento de las políticas de TI de CELMI 
 - **Telemetría de Next.js desactivada** (`next telemetry disable` en el equipo; `NEXT_TELEMETRY_DISABLED=1` en CI).
 - **Secretos:** nunca en el repositorio; `.env*` está en `.gitignore`.
 
+## Costo cero (decisión 2026-10-03)
+
+Todo el proyecto debe operar **gratis**. Si algo requiere pago, se busca la mejor alternativa gratuita antes de seguir.
+
+- Base de datos, autenticación y archivos: **Supabase, plan Free**.
+  - Límites: 2 proyectos activos, 500 MB de base, 1 GB de archivos y 50 000 usuarios activos al mes.
+  - El proyecto se pausa tras 1 semana sin actividad.
+  - **No incluye respaldos automáticos.**
+  - SAML no está incluido, pero OAuth sí.
+- **Inicio de sesión (decisión 2026-10-03):** el tenant de Microsoft de CELMI restringe el inicio de sesión con apps externas, así que se usa **correo corporativo + contraseña** con Supabase Auth.
+  - No hay registro abierto: solo el administrador da de alta usuarios.
+  - Recuperación de contraseña por correo de verificación. Requiere SMTP propio gratuito (Brevo, 300 al día, o Resend, 100 al día) con registros DNS de `celmi.com.mx` que agrega TI; el correo integrado de Supabase solo envía 2 por hora y únicamente al equipo.
+  - **2FA con app autenticadora (TOTP), obligatoria para todos**, exigida en la base de datos (`aal2`). La 2FA por SMS cuesta 75 USD al mes: descartada.
+  - **Passkeys:** Supabase las ofrece en beta experimental (mayo de 2026). Se agregan como opción después de estabilizar contraseña + 2FA.
+  - Si TI autoriza más adelante el inicio de sesión con Microsoft, en Supabase aparece como proveedor «Azure».
+- **Vercel Hobby no sirve**: sus términos prohíben el uso comercial. El hosting de la web se decide en la Fase 11 entre opciones gratuitas que permitan uso comercial.
+- Herramientas descartadas por traer `.exe`: Supabase CLI y `drizzle-kit` (que depende de esbuild). Las migraciones son SQL versionado aplicado con un script de Node. El acceso tipado a datos se hace con Kysely y `postgres` (JavaScript puro).
+
 ## Alcance actual: solo web (decisión 2026-10-02)
 
 Desarrollar web y Android en paralelo consumía demasiados recursos. Se termina la web y después se lleva todo a Android.
@@ -143,6 +161,32 @@ npm run audit                # vulnerabilidades de severidad alta
 | 2026-10-02 | En el dashboard, «monto cotizado» y «en negociación» toman la **propuesta de menor monto** de cada cotización.                                                                                                                                                                                                 |
 | 2026-10-03 | Aclaración: cambiar de mayorista es poco común. Lo usual es obtener una **mejora de precio**. El costo previo se muestra como **«Precio anterior»** (tachado, con el % de mejora calculado por `mejoraDePrecio` en `packages/core`), nunca como «otro mayorista».                                              |
 | 2026-10-03 | Cuando el mayorista mejora su precio **sí se crea una nueva Rev**.                                                                                                                                                                                                                                             |
+| 2026-10-03 | Un ejecutivo ve **solo sus oportunidades** (y donde colabora); el administrador ve todas.                                                                                                                                                                                                                      |
+| 2026-10-03 | Ejecutivos y Cotizador **ven costos**; la **utilidad solo la ve quien autoriza**.                                                                                                                                                                                                                              |
+| 2026-10-03 | **Rodrigo Rivera también es administrador**, además de Alejandro Bonilla.                                                                                                                                                                                                                                      |
+| 2026-10-03 | **2FA obligatoria para todos.**                                                                                                                                                                                                                                                                                |
+
+## Base de datos (Fase 1)
+
+- Migraciones SQL versionadas en `packages/db/migraciones/NNNN_nombre.sql`.
+  - Se aplican con `npm run migrar -w @celmi/db` (lee `SUPABASE_DB_URL` de `packages/db/.env.local`).
+  - **Una migración aplicada no se edita: se agrega otra.** El aplicador compara huellas SHA-256 y se detiene si alguna cambió.
+- **Toda tabla nueva** debe habilitar RLS y dar privilegios explícitos a `authenticated` (una prueba falla si alguna tabla pública no tiene RLS).
+- **Pruebas con PGlite** (PostgreSQL 18 en WebAssembly, sin `.exe` ni Docker):
+  - `test/supabase-simulado.sql` imita roles, `auth.uid()` y `auth.jwt()`.
+  - `como(db, 'jorge', …)` ejecuta como cada usuario.
+  - Supabase usa PostgreSQL 15/17: no uses sintaxis exclusiva de la 18.
+- **Seguridad en la base:**
+  - Sesión válida = perfil activo + `aal2`.
+  - Permisos por rol en `rol_permisos`.
+  - Costos (`partida_costos`), utilidad (`partida_utilidad`) y precio (`partida_precios`) van en tablas separadas con reglas propias.
+  - La revisión autorizada o emitida bloquea partidas y costos (salvo `modificaciones.autorizar`).
+- **Auditoría:** disparadores en todas las tablas de negocio. Inalterable incluso para el superusuario.
+- **Folio:** `public.asignar_folio()`, atómico. Cuándo se asigna (al crear o al emitir) sigue pendiente.
+- **Roles iniciales:**
+  - Administrador (todos los permisos): Alejandro y Rodrigo.
+  - Ejecutivo: clientes ver/crear, oportunidades propias, costos y PDF.
+  - Cotizador/Operador: clientes ver, costos y PDF; trabaja en oportunidades donde es colaborador.
 
 ## Pantalla de autorización (corrida de precios)
 

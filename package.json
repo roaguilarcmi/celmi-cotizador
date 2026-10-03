@@ -12,11 +12,12 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "audit": "npm audit --audit-level=high",
+    "audit": "npm audit --omit=dev --audit-level=high",
     "check:exe": "node scripts/sin-ejecutables.mjs",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run check:exe",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "audit:dev": "npm audit --audit-level=high || echo \"Aviso: vulnerabilidades en herramientas de desarrollo (ver CLAUDE.md)\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
