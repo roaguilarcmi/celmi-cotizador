@@ -31,5 +31,14 @@ export const autorizacionPartidaSchema = z.object({
   utilidadPct: porcentaje,
 });
 
+/** Alta de usuario por el administrador. */
+export const altaUsuarioSchema = z.object({
+  correo: z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido')),
+  nombre: z.string().trim().min(3, 'Escribe el nombre completo').max(120),
+  puesto: z.string().trim().max(80).default(''),
+  rol: z.string().trim().min(1, 'Elige un rol'),
+});
+
+export type AltaUsuario = z.infer<typeof altaUsuarioSchema>;
 export type CostoPartida = z.infer<typeof costoPartidaSchema>;
 export type AutorizacionPartida = z.infer<typeof autorizacionPartidaSchema>;

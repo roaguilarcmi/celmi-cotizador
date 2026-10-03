@@ -201,6 +201,26 @@ npm run audit                # vulnerabilidades de severidad alta
   - Ejecutivo: clientes ver/crear, oportunidades propias, costos y PDF.
   - Cotizador/Operador: clientes ver, costos y PDF; trabaja en oportunidades donde es colaborador.
 
+## Autenticación en la web (Fase 1)
+
+- **Tres capas:**
+  - `proxy.ts` (barrera optimista, renueva la sesión).
+  - `lib/sesion.ts` → `obtenerSesion()` / `exigirPermiso()` en el servidor, con `getClaims()`; nunca confiar en `getSession()`.
+  - Las reglas RLS de la base.
+- **Clientes de Supabase** en `lib/supabase/`:
+  - `servidor` (cookies, sujeto a RLS).
+  - `navegador` (2FA y contraseña).
+  - `admin` (clave secreta, solo servidor y siempre después de `exigirPermiso`).
+- **Rutas de acceso** (grupo `(acceso)`, sin menú):
+  - `/entrar`: correo + contraseña.
+  - `/entrar/verificar`: código TOTP.
+  - `/entrar/configurar-2fa`: QR + clave.
+  - `/acceso/confirmar`: canjea el enlace del administrador solo al presionar «Continuar», para que las vistas previas de Teams o WhatsApp no lo consuman.
+  - `/restablecer`: contraseña nueva, mínimo 12 caracteres; configura el mismo mínimo en Supabase.
+- **Administración** en `/admin/usuarios`: alta sin correo (`generateLink('invite')`), enlace de recuperación, restablecer 2FA, rol y activar/desactivar. Todo se registra en `accesos` con `realizado_por`.
+- **Cierre por inactividad:** 30 minutos (`components/CierrePorInactividad.tsx`).
+- **Sin `apps/web/.env.local`**, la web corre en **modo demostración**: sin inicio de sesión y con datos de muestra.
+
 ## Pantalla de autorización (corrida de precios)
 
 - Debe parecerse lo más posible al «FORMATO CORRIDA COTIZACIÓN» de Excel que ya usa Alejandro: mismas columnas, mismo orden y fila de totales.

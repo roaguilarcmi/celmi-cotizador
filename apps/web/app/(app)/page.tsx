@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { Avatar, Boton, Pill, Tarjeta, Tecla, Titulo2, type Tono } from '@/components/ui';
 import { FOLIO_EPOXEMEX, montoReferencia, UTILIDAD_EPOXEMEX } from '@/lib/epoxemex';
+import { obtenerSesion } from '@/lib/sesion';
 
 const KPIS: { etiqueta: string; valor: string; detalle: string; tono?: Tono; marca?: string }[] = [
   { etiqueta: 'Monto cotizado · septiembre', valor: '$1,284,600', detalle: 'MXN · 14 cotizaciones emitidas' },
@@ -100,7 +101,20 @@ function fechaHoy() {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export default function Inicio() {
+function saludo() {
+  const hora = Number(
+    new Intl.DateTimeFormat('es-MX', {
+      hour: 'numeric',
+      hourCycle: 'h23',
+      timeZone: 'America/Mexico_City',
+    }).format(new Date()),
+  );
+  return hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+export default async function Inicio() {
+  const sesion = await obtenerSesion();
+  const nombre = sesion.nombre.split(/\s+/)[0] ?? '';
   const totalEpoxemex = montoReferencia(UTILIDAD_EPOXEMEX);
   const recientes: {
     folio: string;
@@ -164,7 +178,9 @@ export default function Inicio() {
               Datos de muestra
             </Pill>
           </div>
-          <h1 className="mt-1.5 text-3xl font-bold tracking-tight">Buenos días, Rodrigo</h1>
+          <h1 className="mt-1.5 text-3xl font-bold tracking-tight">
+            {saludo()}, {nombre}
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <label className="flex min-h-11 w-75 max-w-full items-center gap-2.5 rounded-md border border-borde bg-superficie px-3 text-texto-suave">

@@ -247,6 +247,25 @@ describe('folio', () => {
   });
 });
 
+describe('permisos de la sesión', () => {
+  it('mis_permisos refleja el rol y queda vacío sin 2FA', async () => {
+    await como(db, 'jorge', async () => {
+      const [r] = await filas<{ p: string[] }>(db, 'select public.mis_permisos() as p');
+      expect(r!.p).toContain('costos.ver');
+      expect(r!.p).not.toContain('utilidad.ver');
+    });
+    await como(
+      db,
+      'jorge',
+      async () => {
+        const [r] = await filas<{ p: string[] }>(db, 'select public.mis_permisos() as p');
+        expect(r!.p).toEqual([]);
+      },
+      { aal: 'aal1' },
+    );
+  });
+});
+
 describe('perfiles y preferencias', () => {
   it('cada quien guarda sus preferencias, pero no puede cambiarse de rol', async () => {
     await como(db, 'jorge', async () => {

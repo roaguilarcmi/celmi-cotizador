@@ -7,6 +7,8 @@ export interface Seccion {
   /** Fase del RFP en la que se construye. */
   fase: number;
   descripcion: string;
+  /** Si se indica, la sección sólo aparece para quien tiene este permiso (la protección real está en el servidor). */
+  permiso?: string;
 }
 
 export const SECCIONES: Seccion[] = [
@@ -52,6 +54,14 @@ export const SECCIONES: Seccion[] = [
     icono: 'auditoria',
     fase: 7,
     descripcion: 'Registro inalterable de quién hizo qué, cuándo y con qué valores.',
+  },
+  {
+    slug: 'admin/usuarios',
+    titulo: 'Usuarios',
+    icono: 'usuarios',
+    fase: 1,
+    descripcion: 'Alta de usuarios, roles, enlaces de acceso y restablecimiento de 2FA.',
+    permiso: 'usuarios.administrar',
   },
 ];
 

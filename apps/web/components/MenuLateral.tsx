@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { cerrarSesion } from '@/lib/acciones-sesion';
 import { SECCIONES } from '@/lib/navegacion';
 import { usePreferencia } from '@/lib/preferencias';
 import { BotonTema } from './BotonTema';
@@ -15,7 +16,13 @@ const PENDIENTES = 2;
  * Menú lateral. En escritorio se puede compactar a una barra de íconos para dar más espacio al módulo.
  * El estado vive en <html data-menu="compacto"> (aplicado antes de pintar, sin parpadeo) y en localStorage.
  */
-export function MenuLateral() {
+interface Props {
+  usuario: { nombre: string; rol: string; iniciales: string };
+  permisos: string[];
+  demo: boolean;
+}
+
+export function MenuLateral({ usuario, permisos, demo }: Props) {
   const ruta = usePathname();
   const activo = (slug: string) => (slug === '' ? ruta === '/' : ruta.startsWith(`/${slug}`));
   const [menu, guardarMenu] = usePreferencia('celmi-menu');
@@ -38,8 +45,19 @@ export function MenuLateral() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-celmi-blanco.svg" alt="CELMI Solutions" width={150} height={27} />
         </Link>
-        <div className="lg:hidden">
+        <div className="flex items-center gap-1 lg:hidden">
           <BotonTema />
+          {!demo && (
+            <form action={() => cerrarSesion()}>
+              <button
+                type="submit"
+                aria-label="Cerrar sesión"
+                className="inline-flex size-10 cursor-pointer items-center justify-center rounded-md text-nav-texto hover:bg-white/10 hover:text-white"
+              >
+                <Icon name="salir" />
+              </button>
+            </form>
+          )}
         </div>
         <button
           type="button"
@@ -54,7 +72,7 @@ export function MenuLateral() {
       </div>
 
       <ul className="-mx-1 flex gap-0.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:p-0">
-        {SECCIONES.map((s) => {
+        {SECCIONES.filter((s) => !s.permiso || permisos.includes(s.permiso)).map((s) => {
           const on = activo(s.slug);
           return (
             <li key={s.slug}>
@@ -82,13 +100,25 @@ export function MenuLateral() {
         })}
       </ul>
 
-      <div className="mt-auto hidden items-center gap-2.5 rounded-md bg-white/6 p-3 lg:flex lg:compacto:flex-col lg:compacto:p-2">
-        <Avatar iniciales="RR" color="#1D5BD8" tamano={36} />
+      <div className="mt-auto hidden items-center gap-2 rounded-md bg-white/6 p-3 lg:flex lg:compacto:flex-col lg:compacto:p-2">
+        <Avatar iniciales={usuario.iniciales} color="#1D5BD8" tamano={36} />
         <div className="min-w-0 flex-1 lg:compacto:sr-only">
-          <div className="truncate text-sm font-semibold text-white">Rodrigo Rivera</div>
-          <div className="text-xs text-nav-texto">Preventa · Ejecutivo</div>
+          <div className="truncate text-sm font-semibold text-white">{usuario.nombre}</div>
+          <div className="truncate text-xs text-nav-texto">{usuario.rol}</div>
         </div>
         <BotonTema />
+        {!demo && (
+          <form action={() => cerrarSesion()}>
+            <button
+              type="submit"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+              className="inline-flex size-10 cursor-pointer items-center justify-center rounded-md text-nav-texto transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <Icon name="salir" />
+            </button>
+          </form>
+        )}
       </div>
     </nav>
   );

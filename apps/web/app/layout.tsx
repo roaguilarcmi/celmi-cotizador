@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
-import { MenuLateral } from '@/components/MenuLateral';
 import { SCRIPT_INICIAL } from '@/lib/scripts-iniciales';
 import './globals.css';
 
@@ -10,6 +9,7 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakart
 export const metadata: Metadata = {
   title: { default: 'Cotizador CELMI', template: '%s · Cotizador CELMI' },
   description: 'Plataforma de oportunidades, autorización y emisión de cotizaciones de CELMI Solutions.',
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
@@ -25,12 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_INICIAL }} />
       </head>
-      <body className="min-h-dvh">
-        <div className="flex min-h-dvh flex-col lg:flex-row">
-          <MenuLateral />
-          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-9 lg:py-7">{children}</main>
-        </div>
-      </body>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }
