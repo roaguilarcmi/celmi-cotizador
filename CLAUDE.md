@@ -267,5 +267,7 @@ Del RFP §39, aún abiertos:
 ## Estado por fase
 
 - [x] **Fase 0 — Preparación:** monorepo, sistema de diseño, motor de precios con casos reales, web base, CI con controles de seguridad. (Esqueleto Expo creado y pausado.)
-- [ ] Fase 1 — Arquitectura: modelo de datos, roles, autenticación, navegación.
+- [x] **Fase 1 — Arquitectura (2026-10-03):** modelo de datos con RLS, auditoría y folio; roles y permisos; inicio de sesión con 2FA obligatoria; administración de usuarios sin correo; navegación por permisos.
+  - Supabase en uso: proyecto `celmi-cotizador` (us-west-2), migraciones 0001-0005 aplicadas y `npm run verificar -w @celmi/db` en orden. Rodrigo es administrador con 2FA.
+  - Pendiente: dar de alta al resto del equipo (cuando Rodrigo lo decida) y passkeys (beta de Supabase, opcional).
 - [ ] Fases 2–11: ver RFP §37.
