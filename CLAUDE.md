@@ -49,6 +49,17 @@ La ciberseguridad del equipo y el cumplimiento de las políticas de TI de CELMI 
 - **Telemetría de Next.js desactivada** (`next telemetry disable` en el equipo; `NEXT_TELEMETRY_DISABLED=1` en CI).
 - **Secretos:** nunca en el repositorio; `.env*` está en `.gitignore`.
 
+## Iniciativa propia, aún sin TI (decisión 2026-10-03)
+
+El proyecto es iniciativa de Rodrigo, autorizada por su jefe. **TI aún no está enterada**: se le presentará al terminar para que valide y asuma la seguridad.
+
+- Mientras tanto **no se puede pedir nada a TI**: ni registros DNS, ni SMTP, ni registro de apps en Microsoft, ni excepciones de Defender. Todo debe funcionar sin su intervención.
+- La seguridad y la confidencialidad se tratan con más rigor precisamente por eso.
+- **Datos reales permitidos** en Supabase y GitHub por decisión de Rodrigo (con autorización de su jefe). Por ello:
+  - El repositorio de GitHub debe ser **privado**.
+  - El proyecto de Supabase no se comparte.
+  - Las claves secretas solo van en `.env.local`, nunca en el chat ni en el repositorio.
+
 ## Costo cero (decisión 2026-10-03)
 
 Todo el proyecto debe operar **gratis**. Si algo requiere pago, se busca la mejor alternativa gratuita antes de seguir.
@@ -60,7 +71,9 @@ Todo el proyecto debe operar **gratis**. Si algo requiere pago, se busca la mejo
   - SAML no está incluido, pero OAuth sí.
 - **Inicio de sesión (decisión 2026-10-03):** el tenant de Microsoft de CELMI restringe el inicio de sesión con apps externas, así que se usa **correo corporativo + contraseña** con Supabase Auth.
   - No hay registro abierto: solo el administrador da de alta usuarios.
-  - Recuperación de contraseña por correo de verificación. Requiere SMTP propio gratuito (Brevo, 300 al día, o Resend, 100 al día) con registros DNS de `celmi.com.mx` que agrega TI; el correo integrado de Supabase solo envía 2 por hora y únicamente al equipo.
+  - **Sin envío de correos por ahora.** El correo integrado de Supabase solo envía 2 por hora y únicamente a miembros del equipo, y un SMTP propio (Brevo/Resend) requiere registros DNS que hoy no se pueden pedir a TI.
+    - Alta y recuperación: el administrador genera desde la app el enlace de invitación o de recuperación (`auth.admin.generateLink`, sin enviar correo), lo entrega por un canal interno y queda en la auditoría.
+    - Cuando TI configure el SMTP, se activa la recuperación por cuenta propia sin rehacer nada.
   - **2FA con app autenticadora (TOTP), obligatoria para todos**, exigida en la base de datos (`aal2`). La 2FA por SMS cuesta 75 USD al mes: descartada.
   - **Passkeys:** Supabase las ofrece en beta experimental (mayo de 2026). Se agregan como opción después de estabilizar contraseña + 2FA.
   - Si TI autoriza más adelante el inicio de sesión con Microsoft, en Supabase aparece como proveedor «Azure».
