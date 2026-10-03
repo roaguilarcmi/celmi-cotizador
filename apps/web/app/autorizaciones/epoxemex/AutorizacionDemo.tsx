@@ -490,14 +490,15 @@ export function AutorizacionDemo() {
               // Cada propuesta lleva una barra a la izquierda que alterna azul / violeta, del encabezado a su
               // última partida, y una línea más marcada donde empieza: se distingue sin saturar la tabla.
               const par = pi % 2 === 0;
-              const barra = `before:absolute before:top-0 before:-bottom-px before:left-0 before:w-1 before:content-[''] ${par ? 'before:bg-acento' : 'before:bg-info'}`;
-              const inicio = pi > 0 ? 'border-t-2 border-t-texto/15' : '';
+              const barra = `before:absolute before:top-0 before:-bottom-px before:left-0 before:w-1.5 before:content-[''] ${par ? 'before:bg-acento' : 'before:bg-info'}`;
+              const inicio = pi > 0 ? 'border-t-[3px] border-t-texto/25' : '';
+              const fondoEncabezado = par ? 'bg-acento-suave/60' : 'bg-info-suave/60';
               return (
                 <tbody key={prop.nombre}>
                   <tr>
                     <td
                       colSpan={2 + columnas.length}
-                      className={`border-b border-borde bg-superficie p-0 ${inicio}`}
+                      className={`border-b border-borde p-0 ${fondoEncabezado} ${inicio}`}
                     >
                       <div
                         className={`sticky left-0 z-0 flex w-fit flex-wrap items-center gap-x-3 gap-y-1 py-2 pt-4 pr-3 pl-4 ${barra}`}
