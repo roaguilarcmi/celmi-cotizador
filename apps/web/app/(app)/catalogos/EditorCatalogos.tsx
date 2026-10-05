@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import { Icon } from '@/components/Icon';
 import { Boton, Pill, Tarjeta } from '@/components/ui';
 import type { CampoCatalogo, DefinicionCatalogo } from '@/lib/catalogos';
@@ -12,14 +12,18 @@ export function EditorCatalogos({
   catalogos,
   datos,
   puedeEditar,
+  extra,
 }: {
   catalogos: DefinicionCatalogo[];
   datos: Record<string, Registro[]>;
   puedeEditar: boolean;
+  /** Pestaña con contenido propio (p. ej. condiciones comerciales, que se editan con texto con formato). */
+  extra?: { clave: string; titulo: string; cuenta: number; contenido: ReactNode };
 }) {
-  const [activo, setActivo] = useState(catalogos[0]!.tabla);
-  const def = catalogos.find((c) => c.tabla === activo)!;
-  const filas = datos[activo] ?? [];
+  const [activo, setActivo] = useState<string>(catalogos[0]!.tabla);
+  const enExtra = extra?.clave === activo;
+  const def = catalogos.find((c) => c.tabla === activo) ?? catalogos[0]!;
+  const filas = datos[def.tabla] ?? [];
 
   return (
     <div className="animar-entrada mx-auto max-w-[1100px]">
@@ -50,41 +54,64 @@ export function EditorCatalogos({
             </span>
           </button>
         ))}
+        {extra && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={enExtra}
+            onClick={() => setActivo(extra.clave)}
+            className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-pill px-4 text-[13px] font-semibold transition-colors ${
+              enExtra ? 'bg-paso text-white' : 'bg-superficie text-texto-suave hover:text-texto'
+            }`}
+          >
+            {extra.titulo}
+            <span className={`tabular text-xs ${enExtra ? 'text-white/80' : ''}`}>{extra.cuenta}</span>
+          </button>
+        )}
       </div>
 
-      <Tarjeta key={def.tabla} className="animar-entrada overflow-hidden">
-        <div className="border-b border-borde px-5 py-4">
-          <h2 className="text-[17px] font-bold tracking-tight">{def.titulo}</h2>
-          <p className="mt-0.5 text-[13px] text-texto-suave">{def.descripcion}</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-superficie-2 text-left text-xs font-semibold text-texto-suave">
-                {def.campos.map((c) => (
-                  <th key={c.id} scope="col" className="border-b border-borde px-4 py-2.5">
-                    {c.etiqueta}
+      {enExtra ? (
+        extra.contenido
+      ) : (
+        <Tarjeta key={def.tabla} className="animar-entrada overflow-hidden">
+          <div className="border-b border-borde px-5 py-4">
+            <h2 className="text-[17px] font-bold tracking-tight">{def.titulo}</h2>
+            <p className="mt-0.5 text-[13px] text-texto-suave">{def.descripcion}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                <tr className="bg-superficie-2 text-left text-xs font-semibold text-texto-suave">
+                  {def.campos.map((c) => (
+                    <th key={c.id} scope="col" className="border-b border-borde px-4 py-2.5">
+                      {c.etiqueta}
+                    </th>
+                  ))}
+                  <th scope="col" className="border-b border-borde px-4 py-2.5">
+                    Estado
                   </th>
+                  {puedeEditar && (
+                    <th scope="col" className="border-b border-borde px-4 py-2.5 text-right">
+                      Acciones
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f) => (
+                  <FilaRegistro
+                    key={String(f[def.clave.campo])}
+                    def={def}
+                    fila={f}
+                    puedeEditar={puedeEditar}
+                  />
                 ))}
-                <th scope="col" className="border-b border-borde px-4 py-2.5">
-                  Estado
-                </th>
-                {puedeEditar && (
-                  <th scope="col" className="border-b border-borde px-4 py-2.5 text-right">
-                    Acciones
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((f) => (
-                <FilaRegistro key={String(f[def.clave.campo])} def={def} fila={f} puedeEditar={puedeEditar} />
-              ))}
-              {puedeEditar && <FilaRegistro def={def} puedeEditar nueva />}
-            </tbody>
-          </table>
-        </div>
-      </Tarjeta>
+                {puedeEditar && <FilaRegistro def={def} puedeEditar nueva />}
+              </tbody>
+            </table>
+          </div>
+        </Tarjeta>
+      )}
     </div>
   );
 }

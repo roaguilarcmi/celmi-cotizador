@@ -21,15 +21,16 @@ export default async function Catalogos() {
     }),
   );
   return (
-    <>
-      <EditorCatalogos
-        catalogos={CATALOGOS}
-        datos={Object.fromEntries(resultados)}
-        puedeEditar={puedeEditar}
-      />
-      <div className="mx-auto max-w-[1100px]">
-        <EditorCondiciones condiciones={condiciones} puedeEditar={puedeEditar} />
-      </div>
-    </>
+    <EditorCatalogos
+      catalogos={CATALOGOS}
+      datos={Object.fromEntries(resultados)}
+      puedeEditar={puedeEditar}
+      extra={{
+        clave: 'condiciones',
+        titulo: 'Condiciones comerciales',
+        cuenta: condiciones.length,
+        contenido: <EditorCondiciones condiciones={condiciones} puedeEditar={puedeEditar} />,
+      }}
+    />
   );
 }

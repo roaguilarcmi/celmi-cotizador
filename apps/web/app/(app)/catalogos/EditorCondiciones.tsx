@@ -45,7 +45,7 @@ export function EditorCondiciones({
   const editando = condiciones.find((c) => c.id === abierta);
 
   return (
-    <Tarjeta className="mt-6 overflow-hidden">
+    <Tarjeta className="animar-entrada overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-borde px-6 py-4">
         <div className="mr-auto">
           <Titulo2>Condiciones comerciales</Titulo2>
