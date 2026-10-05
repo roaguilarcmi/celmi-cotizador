@@ -187,6 +187,7 @@ npm run audit                # vulnerabilidades de severidad alta
 - Migraciones SQL versionadas en `packages/db/migraciones/NNNN_nombre.sql`.
   - Se aplican con `npm run migrar -w @celmi/db` (lee `SUPABASE_DB_URL` de `packages/db/.env.local`).
   - **Una migración aplicada no se edita: se agrega otra.** El aplicador compara huellas SHA-256 y se detiene si alguna cambió.
+- **Consultas de la web:** las columnas viven en `apps/web/lib/consultas.ts`. Si dos tablas tienen más de una relación (oportunidades ↔ perfiles), nombra la llave en el embebido (`perfiles!oportunidades_ejecutivo_id_fkey(...)`); si no, PostgREST responde PGRST201. Después de cambiar consultas o esquema, corre `npm run verificar:consultas -w @celmi/web`: PGlite no pasa por PostgREST y no detecta estos errores. Un error de consulta nunca debe tratarse como «sin datos».
 - **Toda tabla nueva** debe habilitar RLS y dar privilegios explícitos a `authenticated` (una prueba falla si alguna tabla pública no tiene RLS).
 - **Pruebas con PGlite** (PostgreSQL 18 en WebAssembly, sin `.exe` ni Docker):
   - `test/supabase-simulado.sql` imita roles, `auth.uid()` y `auth.jwt()`.

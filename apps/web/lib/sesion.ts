@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import { CONSULTAS } from './consultas';
 import { supabaseConfigurado } from './supabase/config';
 import { clienteServidor } from './supabase/servidor';
 
@@ -45,11 +46,7 @@ export const obtenerSesion = cache(async (): Promise<Sesion> => {
   if (claims.aal !== 'aal2') redirect('/entrar/verificar');
 
   const [perfil, permisos] = await Promise.all([
-    supabase
-      .from('perfiles')
-      .select('nombre, puesto, correo, roles(nombre)')
-      .eq('id', claims.sub)
-      .maybeSingle(),
+    supabase.from('perfiles').select(CONSULTAS.perfilSesion).eq('id', claims.sub).maybeSingle(),
     supabase.rpc('mis_permisos'),
   ]);
   // Las reglas RLS ocultan el perfil si no existe o está desactivado.

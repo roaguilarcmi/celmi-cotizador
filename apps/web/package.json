@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verificar:consultas": "node --env-file=.env.local scripts/verificar-consultas.ts"
   },
   "dependencies": {
     "@celmi/core": "*",

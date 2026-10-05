@@ -1,3 +1,4 @@
+import { CONSULTAS } from './consultas';
 import { clienteServidor } from './supabase/servidor';
 
 /*
@@ -66,65 +67,55 @@ export interface SeguimientoFila {
   autor: { nombre: string } | null;
 }
 
-const COLUMNAS_OPORTUNIDAD = `id, nombre, estado_id, esquema_id, ciudad_entrega, observaciones_internas, creado_en,
-  actualizado_en, ejecutivo_id, cliente:clientes(id, razon_social),
-  contacto:contactos(id, tratamiento, nombre, puesto, correo, telefono), ejecutivo:perfiles(id, nombre)`;
+/** Falla visible: un error de consulta nunca debe parecer «no hay datos» o «no existe». */
+function exigir<T>(r: { data: T; error: { code?: string; message: string } | null }, que: string): T {
+  if (r.error) {
+    console.error(`[datos] ${que}: ${r.error.code ?? ''} ${r.error.message}`);
+    throw new Error(`No se pudo consultar ${que} (${r.error.code ?? 'error'}).`);
+  }
+  return r.data;
+}
 
 export async function listarEstados(soloActivos = true): Promise<Estado[]> {
   const supabase = await clienteServidor();
-  let q = supabase.from('estados_oportunidad').select('id, nombre, orden, final, activo').order('orden');
+  let q = supabase.from('estados_oportunidad').select(CONSULTAS.estados).order('orden');
   if (soloActivos) q = q.eq('activo', true);
-  return ((await q).data ?? []) as Estado[];
+  return (exigir(await q, 'estados') ?? []) as Estado[];
 }
 
 export async function listarEsquemas(soloActivos = true): Promise<Esquema[]> {
   const supabase = await clienteServidor();
-  let q = supabase.from('esquemas_adquisicion').select('id, nombre, plazos_meses, activo').order('nombre');
+  let q = supabase.from('esquemas_adquisicion').select(CONSULTAS.esquemas).order('nombre');
   if (soloActivos) q = q.eq('activo', true);
-  return ((await q).data ?? []) as Esquema[];
+  return (exigir(await q, 'esquemas') ?? []) as Esquema[];
 }
 
 export async function listarClientes(): Promise<ClienteFila[]> {
   const supabase = await clienteServidor();
-  const { data } = await supabase
-    .from('clientes')
-    .select(
-      'id, razon_social, rfc, direccion, ciudad, creado_en, contactos(id, cliente_id, tratamiento, nombre, puesto, correo, telefono), oportunidades(id)',
-    )
-    .order('razon_social');
-  return (data ?? []) as unknown as ClienteFila[];
+  const r = await supabase.from('clientes').select(CONSULTAS.clientes).order('razon_social');
+  return (exigir(r, 'clientes') ?? []) as unknown as ClienteFila[];
 }
 
 export async function obtenerCliente(id: string): Promise<ClienteFila | null> {
   const supabase = await clienteServidor();
-  const { data } = await supabase
-    .from('clientes')
-    .select(
-      'id, razon_social, rfc, direccion, ciudad, creado_en, contactos(id, cliente_id, tratamiento, nombre, puesto, correo, telefono), oportunidades(id)',
-    )
-    .eq('id', id)
-    .maybeSingle();
-  return (data as unknown as ClienteFila | null) ?? null;
+  const r = await supabase.from('clientes').select(CONSULTAS.clientes).eq('id', id).maybeSingle();
+  return (exigir(r, 'el cliente') as unknown as ClienteFila | null) ?? null;
 }
 
 export async function listarOportunidades(filtro?: { clienteId?: string }): Promise<OportunidadFila[]> {
   const supabase = await clienteServidor();
   let q = supabase
     .from('oportunidades')
-    .select(COLUMNAS_OPORTUNIDAD)
+    .select(CONSULTAS.oportunidades)
     .order('actualizado_en', { ascending: false });
   if (filtro?.clienteId) q = q.eq('cliente_id', filtro.clienteId);
-  return ((await q).data ?? []) as unknown as OportunidadFila[];
+  return (exigir(await q, 'oportunidades') ?? []) as unknown as OportunidadFila[];
 }
 
 export async function obtenerOportunidad(id: string): Promise<OportunidadFila | null> {
   const supabase = await clienteServidor();
-  const { data } = await supabase
-    .from('oportunidades')
-    .select(COLUMNAS_OPORTUNIDAD)
-    .eq('id', id)
-    .maybeSingle();
-  return (data as unknown as OportunidadFila | null) ?? null;
+  const r = await supabase.from('oportunidades').select(CONSULTAS.oportunidades).eq('id', id).maybeSingle();
+  return (exigir(r, 'la oportunidad') as unknown as OportunidadFila | null) ?? null;
 }
 
 export async function listarSeguimiento(
@@ -134,11 +125,13 @@ export async function listarSeguimiento(
   const supabase = await clienteServidor();
   let q = supabase
     .from('seguimiento')
-    .select('id, oportunidad_id, tipo, texto, estado_anterior, estado_nuevo, en, autor:perfiles(nombre)')
+    .select(CONSULTAS.seguimiento)
     .order('en', { ascending: false })
     .limit(limite);
   if (oportunidadId) q = q.eq('oportunidad_id', oportunidadId);
-  return ((await q).data ?? []) as unknown as (SeguimientoFila & { oportunidad_id: string })[];
+  return (exigir(await q, 'el seguimiento') ?? []) as unknown as (SeguimientoFila & {
+    oportunidad_id: string;
+  })[];
 }
 
 /** FormData → objeto, con cadenas vacías como «no capturado» para que apliquen los valores por omisión. */
