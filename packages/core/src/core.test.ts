@@ -46,10 +46,12 @@ describe('precios', () => {
     expect(precioUnitario({ costoUnitario: '6842.00', tipoCambio: '18.42', utilidadPct: '22' })).toBe(
       15375616n,
     );
-    // Tipo de cambio con más decimales: 100 × 18.123456 × 1.10 = 1993.58016 → 1993.58
-    expect(precioUnitario({ costoUnitario: '100', tipoCambio: '18.123456', utilidadPct: '10' })).toBe(
-      199358n,
-    );
+    // Tipo de cambio con 5 decimales (decisión 2026-10-05): 100 × 18.12345 × 1.10 = 1993.5795 → 1993.58
+    expect(precioUnitario({ costoUnitario: '100', tipoCambio: '18.12345', utilidadPct: '10' })).toBe(199358n);
+    // Con más de 5 decimales se rechaza.
+    expect(() =>
+      precioUnitario({ costoUnitario: '100', tipoCambio: '18.123456', utilidadPct: '10' }),
+    ).toThrow();
   });
 
   it('calcula la utilidad unitaria y total de una partida', () => {

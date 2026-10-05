@@ -8,7 +8,7 @@ export const decimalTexto = (maxDecimales: number) =>
     .regex(new RegExp(`^\\d+(\\.\\d{1,${maxDecimales}})?$`), `Número con hasta ${maxDecimales} decimales`);
 
 export const dinero = decimalTexto(2);
-export const tipoCambio = decimalTexto(6).refine(
+export const tipoCambio = decimalTexto(5).refine(
   (v) => Number(v) > 0,
   'El tipo de cambio debe ser mayor que cero',
 );

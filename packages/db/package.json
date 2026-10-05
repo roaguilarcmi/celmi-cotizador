@@ -13,7 +13,9 @@
     "typecheck": "tsc -p .",
     "lint": "eslint .",
     "primer-admin": "node --env-file=.env.local scripts/primer-administrador.ts",
-    "verificar": "node --env-file=.env.local scripts/verificar.ts"
+    "verificar": "node --env-file=.env.local scripts/verificar.ts",
+    "respaldo": "node --env-file=.env.local scripts/respaldo.ts",
+    "respaldo:verificar": "node --env-file=.env.local scripts/verificar-respaldo.ts"
   },
   "dependencies": {
     "postgres": "3.4.9"

@@ -1,6 +1,6 @@
 /**
  * Aritmética decimal exacta. Todo importe se maneja como entero escalado (bigint):
- * dinero en centavos (escala 2), tipo de cambio en escala 6 y porcentajes en escala 4.
+ * dinero en centavos (escala 2), tipo de cambio en escala 5 (decisión 2026-10-05) y porcentajes en escala 4.
  * Nunca se usan números de punto flotante para calcular dinero.
  */
 
@@ -8,7 +8,7 @@
 export type Centavos = bigint;
 
 export const ESCALA_DINERO = 2;
-export const ESCALA_TIPO_CAMBIO = 6;
+export const ESCALA_TIPO_CAMBIO = 5;
 export const ESCALA_PORCENTAJE = 4;
 
 /** Convierte "14533.46" con escala 2 en 1453346n. Rechaza texto inválido o más decimales que la escala. */
