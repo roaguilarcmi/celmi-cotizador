@@ -1,6 +1,13 @@
 'use server';
 
-import { leerContenido, tareaSchema, textoPlano } from '@celmi/validation';
+import {
+  leerContenido,
+  subtareaSchema,
+  subtareasNuevasSchema,
+  tareaSchema,
+  textoPlano,
+  tituloSubtareaSchema,
+} from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { borrarBorrador } from './acciones-borradores';
 import { obtenerSesion } from './sesion';
@@ -28,26 +35,31 @@ const refrescar = (oportunidadId?: string) => {
   if (oportunidadId) revalidatePath(`/oportunidades/${oportunidadId}`);
 };
 
-/** Lee y valida el formulario de tarea (título, vencimiento, avisos y notas con formato). */
-function leerTarea(datos: FormData) {
-  let avisos: unknown = [];
+const json = (valor: FormDataEntryValue | null, omision: string): unknown => {
   try {
-    avisos = JSON.parse(String(datos.get('avisos') ?? '[]'));
+    return JSON.parse(String(valor ?? omision));
   } catch {
-    return { error: 'Los avisos no son válidos.' } as const;
+    return undefined;
   }
-  const leido = tareaSchema.safeParse({
-    titulo: datos.get('titulo'),
-    vence_en: datos.get('vence_en'),
-    avisos,
-  });
+};
+
+/**
+ * Lee y valida el formulario de tarea (título, vencimiento, avisos y notas con formato). En una subtarea la fecha es
+ * opcional y sin fecha no hay avisos.
+ */
+function leerTarea(datos: FormData, { subtarea = false } = {}) {
+  const avisos = json(datos.get('avisos'), '[]');
+  if (avisos === undefined) return { error: 'Los avisos no son válidos.' } as const;
+  const vence = String(datos.get('vence_en') ?? '');
+  const entrada = { titulo: datos.get('titulo'), vence_en: subtarea && !vence ? null : vence, avisos };
+  const leido = subtarea ? subtareaSchema.safeParse(entrada) : tareaSchema.safeParse(entrada);
   if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa la tarea.' } as const;
   const notas = leerContenido(datos.get('notas'));
   if (!notas.ok) return { error: notas.error } as const;
   return {
     fila: {
       titulo: leido.data.titulo,
-      vence_en: new Date(leido.data.vence_en).toISOString(),
+      vence_en: leido.data.vence_en ? new Date(leido.data.vence_en).toISOString() : null,
       notas: notas.doc,
       descripcion: notas.doc ? textoPlano(notas.doc).slice(0, 2000) : '',
     },
@@ -74,6 +86,8 @@ export async function crearTarea(
   await obtenerSesion();
   const leido = leerTarea(datos);
   if ('error' in leido) return { error: leido.error };
+  const subtareas = subtareasNuevasSchema.safeParse(json(datos.get('subtareas'), '[]'));
+  if (!subtareas.success) return { error: subtareas.error.issues[0]?.message ?? 'Revisa las subtareas.' };
   const supabase = await clienteServidor();
   // responsable_id lo pone la base (auth.uid()): una tarea siempre es de quien la crea.
   const { data, error } = await supabase
@@ -84,6 +98,12 @@ export async function crearTarea(
   if (error || !data) return { error: 'No se pudo guardar la tarea.' };
   if (await guardarAvisos(data.id as string, leido.avisos))
     return { error: 'La tarea se guardó, pero no sus avisos.' };
+  if (subtareas.data.length > 0) {
+    const { error: e } = await supabase
+      .from('tareas')
+      .insert(subtareas.data.map((titulo) => ({ tarea_padre_id: data.id, titulo })));
+    if (e) return { error: 'La tarea se guardó, pero no sus subtareas.' };
+  }
   await borrarBorrador(oportunidadId, 'tarea');
   refrescar(oportunidadId);
   return { ok: 'Tarea programada.' };
@@ -109,6 +129,45 @@ export async function actualizarTarea(
   if (await guardarAvisos(id, leido.avisos)) return { error: 'La tarea se guardó, pero no sus avisos.' };
   refrescar(data.oportunidad_id as string);
   return { ok: 'Tarea actualizada.' };
+}
+
+/** Agrega una subtarea rápida (sólo el título, como en Asana); la oportunidad la hereda de la principal. */
+export async function crearSubtarea(padreId: string, titulo: string): Promise<EstadoTarea> {
+  await obtenerSesion();
+  const leido = tituloSubtareaSchema.safeParse(titulo);
+  if (!leido.success) return { error: leido.error.issues[0]?.message };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('tareas')
+    .insert({ tarea_padre_id: padreId, titulo: leido.data })
+    .select('oportunidad_id')
+    .single();
+  if (error || !data) return { error: 'No se pudo agregar la subtarea.' };
+  refrescar(data.oportunidad_id as string);
+  return { ok: 'Subtarea agregada.' };
+}
+
+/** Edita una subtarea: título, fecha opcional, avisos y notas. */
+export async function actualizarSubtarea(
+  id: string,
+  _previo: EstadoTarea,
+  datos: FormData,
+): Promise<EstadoTarea> {
+  await obtenerSesion();
+  const leido = leerTarea(datos, { subtarea: true });
+  if ('error' in leido) return { error: leido.error };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('tareas')
+    .update(leido.fila)
+    .eq('id', id)
+    .not('tarea_padre_id', 'is', null)
+    .select('oportunidad_id')
+    .maybeSingle();
+  if (error || !data) return { error: 'No se pudo guardar la subtarea.' };
+  if (await guardarAvisos(id, leido.avisos)) return { error: 'La subtarea se guardó, pero no sus avisos.' };
+  refrescar(data.oportunidad_id as string);
+  return { ok: 'Subtarea actualizada.' };
 }
 
 export async function cambiarEstadoTarea(

@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 
 /** Permite que el botón «Cancelar» de un formulario pase por la misma confirmación que el clic fuera. */
@@ -39,6 +40,7 @@ export function VentanaFlotante({
   version?: number;
   children: ReactNode;
 }) {
+  const idTitulo = useId();
   const ventana = useRef<HTMLDialogElement>(null);
   const cuerpo = useRef<HTMLDivElement>(null);
   const inicial = useRef('');
@@ -82,11 +84,14 @@ export function VentanaFlotante({
     else onCerrar();
   };
 
-  return (
+  // Portal: una ventana abierta desde otra (p. ej. una subtarea) no queda dentro del formulario de la primera.
+  return createPortal(
     <dialog
       ref={ventana}
-      aria-labelledby="ventana-titulo"
+      aria-labelledby={idTitulo}
       onCancel={(e) => {
+        // En React los eventos de un portal suben al componente que lo contiene: sólo atender los propios.
+        if (e.target !== ventana.current) return;
         e.preventDefault(); // Esc pasa por la confirmación
         if (confirmar) setConfirmar(false);
         else intentarCerrar();
@@ -104,7 +109,7 @@ export function VentanaFlotante({
         <div className={`relative ${confirmar ? 'min-h-[400px]' : ''}`}>
           <div className="flex items-start justify-between gap-3 border-b border-borde px-6 py-4">
             <div className="min-w-0">
-              <h2 id="ventana-titulo" className="text-[17px] font-bold tracking-tight">
+              <h2 id={idTitulo} className="text-[17px] font-bold tracking-tight">
                 {titulo}
               </h2>
               {detalle && <div className="mt-0.5 text-[13px] text-texto-suave">{detalle}</div>}
@@ -185,6 +190,7 @@ export function VentanaFlotante({
           )}
         </div>
       </Contexto.Provider>
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

@@ -20,6 +20,8 @@ try {
     consultar: async <T>(texto: string) => (await sql.unsafe(texto)) as unknown as T[],
   });
   console.log(nuevas.length ? `Migraciones aplicadas:\n  ${nuevas.join('\n  ')}` : 'La base ya está al día.');
+  // La API (PostgREST) guarda el esquema en caché: se le pide recargarlo para que vea tablas y relaciones nuevas.
+  await sql`notify pgrst, 'reload schema'`;
 } finally {
   await sql.end();
 }

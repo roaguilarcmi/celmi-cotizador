@@ -18,8 +18,10 @@ function leerBorrador(tipo: TipoBorrador, datos: FormData) {
     return { datos: { ...r.data, contenido: texto.doc } } as const;
   }
   let avisos: unknown = [];
+  let subtareas: unknown = [];
   try {
     avisos = JSON.parse(String(datos.get('avisos') ?? '[]'));
+    subtareas = JSON.parse(String(datos.get('subtareas') ?? '[]'));
   } catch {
     return { error: 'El borrador no es válido.' } as const;
   }
@@ -28,6 +30,7 @@ function leerBorrador(tipo: TipoBorrador, datos: FormData) {
     fecha: String(datos.get('fecha') ?? ''),
     hora: String(datos.get('hora') ?? ''),
     avisos,
+    subtareas,
   });
   if (!r.success) return { error: 'El borrador no es válido.' } as const;
   return { datos: { ...r.data, notas: texto.doc } } as const;

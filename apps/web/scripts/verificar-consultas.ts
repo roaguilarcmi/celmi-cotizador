@@ -19,5 +19,19 @@ for (const [nombre, columnas] of Object.entries(CONSULTAS)) {
   console.log(`${error ? '✘' : '✔'} ${nombre} (${tabla})${error ? ` · ${error.code} ${error.message}` : ''}`);
   if (error) fallas++;
 }
+// Relación de una tabla consigo misma: `subtareas` debe traer las hijas (lista), no la tarea principal (objeto).
+{
+  const { data, error } = await supabase
+    .from('tareas')
+    .select(CONSULTAS.tareas)
+    .is('tarea_padre_id', null)
+    .limit(1);
+  const fila = (data as unknown as { subtareas: unknown }[] | null)?.[0];
+  const bien = !error && (!fila || Array.isArray(fila.subtareas));
+  console.log(
+    `${bien ? '✔' : '✘'} tareas.subtareas llega como lista${fila ? '' : ' (sin tareas para revisar)'}`,
+  );
+  if (!bien) fallas++;
+}
 console.log(fallas ? `\n${fallas} consulta(s) con error.` : '\nTodas las consultas responden.');
 process.exit(fallas ? 1 : 0);

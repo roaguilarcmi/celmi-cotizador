@@ -17,7 +17,7 @@ export const CONSULTAS = {
     'id, oportunidad_id, autor_id, tipo, texto, contenido, estado_anterior, estado_nuevo, en, editado_en, autor:perfiles!seguimiento_autor_id_fkey(nombre)',
   perfilSesion: 'nombre, puesto, correo, roles(nombre)',
   tareas:
-    'id, oportunidad_id, titulo, descripcion, notas, vence_en, estado, completada_en, avisos:tarea_avisos(id, minutos_antes, aviso_en), oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social))',
+    'id, oportunidad_id, titulo, descripcion, notas, vence_en, estado, completada_en, avisos:tarea_avisos(id, minutos_antes, aviso_en), oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social)), subtareas:tareas!tarea_padre_id(id, titulo, descripcion, notas, vence_en, estado, completada_en, creado_en, avisos:tarea_avisos(id, minutos_antes, aviso_en))',
   borradores: 'tipo, datos, actualizado_en',
 } as const;
 

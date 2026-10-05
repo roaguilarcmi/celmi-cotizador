@@ -4,10 +4,11 @@ import type { JSONContent } from '@tiptap/core';
 import { useId, useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
-import { actualizarTarea, crearTarea } from '@/lib/acciones-tareas';
 import { useVentana } from '@/components/VentanaFlotante';
-import type { BorradorTarea, TareaFila } from '@/lib/datos';
+import { actualizarSubtarea, actualizarTarea, crearTarea } from '@/lib/acciones-tareas';
+import type { BorradorTarea } from '@/lib/datos';
 import { BotonActivarAvisos } from './BotonActivarAvisos';
+import { SubtareasNuevas } from './SubtareasNuevas';
 
 /** Anticipaciones disponibles (se pueden elegir varias). */
 export const OPCIONES_AVISO = [
@@ -36,15 +37,29 @@ function porOmision() {
   return local(d);
 }
 
-/** Crear (con `oportunidadId`) o editar/reprogramar (con `tarea`). */
+/** Lo que se edita de una tarea o subtarea. */
+export interface TareaEditable {
+  id: string;
+  titulo: string;
+  notas: unknown;
+  vence_en: string | null;
+  avisos: { minutos_antes: number }[];
+}
+
+/**
+ * Crear (con `oportunidadId`), editar/reprogramar (con `tarea`) o editar una subtarea (`esSubtarea`: la fecha es
+ * opcional y sin fecha no hay avisos).
+ */
 export function FormularioTarea({
   oportunidadId,
   tarea,
+  esSubtarea = false,
   borrador,
   onListo,
 }: {
   oportunidadId?: string;
-  tarea?: TareaFila;
+  tarea?: TareaEditable;
+  esSubtarea?: boolean;
   /** Valores de un borrador guardado para continuarlo. */
   borrador?: BorradorTarea;
   /** Al guardar con éxito (con el mensaje); si no se pasa, el formulario se vacía para capturar otra. */
@@ -54,10 +69,11 @@ export function FormularioTarea({
   const id = useId();
   const [version, setVersion] = useState(0);
   const [avisos, setAvisos] = useState<number[]>(
-    () => tarea?.avisos.map((a) => a.minutos_antes) ?? borrador?.avisos ?? [15],
+    () => tarea?.avisos.map((a) => a.minutos_antes) ?? borrador?.avisos ?? (esSubtarea ? [] : [15]),
   );
+  const [conFecha, setConFecha] = useState(() => !esSubtarea || Boolean(tarea?.vence_en));
   const [{ fecha, hora }, setCuando] = useState(() =>
-    tarea
+    tarea?.vence_en
       ? local(new Date(tarea.vence_en))
       : borrador?.fecha && borrador.hora
         ? { fecha: borrador.fecha, hora: borrador.hora }
@@ -65,6 +81,7 @@ export function FormularioTarea({
   );
   const [mensaje, setMensaje] = useState<{ error?: string; ok?: string }>({});
   const [pendiente, iniciar] = useTransition();
+  const sujeto = esSubtarea ? 'subtarea' : 'tarea';
 
   const alternar = (m: number) =>
     setAvisos((xs) => (xs.includes(m) ? xs.filter((x) => x !== m) : [...xs, m].sort((a, b) => a - b)));
@@ -72,15 +89,22 @@ export function FormularioTarea({
   const enviar = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const datos = new FormData(e.currentTarget);
-    const vence = new Date(`${fecha}T${hora}`);
-    if (Number.isNaN(vence.getTime())) return setMensaje({ error: 'Elige la fecha y hora.' });
-    // El navegador conoce la zona horaria de quien captura: se envía el instante exacto en ISO.
-    datos.set('vence_en', vence.toISOString());
-    datos.set('avisos', JSON.stringify(avisos));
+    if (conFecha) {
+      const vence = new Date(`${fecha}T${hora}`);
+      if (Number.isNaN(vence.getTime())) return setMensaje({ error: 'Elige la fecha y hora.' });
+      // El navegador conoce la zona horaria de quien captura: se envía el instante exacto en ISO.
+      datos.set('vence_en', vence.toISOString());
+      datos.set('avisos', JSON.stringify(avisos));
+    } else {
+      datos.set('vence_en', '');
+      datos.set('avisos', '[]');
+    }
     iniciar(async () => {
-      const r = tarea
-        ? await actualizarTarea(tarea.id, {}, datos)
-        : await crearTarea(oportunidadId!, {}, datos);
+      const r = !tarea
+        ? await crearTarea(oportunidadId!, {}, datos)
+        : esSubtarea
+          ? await actualizarSubtarea(tarea.id, {}, datos)
+          : await actualizarTarea(tarea.id, {}, datos);
       setMensaje(r);
       if (r.ok) {
         if (onListo) onListo(r.ok);
@@ -96,8 +120,8 @@ export function FormularioTarea({
     'h-11 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none transition-colors focus:border-acento focus:ring-4 focus:ring-acento-suave';
 
   return (
-    <form key={version} onSubmit={enviar} className="flex flex-col gap-3">
-      <input type="hidden" name="avisos" value={JSON.stringify(avisos)} />
+    <form key={version} onSubmit={enviar} className="flex flex-col gap-3.5">
+      <input type="hidden" name="avisos" value={conFecha ? JSON.stringify(avisos) : '[]'} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-titulo`} className="text-xs font-semibold text-texto-suave">
           ¿Qué hay que hacer?
@@ -110,73 +134,93 @@ export function FormularioTarea({
           maxLength={200}
           autoComplete="off"
           defaultValue={tarea?.titulo ?? borrador?.titulo}
-          placeholder="Ej. «Llamar a Héctor para confirmar la vigencia»"
+          placeholder={
+            esSubtarea ? 'Ej. «Pedir precio a CVA»' : 'Ej. «Llamar a Héctor para confirmar la vigencia»'
+          }
           className={`${control} w-full`}
         />
       </div>
 
-      <div className="flex flex-wrap items-end gap-2.5">
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
-          Fecha
+      {esSubtarea && (
+        <label className="inline-flex min-h-9 w-fit cursor-pointer items-center gap-2.5 text-[13px] font-semibold">
           <input
-            type="date"
-            name="fecha"
-            value={fecha}
-            onChange={(e) => setCuando((c) => ({ ...c, fecha: e.target.value }))}
-            required
-            className={control}
+            type="checkbox"
+            checked={conFecha}
+            onChange={(e) => setConFecha(e.target.checked)}
+            className="size-4 accent-acento"
           />
+          Ponerle fecha (y avisos)
         </label>
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
-          Hora
-          <input
-            type="time"
-            name="hora"
-            value={hora}
-            onChange={(e) => setCuando((c) => ({ ...c, hora: e.target.value }))}
-            required
-            className={control}
-          />
-        </label>
-      </div>
+      )}
 
-      <fieldset>
-        <legend className="mb-1.5 text-xs font-semibold text-texto-suave">
-          Avisos <span className="font-normal">(elige uno o varios; ninguno = sin aviso)</span>
-        </legend>
-        <div className="flex flex-wrap gap-1.5">
-          {OPCIONES_AVISO.map((o) => {
-            const activo = avisos.includes(o.minutos);
-            return (
-              <button
-                key={o.minutos}
-                type="button"
-                aria-pressed={activo}
-                onClick={() => alternar(o.minutos)}
-                className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-pill border px-3 text-[13px] font-semibold transition-colors ${
-                  activo
-                    ? 'border-paso bg-paso text-white'
-                    : 'border-borde bg-superficie text-texto-suave hover:text-texto'
-                }`}
-              >
-                <Icon name={activo ? 'palomita' : 'campana'} size={14} strokeWidth={activo ? 2.6 : 1.8} />
-                {o.nombre}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
+      {conFecha && (
+        <>
+          <div className="flex flex-wrap items-end gap-2.5">
+            <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
+              Fecha
+              <input
+                type="date"
+                name="fecha"
+                value={fecha}
+                onChange={(e) => setCuando((c) => ({ ...c, fecha: e.target.value }))}
+                required
+                className={control}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
+              Hora
+              <input
+                type="time"
+                name="hora"
+                value={hora}
+                onChange={(e) => setCuando((c) => ({ ...c, hora: e.target.value }))}
+                required
+                className={control}
+              />
+            </label>
+          </div>
+
+          <fieldset>
+            <legend className="mb-1.5 text-xs font-semibold text-texto-suave">
+              Avisos <span className="font-normal">(elige uno o varios; ninguno = sin aviso)</span>
+            </legend>
+            <div className="flex flex-wrap gap-1.5">
+              {OPCIONES_AVISO.map((o) => {
+                const activo = avisos.includes(o.minutos);
+                return (
+                  <button
+                    key={o.minutos}
+                    type="button"
+                    aria-pressed={activo}
+                    onClick={() => alternar(o.minutos)}
+                    className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-pill border px-3 text-[13px] font-semibold transition-colors ${
+                      activo
+                        ? 'border-paso bg-paso text-white'
+                        : 'border-borde bg-superficie text-texto-suave hover:text-texto'
+                    }`}
+                  >
+                    <Icon name={activo ? 'palomita' : 'campana'} size={14} strokeWidth={activo ? 2.6 : 1.8} />
+                    {o.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        </>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-texto-suave">Notas</span>
         <EditorEnriquecido
           nombre="notas"
           inicial={((tarea?.notas ?? borrador?.notas) as JSONContent | null) ?? null}
-          etiqueta="Notas de la tarea"
+          etiqueta={`Notas de la ${sujeto}`}
           placeholder="Detalles, datos de contacto, qué preguntar… (opcional)"
           minAlto={72}
         />
       </div>
+
+      {!tarea && <SubtareasNuevas inicial={borrador?.subtareas} />}
 
       <div className="flex flex-wrap items-center gap-2.5">
         <button

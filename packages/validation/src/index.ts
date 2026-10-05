@@ -121,8 +121,35 @@ export const borradorTareaSchema = z.object({
   fecha: z.union([z.iso.date(), z.literal('')]).default(''),
   hora: z.union([z.iso.time({ precision: -1 }), z.literal('')]).default(''),
   avisos: z.array(z.number().int().min(0).max(43_200)).max(6).default([]),
+  subtareas: z.array(z.string().max(200)).max(30).default([]),
 });
 
 export const borradorNotaSchema = z.object({
   tipo: z.enum(['nota', 'llamada', 'visita', 'correo']).default('nota'),
 });
+
+/** Máximo de subtareas por tarea. */
+export const MAX_SUBTAREAS = 30;
+
+/** Título de subtarea (al agregarla rápido, como en Asana: sólo el título). */
+export const tituloSubtareaSchema = z.string().trim().min(2, 'Escribe la subtarea').max(200);
+
+/** Subtareas capturadas al crear la tarea principal. */
+export const subtareasNuevasSchema = z
+  .array(tituloSubtareaSchema)
+  .max(MAX_SUBTAREAS, 'Máximo 30 subtareas')
+  .default([]);
+
+/**
+ * Subtarea (decisión 2026-10-05): como una tarea, pero la fecha es opcional y sin fecha no hay avisos.
+ */
+export const subtareaSchema = z
+  .object({
+    titulo: tituloSubtareaSchema,
+    vence_en: z.iso.datetime({ offset: true, message: 'La fecha no es válida' }).nullable().default(null),
+    avisos: tareaSchema.shape.avisos,
+  })
+  .refine((s) => s.vence_en !== null || s.avisos.length === 0, {
+    message: 'Para programar avisos, ponle fecha a la subtarea',
+    path: ['avisos'],
+  });

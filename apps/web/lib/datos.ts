@@ -84,6 +84,21 @@ export interface TareaFila {
   estado: 'pendiente' | 'completada' | 'cancelada';
   completada_en: string | null;
   oportunidad: { id: string; nombre: string; cliente: { razon_social: string } | null } | null;
+  /** Subtareas (un nivel), en orden de creación. */
+  subtareas: SubtareaFila[];
+}
+
+/** Subtarea: como una tarea, con fecha opcional y sin subtareas propias. */
+export interface SubtareaFila {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  notas: unknown;
+  vence_en: string | null;
+  estado: 'pendiente' | 'completada' | 'cancelada';
+  completada_en: string | null;
+  creado_en: string;
+  avisos: { id: string; minutos_antes: number; aviso_en: string }[];
 }
 
 /** Falla visible: un error de consulta nunca debe parecer «no hay datos» o «no existe». */
@@ -143,6 +158,8 @@ export interface BorradorTarea {
   fecha: string;
   hora: string;
   avisos: number[];
+  /** Títulos de subtareas capturadas (borradores anteriores no las traen). */
+  subtareas?: string[];
   notas: unknown;
   actualizado_en: string;
 }
@@ -200,7 +217,13 @@ export async function listarMisTareas(filtro?: {
   soloPendientes?: boolean;
 }): Promise<TareaFila[]> {
   const supabase = await clienteServidor();
-  let q = supabase.from('tareas').select(CONSULTAS.tareas).order('vence_en');
+  // Sólo tareas principales; sus subtareas vienen embebidas, en orden de creación.
+  let q = supabase
+    .from('tareas')
+    .select(CONSULTAS.tareas)
+    .is('tarea_padre_id', null)
+    .order('vence_en')
+    .order('creado_en', { referencedTable: 'subtareas' });
   if (filtro?.oportunidadId) q = q.eq('oportunidad_id', filtro.oportunidadId);
   if (filtro?.soloPendientes) q = q.eq('estado', 'pendiente');
   return (exigir(await q, 'tus tareas') ?? []) as unknown as TareaFila[];

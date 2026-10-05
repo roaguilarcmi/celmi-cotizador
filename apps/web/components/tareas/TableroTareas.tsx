@@ -30,6 +30,13 @@ function columnaDe(t: TareaFila): Columna | null {
 /** «Mis tareas» como tablero (pendientes vs. completadas) o como lista; la vista se recuerda. */
 export function TableroTareas({ tareas: iniciales }: { tareas: TareaFila[] }) {
   const [tareas, setTareas] = useState(iniciales);
+  // Cuando el servidor trae datos nuevos (p. ej. tras agregar una subtarea), se adoptan sin remontar el tablero,
+  // para que la ventana abierta siga abierta.
+  const [previas, setPrevias] = useState(iniciales);
+  if (iniciales !== previas) {
+    setPrevias(iniciales);
+    setTareas(iniciales);
+  }
   const [vistaGuardada, guardarVista] = usePreferencia('celmi-tareas-vista');
   const vista = vistaGuardada === 'lista' ? 'lista' : 'tablero';
   const [sobre, setSobre] = useState<Columna | null>(null);

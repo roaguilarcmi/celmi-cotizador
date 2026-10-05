@@ -12,6 +12,7 @@ async function tareasPorVencer(): Promise<number> {
     .from('tareas')
     .select('id', { count: 'exact', head: true })
     .eq('estado', 'pendiente')
+    .is('tarea_padre_id', null)
     .lte('vence_en', new Date(Date.now() + 86_400_000).toISOString());
   return count ?? 0;
 }
