@@ -5,7 +5,7 @@ import { Icon } from '@/components/Icon';
 import { Tarjeta } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import { descartarBorrador, guardarBorrador } from '@/lib/acciones-borradores';
-import { cambiarEstadoTarea, moverTareaAEtapa } from '@/lib/acciones-tareas';
+import { cambiarEstadoTarea, moverTareaAEtapa, reprogramarTarea } from '@/lib/acciones-tareas';
 import type { BorradorTarea, TareaFila } from '@/lib/datos';
 import { COLORES_ETAPA, etapaDe, etapaFinal, etapaInicial, type EtapaTarea } from '@/lib/etapas-tareas';
 import { usePreferencia } from '@/lib/preferencias';
@@ -14,7 +14,8 @@ import { DialogoTarea } from './DialogoTarea';
 import { EditorEtapas } from './EditorEtapas';
 import { useEtapas } from './EtapasContexto';
 import { FormularioTarea, type OportunidadElegible } from './FormularioTarea';
-import { DetallesTarea, ListaTareas } from './ListaTareas';
+import { alClicLibre } from './clicLibre';
+import { BotonAbrir, DetallesTarea, ListaTareas } from './ListaTareas';
 import { MenuTarea } from './MenuTarea';
 
 /** Dentro de cada etapa: lo que vence antes primero; sin fecha al final. En la final: lo más reciente primero. */
@@ -70,11 +71,11 @@ export function TableroTareas({
   ) => {
     const t = tareas.find((x) => x.id === id);
     if (!t) return;
-    const anterior = { estado: t.estado, etapa_id: t.etapa_id, completada_en: t.completada_en };
+    const anterior = t;
     setTareas((xs) => xs.map((x) => (x.id === id ? { ...x, ...cambio } : x)));
     const r = await guardar();
     if (r.error) {
-      setTareas((xs) => xs.map((x) => (x.id === id ? { ...x, ...anterior } : x)));
+      setTareas((xs) => xs.map((x) => (x.id === id ? anterior : x)));
       setAviso({ texto: r.error, error: true });
     } else setAviso(null);
   };
@@ -105,6 +106,11 @@ export function TableroTareas({
             completada_en: new Date().toISOString(),
           },
       () => cambiarEstadoTarea(id, hecha ? 'pendiente' : 'completada'),
+    );
+
+  const reprogramar = (id: string, venceEn: string | null, sinHora: boolean) =>
+    void aplicar(id, { vence_en: venceEn, sin_hora: venceEn !== null && sinHora }, () =>
+      reprogramarTarea(id, venceEn, sinHora),
     );
 
   const cancelar = (id: string) =>
@@ -252,6 +258,7 @@ export function TableroTareas({
                           onMover={(etapaId) => moverA(t.id, etapaId)}
                           onCompletar={() => completar(t.id, t.estado === 'completada')}
                           onCancelar={() => cancelar(t.id)}
+                          onReprogramar={(venceEn, sinHora) => reprogramar(t.id, venceEn, sinHora)}
                         />
                       ))}
                       {lista.length === 0 && (
@@ -281,11 +288,13 @@ function TarjetaTarea({
   onMover,
   onCompletar,
   onCancelar,
+  onReprogramar,
 }: {
   t: TareaFila;
   onMover: (etapaId: string) => void;
   onCompletar: () => void;
   onCancelar: () => void;
+  onReprogramar: (venceEn: string | null, sinHora: boolean) => void;
 }) {
   const [abierta, setAbierta] = useState(false);
   const hecha = t.estado === 'completada';
@@ -296,7 +305,8 @@ function TarjetaTarea({
         e.dataTransfer.setData('text/tarea', t.id);
         e.dataTransfer.effectAllowed = 'move';
       }}
-      className="cursor-grab rounded-md border border-borde bg-superficie p-3.5 sombra transition-[border-color] hover:border-acento/50 active:cursor-grabbing"
+      onClick={alClicLibre(() => setAbierta(true))}
+      className="group cursor-pointer rounded-md border border-borde bg-superficie p-3.5 sombra transition-[border-color,transform] hover:-translate-y-px hover:border-acento/50 active:cursor-grabbing"
     >
       <div className="flex items-start gap-2.5">
         <button
@@ -320,9 +330,12 @@ function TarjetaTarea({
           onAbrir={() => setAbierta(true)}
           className={`text-sm leading-snug font-semibold ${hecha ? 'text-texto-suave line-through' : ''}`}
         />
+        <div className="-mt-1.5 -mr-1.5 ml-auto">
+          <BotonAbrir titulo={t.titulo} onAbrir={() => setAbierta(true)} />
+        </div>
       </div>
       <div className="pl-7">
-        <DetallesTarea t={t} mostrarOportunidad compacta onAbrir={() => setAbierta(true)} />
+        <DetallesTarea t={t} mostrarOportunidad compacta onReprogramar={onReprogramar} />
       </div>
       {abierta && <DialogoTarea tarea={t} onCerrar={() => setAbierta(false)} />}
     </article>

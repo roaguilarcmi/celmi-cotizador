@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
-import { cambiarEstadoTarea, moverTareaAEtapa } from '@/lib/acciones-tareas';
+import { cambiarEstadoTarea, moverTareaAEtapa, reprogramarTarea } from '@/lib/acciones-tareas';
 import type { TareaFila } from '@/lib/datos';
 import { COLORES_ETAPA, estaAbierta, etapaDe, type EstadoTarea } from '@/lib/etapas-tareas';
 import { AvanceSubtareas } from './AvanceSubtareas';
@@ -12,7 +12,9 @@ import { cuando, TONOS_CUANDO } from './cuando';
 import { DialogoTarea } from './DialogoTarea';
 import { useEtapas } from './EtapasContexto';
 import { nombreAviso } from './FormularioTarea';
+import { alClicLibre } from './clicLibre';
 import { MenuTarea } from './MenuTarea';
+import { SelectorFecha } from './SelectorFecha';
 
 export { cuando, TONOS_CUANDO } from './cuando';
 
@@ -80,26 +82,31 @@ export function useAccionesTarea(t: TareaFila) {
       const r = await moverTareaAEtapa(t.id, etapaId);
       setError(r.error ?? null);
     });
-  return { pendiente, error, cambiar, moverA };
+  const reprogramar = (venceEn: string | null, sinHora: boolean) =>
+    iniciar(async () => {
+      const r = await reprogramarTarea(t.id, venceEn, sinHora);
+      setError(r.error ?? null);
+    });
+  return { pendiente, error, cambiar, moverA, reprogramar };
 }
 
 /**
- * Etiquetas de la tarea. La fecha es un botón que abre los detalles (decisión 2026-10-05); «Sin fecha» también, para
- * poder programarla.
+ * Etiquetas de la tarea. La fecha es un botón que abre «Reprogramar» (decisión 2026-10-05: lo que uno espera al tocar
+ * una fecha); «Sin fecha» también, para ponerle una.
  */
 export function DetallesTarea({
   t,
   mostrarOportunidad,
   mostrarEtapa,
   compacta,
-  onAbrir,
+  onReprogramar,
 }: {
   t: TareaFila;
   mostrarOportunidad?: boolean;
   /** En la lista (sin columnas) se indica la etapa; en el tablero ya la dice la columna. */
   mostrarEtapa?: boolean;
   compacta?: boolean;
-  onAbrir: () => void;
+  onReprogramar: (venceEn: string | null, sinHora: boolean) => void;
 }) {
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
@@ -109,24 +116,20 @@ export function DetallesTarea({
     <>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-texto-suave">
         {!hecha && !cancelada && (
-          <button
-            type="button"
-            onClick={onAbrir}
-            title="Abrir detalles"
-            className={`inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-pill px-2.5 font-semibold transition-[filter,box-shadow] hover:ring-2 hover:ring-acento/40 ${TONOS_CUANDO[c.tono]}`}
+          <SelectorFecha
+            venceEn={t.vence_en}
+            sinHora={t.sin_hora}
+            onCambiar={onReprogramar}
+            className={`inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-pill px-2.5 font-semibold transition-[box-shadow] hover:ring-2 hover:ring-acento/40 ${TONOS_CUANDO[c.tono]}`}
           >
             <Icon name="reloj" size={12} />
             {c.texto}
-          </button>
+          </SelectorFecha>
         )}
         {(hecha || cancelada) && (
-          <button
-            type="button"
-            onClick={onAbrir}
-            className={`min-h-7 cursor-pointer font-semibold hover:underline ${hecha ? 'text-exito' : ''}`}
-          >
+          <span className={`font-semibold ${hecha ? 'text-exito' : ''}`}>
             {hecha ? 'Completada' : 'Cancelada'}
-          </button>
+          </span>
         )}
         {mostrarEtapa && etapa && !hecha && !cancelada && (
           <span
@@ -177,14 +180,15 @@ function FilaTarea({
   mostrarOportunidad?: boolean;
   compacta?: boolean;
 }) {
-  const { pendiente, error, cambiar, moverA } = useAccionesTarea(t);
+  const { pendiente, error, cambiar, moverA, reprogramar } = useAccionesTarea(t);
   const [abierta, setAbierta] = useState(false);
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
 
   return (
     <li
-      className={`flex items-start gap-3 border-b border-borde py-3 last:border-0 ${pendiente ? 'opacity-60' : ''}`}
+      onClick={alClicLibre(() => setAbierta(true))}
+      className={`group -mx-2 flex cursor-pointer items-start gap-3 rounded-md border-b border-borde px-2 py-3 transition-colors last:border-0 hover:bg-superficie-2/70 ${pendiente ? 'opacity-60' : ''}`}
     >
       <button
         type="button"
@@ -214,11 +218,27 @@ function FilaTarea({
           mostrarOportunidad={mostrarOportunidad}
           mostrarEtapa
           compacta={compacta}
-          onAbrir={() => setAbierta(true)}
+          onReprogramar={reprogramar}
         />
         {error && <p className="mt-1 text-xs text-peligro">{error}</p>}
       </div>
+      <BotonAbrir titulo={t.titulo} onAbrir={() => setAbierta(true)} />
       {abierta && <DialogoTarea tarea={t} onCerrar={() => setAbierta(false)} />}
     </li>
+  );
+}
+
+/** «Abrir detalle» explícito: aparece al pasar el mouse o con el foco, y siempre en pantallas táctiles. */
+export function BotonAbrir({ titulo, onAbrir }: { titulo: string; onAbrir: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      aria-label={`Abrir detalle de «${titulo}»`}
+      title="Abrir detalle"
+      className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-texto-suave opacity-100 transition-opacity hover:bg-superficie hover:text-texto focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
+    >
+      <Icon name="abrir" size={15} />
+    </button>
   );
 }

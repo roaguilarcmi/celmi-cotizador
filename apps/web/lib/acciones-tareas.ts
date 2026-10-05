@@ -147,6 +147,38 @@ export async function actualizarTarea(
 }
 
 /** Mueve una tarea a otra etapa de su pipeline; la base ajusta el estado (la final la completa). */
+/**
+ * Reprogramación rápida desde la fecha de la tarjeta (decisión 2026-10-05): nueva fecha (con o sin hora) o sin fecha.
+ * La base recalcula los avisos; sin hora se quitan los que no son de días antes, y sin fecha se quitan todos.
+ */
+export async function reprogramarTarea(
+  id: string,
+  venceEn: string | null,
+  sinHora: boolean,
+): Promise<EstadoTarea> {
+  await obtenerSesion();
+  if (venceEn !== null && Number.isNaN(Date.parse(venceEn))) return { error: 'La fecha no es válida.' };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('tareas')
+    .update({
+      vence_en: venceEn ? new Date(venceEn).toISOString() : null,
+      sin_hora: venceEn !== null && sinHora,
+    })
+    .eq('id', id)
+    .select('oportunidad_id, avisos:tarea_avisos(id, minutos_antes)')
+    .maybeSingle();
+  if (error || !data) return { error: 'No se pudo reprogramar la tarea.' };
+  if (venceEn && sinHora) {
+    const sobran = ((data.avisos ?? []) as { id: string; minutos_antes: number }[])
+      .filter((a) => a.minutos_antes % 1440 !== 0)
+      .map((a) => a.id);
+    if (sobran.length) await supabase.from('tarea_avisos').delete().in('id', sobran);
+  }
+  refrescar(data.oportunidad_id as string | null);
+  return { ok: venceEn ? 'Tarea reprogramada.' : 'Se quitó la fecha.' };
+}
+
 export async function moverTareaAEtapa(id: string, etapaId: string): Promise<EstadoTarea> {
   await obtenerSesion();
   const supabase = await clienteServidor();

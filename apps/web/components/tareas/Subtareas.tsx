@@ -3,13 +3,20 @@
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 import { Icon } from '@/components/Icon';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
-import { cambiarEstadoTarea, crearSubtarea, reordenarSubtareas } from '@/lib/acciones-tareas';
+import {
+  cambiarEstadoTarea,
+  crearSubtarea,
+  reordenarSubtareas,
+  reprogramarTarea,
+} from '@/lib/acciones-tareas';
 import type { SubtareaFila, TareaFila } from '@/lib/datos';
 import type { EstadoTarea } from '@/lib/etapas-tareas';
 import { mover } from '@/lib/reordenar';
 import { FormularioTarea } from './FormularioTarea';
 import { subtareasVigentes } from './AvanceSubtareas';
+import { alClicLibre } from './clicLibre';
 import { cuando, TONOS_CUANDO } from './cuando';
+import { SelectorFecha } from './SelectorFecha';
 
 /**
  * Lista de subtareas de una tarea existente: agregado rápido, detalle de cada una y reordenamiento (arrastrando la
@@ -147,6 +154,7 @@ function FilaSubtarea({
   const c = s.vence_en ? cuando(s.vence_en, s.sin_hora) : null;
   return (
     <li
+      onClick={alClicLibre(onAbrir)}
       onDragOver={(e) => {
         if (onDragOver()) e.preventDefault();
       }}
@@ -205,10 +213,22 @@ function FilaSubtarea({
           <Icon name="campana" size={14} />
         </span>
       )}
-      {c && !hecha && (
-        <span className={`shrink-0 rounded-pill px-2 py-0.5 text-xs font-semibold ${TONOS_CUANDO[c.tono]}`}>
-          {c.texto}
-        </span>
+      {!hecha && (
+        <SelectorFecha
+          venceEn={s.vence_en}
+          sinHora={s.sin_hora}
+          onCambiar={(venceEn, sinHora) =>
+            iniciar(async () => void (await reprogramarTarea(s.id, venceEn, sinHora)))
+          }
+          className={`inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1 rounded-pill px-2 text-xs font-semibold transition-[box-shadow,opacity] hover:ring-2 hover:ring-acento/40 ${
+            c
+              ? TONOS_CUANDO[c.tono]
+              : `${TONOS_CUANDO.vacio} pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100`
+          }`}
+        >
+          <Icon name="reloj" size={12} />
+          {c ? c.texto : 'Fecha'}
+        </SelectorFecha>
       )}
       <button
         type="button"

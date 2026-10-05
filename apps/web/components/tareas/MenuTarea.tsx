@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { COLORES_ETAPA, estaAbierta, type EstadoTarea } from '@/lib/etapas-tareas';
+import { capaDe } from './clicLibre';
 import { useEtapas } from './EtapasContexto';
 
 /**
@@ -33,14 +34,19 @@ export function MenuTarea({
   const idMenu = useId();
   const boton = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number; arriba: boolean } | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; arriba: boolean; capa: HTMLElement } | null>(null);
   const abierto = pos !== null;
 
   const abrir = () => {
     const r = boton.current?.getBoundingClientRect();
     if (!r) return;
     const arriba = r.bottom + 300 > window.innerHeight && r.top > 300;
-    setPos({ x: Math.min(r.left, window.innerWidth - 248), y: arriba ? r.top - 6 : r.bottom + 6, arriba });
+    setPos({
+      x: Math.min(r.left, window.innerWidth - 248),
+      y: arriba ? r.top - 6 : r.bottom + 6,
+      arriba,
+      capa: capaDe(boton.current!),
+    });
   };
   const cerrar = (devolverFoco = true) => {
     setPos(null);
@@ -99,11 +105,13 @@ export function MenuTarea({
         title="Mover a otra etapa"
         className={`group/titulo inline-flex max-w-full cursor-pointer items-start gap-1 rounded-sm text-left hover:text-acento-texto focus-visible:outline-2 focus-visible:outline-acento ${className}`}
       >
-        <span className="min-w-0">{titulo}</span>
+        <span className="min-w-0 underline decoration-texto/25 decoration-dashed underline-offset-4 group-hover/titulo:decoration-acento">
+          {titulo}
+        </span>
         <Icon
           name="derecha"
           size={13}
-          className="mt-[3px] shrink-0 rotate-90 opacity-40 transition-opacity group-hover/titulo:opacity-100"
+          className="mt-[3px] shrink-0 rotate-90 opacity-60 transition-opacity group-hover/titulo:opacity-100"
         />
       </button>
       {pos &&
@@ -159,7 +167,7 @@ export function MenuTarea({
               </>
             )}
           </div>,
-          document.body,
+          pos.capa,
         )}
     </>
   );
