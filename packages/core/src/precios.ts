@@ -186,3 +186,55 @@ export function calcularTotales(
   const iva = dividirRedondeando(subtotal * tasa, CIEN_POR_CIENTO);
   return { subtotal, iva, total: subtotal + iva };
 }
+
+/**
+ * Reparte un monto en centavos en proporción a los pesos, sin perder ni inventar centavos (método del mayor residuo:
+ * cada parte se redondea hacia abajo y los centavos sobrantes van a las de mayor residuo; en empate, a la primera).
+ */
+export function repartir(monto: Centavos, pesos: readonly bigint[]): Centavos[] {
+  if (monto < 0n) throw new Error('El monto a repartir no puede ser negativo');
+  if (pesos.some((p) => p < 0n)) throw new Error('Los pesos no pueden ser negativos');
+  const total = pesos.reduce((s, p) => s + p, 0n);
+  if (total === 0n) throw new Error('No hay sobre qué repartir (los pesos suman cero)');
+  const partes = pesos.map((p) => (monto * p) / total);
+  const residuos = pesos.map((p, i) => ({ i, r: (monto * p) % total }));
+  let sobrante = monto - partes.reduce((s, p) => s + p, 0n);
+  residuos.sort((a, b) => (b.r > a.r ? 1 : b.r < a.r ? -1 : a.i - b.i));
+  for (const { i } of residuos) {
+    if (sobrante === 0n) break;
+    partes[i] = (partes[i] ?? 0n) + 1n;
+    sobrante -= 1n;
+  }
+  return partes;
+}
+
+export interface LineaProrrateada {
+  /** Parte del cargo que le toca a la línea. */
+  cargo: Centavos;
+  /** Precio unitario con el cargo incluido (la parte entre la cantidad, redondeada a centavos). */
+  precioUnitario: Centavos;
+  importe: Centavos;
+}
+
+/**
+ * Cargo prorrateado (regla 2026-10-05): el precio del cargo (con su propia utilidad) se reparte entre las líneas
+ * elegidas en proporción a su precio de venta (importe). Cada línea suma su parte entre su cantidad al precio
+ * unitario; ese cociente se redondea a centavos, así que el total puede diferir del cargo por algunos centavos
+ * (`diferencia`, que quien autoriza ve).
+ */
+export function prorratear(
+  cargo: Centavos,
+  lineas: readonly { precioUnitario: Centavos; cantidad: number; importe: Centavos }[],
+): { lineas: LineaProrrateada[]; diferencia: Centavos } {
+  const partes = repartir(
+    cargo,
+    lineas.map((l) => l.importe),
+  );
+  const resultado = lineas.map((l, i) => {
+    const parte = partes[i] ?? 0n;
+    const precioUnitario = l.precioUnitario + dividirRedondeando(parte, BigInt(l.cantidad));
+    return { cargo: parte, precioUnitario, importe: precioUnitario * BigInt(l.cantidad) };
+  });
+  const agregado = resultado.reduce((s, l, i) => s + l.importe - (lineas[i]?.importe ?? 0n), 0n);
+  return { lineas: resultado, diferencia: agregado - cargo };
+}

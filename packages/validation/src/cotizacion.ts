@@ -20,8 +20,11 @@ export const costoCotizacionSchema = z.object({
   vigencia: z.union([z.iso.date(), z.literal('')]).default(''),
 });
 
-export const partidaCotizacionSchema = z.object({
+/** Campos de una partida o de un adicional. */
+const camposPartida = {
   id: uuid.optional(),
+  /** Clave local (para referirse a partidas aún sin id, p. ej. en un prorrateo). */
+  clave: z.string().max(80).default(''),
   sku: z.string().trim().max(60).default(''),
   marca_id: opcionalUuid,
   descripcion: z.string().trim().min(1, 'Cada partida necesita descripción').max(2000),
@@ -37,7 +40,25 @@ export const partidaCotizacionSchema = z.object({
   oculta_al_cliente: z.boolean().default(false),
   /** null: aún sin costo (se puede guardar así, pero no enviar a autorización). */
   costo: costoCotizacionSchema.nullable().default(null),
+};
+
+/** Adicional de una partida (regla 2026-10-05): línea visible o incluido en el precio de su partida. */
+export const componenteCotizacionSchema = z.object({
+  ...camposPartida,
+  presentacion: z.enum(['linea', 'incluida']).default('incluida'),
 });
+
+/** Partida de primer nivel, o cargo prorrateado (se reparte entre las partidas de «prorratear_entre»). */
+export const partidaCotizacionSchema = z
+  .object({
+    ...camposPartida,
+    presentacion: z.enum(['linea', 'prorrateada']).default('linea'),
+    componentes: z.array(componenteCotizacionSchema).max(20, 'Máximo 20 adicionales por partida').default([]),
+    prorratear_entre: z.array(z.string().max(80)).max(300).default([]),
+  })
+  .refine((p) => p.presentacion !== 'prorrateada' || p.componentes.length === 0, {
+    message: 'Un cargo prorrateado no lleva adicionales',
+  });
 
 export const propuestaCotizacionSchema = z.object({
   id: uuid.optional(),

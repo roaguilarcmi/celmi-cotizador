@@ -6,6 +6,7 @@ import type { JSONContent } from '@tiptap/core';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
+import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { costoDeFila, erroresDeFila, filaVacia, type Catalogos, type FilaEditable } from './modelo';
 
@@ -17,23 +18,57 @@ export const textoComoDocumento = (texto: string): JSONContent => ({
     .map((l) => (l ? { type: 'paragraph', content: [{ type: 'text', text: l }] } : { type: 'paragraph' })),
 });
 
+/** partida: de primer nivel · adicional: de una partida · cargo: se prorratea entre partidas (reglas 2026-10-05). */
+export type ModoPartida = 'partida' | 'adicional' | 'cargo';
+
+const TITULOS: Record<ModoPartida, { nueva: string; existente: string; detalle: string }> = {
+  partida: {
+    nueva: 'Nueva partida',
+    existente: 'Partida',
+    detalle: 'Producto, costo y sus adicionales. La utilidad y el precio los define quien autoriza.',
+  },
+  adicional: {
+    nueva: 'Nuevo adicional',
+    existente: 'Adicional',
+    detalle:
+      'Con su propio costo y utilidad. Puede ir incluido en el precio de la partida o como línea visible.',
+  },
+  cargo: {
+    nueva: 'Nuevo cargo a prorratear',
+    existente: 'Cargo a prorratear',
+    detalle:
+      'Con su propio costo y utilidad; su precio se reparte entre las partidas que elijas, según su precio de venta.',
+  },
+};
+
 /**
- * Captura o edición de una partida en ventana flotante (decisión 2026-10-05): producto con descripción con formato
- * (mismo editor que tareas y notas) y su costo. Al cerrar con cambios pregunta, como en las demás capturas.
+ * Captura o edición en ventana flotante (decisión 2026-10-05): descripción con formato (mismo editor que tareas y
+ * notas), producto y costo. Al cerrar con cambios pregunta, como en las demás capturas.
  */
 export function VentanaPartida({
   fila,
+  modo = 'partida',
   numero,
-  esAdicional,
+  esAdicional = false,
+  cantidadPadre,
+  descripcionPadre,
+  destinos = [],
   catalogos,
   soloLectura,
   onGuardar,
   onCerrar,
 }: {
-  /** null: partida nueva. */
+  /** null: nueva. */
   fila: FilaEditable | null;
-  numero: number;
-  esAdicional: boolean;
+  modo?: ModoPartida;
+  numero?: number;
+  /** La propuesta es de adicionales (aparece «Se suma»). */
+  esAdicional?: boolean;
+  /** Cantidad de la partida (para adicionales incluidos, que llevan la misma). */
+  cantidadPadre?: string;
+  descripcionPadre?: string;
+  /** Partidas entre las que se puede repartir un cargo. */
+  destinos?: { clave: string; descripcion: string }[];
   catalogos: Catalogos;
   soloLectura: boolean;
   /** `otra`: guardar y abrir una nueva en blanco. */
@@ -41,11 +76,26 @@ export function VentanaPartida({
   onCerrar: () => void;
 }) {
   const [version, setVersion] = useState(0);
+  const t = TITULOS[modo];
+  const unidad = catalogos.unidades[0]?.id ?? null;
+  const vacia = () => {
+    const f = filaVacia(
+      modo === 'cargo' ? (catalogos.unidades.find((u) => u.id === 'servicio')?.id ?? unidad) : unidad,
+    );
+    if (modo === 'adicional')
+      return { ...f, presentacion: 'incluida' as const, cantidad: cantidadPadre ?? '1' };
+    if (modo === 'cargo') return { ...f, presentacion: 'prorrateada' as const };
+    return f;
+  };
   return (
     <VentanaFlotante
-      titulo={fila ? `Partida ${numero}` : 'Nueva partida'}
+      titulo={fila ? `${t.existente}${numero ? ` ${numero}` : ''}` : t.nueva}
       detalle={
-        soloLectura ? 'Sólo lectura.' : 'Producto y costo. La utilidad y el precio los define quien autoriza.'
+        soloLectura
+          ? 'Sólo lectura.'
+          : modo === 'adicional' && descripcionPadre
+            ? `De «${descripcionPadre}». ${t.detalle}`
+            : t.detalle
       }
       esEdicion={Boolean(fila)}
       version={version}
@@ -53,9 +103,12 @@ export function VentanaPartida({
     >
       <Formulario
         key={version}
-        inicial={fila ?? filaVacia(catalogos.unidades[0]?.id ?? null)}
+        inicial={fila ?? vacia()}
+        modo={modo}
         nueva={!fila}
         esAdicional={esAdicional}
+        cantidadPadre={cantidadPadre}
+        destinos={destinos}
         catalogos={catalogos}
         soloLectura={soloLectura}
         onGuardar={(f, otra) => {
@@ -69,15 +122,21 @@ export function VentanaPartida({
 
 function Formulario({
   inicial,
+  modo,
   nueva,
   esAdicional,
+  cantidadPadre,
+  destinos,
   catalogos,
   soloLectura,
   onGuardar,
 }: {
   inicial: FilaEditable;
+  modo: ModoPartida;
   nueva: boolean;
   esAdicional: boolean;
+  cantidadPadre?: string;
+  destinos: { clave: string; descripcion: string }[];
   catalogos: Catalogos;
   soloLectura: boolean;
   onGuardar: (fila: FilaEditable, otra: boolean) => void;
@@ -86,17 +145,34 @@ function Formulario({
   const id = useId();
   const [f, setF] = useState(inicial);
   const [intento, setIntento] = useState(false);
-  const cambiar = (cambio: Partial<FilaEditable>) => setF((x) => ({ ...x, ...cambio }));
+  const [adicional, setAdicional] = useState<string | 'nuevo' | null>(null);
+
+  // El incluido lleva la misma cantidad que su partida.
+  const incluido = modo === 'adicional' && f.presentacion === 'incluida';
+  const cambiar = (cambio: Partial<FilaEditable>) =>
+    setF((x) => {
+      const nuevo = { ...x, ...cambio };
+      if (cambio.cantidad !== undefined)
+        nuevo.componentes = nuevo.componentes.map((c) =>
+          c.presentacion === 'incluida' ? { ...c, cantidad: nuevo.cantidad } : c,
+        );
+      return nuevo;
+    });
 
   const errores = erroresDeFila(f);
   const costo = costoDeFila(f);
 
-  const enviar = (e: FormEvent<HTMLFormElement>, otra = false) => {
+  const enviar = (e: FormEvent, otra = false) => {
     e.preventDefault();
     const form = (e.target as HTMLElement).closest('form');
     const valor = String(new FormData(form ?? undefined).get('descripcion_contenido') ?? '');
     const doc = valor ? (JSON.parse(valor) as ContenidoEnriquecido) : null;
-    const lista = { ...f, descripcion_contenido: doc, descripcion: doc ? textoPlano(doc) : '' };
+    const lista = {
+      ...f,
+      cantidad: incluido ? (cantidadPadre ?? f.cantidad) : f.cantidad,
+      descripcion_contenido: doc,
+      descripcion: doc ? textoPlano(doc) : '',
+    };
     setIntento(true);
     if (Object.keys(erroresDeFila(lista)).length) {
       setF(lista);
@@ -108,9 +184,18 @@ function Formulario({
   const control =
     'h-10 w-full rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none transition-colors focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
   const mal = (campo: keyof typeof errores) => (intento && errores[campo] ? 'border-peligro' : '');
+  const componenteAbierto = f.componentes.find((c) => c.clave === adicional);
 
   return (
-    <form onSubmit={(e) => enviar(e)} className="flex flex-col gap-5">
+    <form
+      onSubmit={(e) => {
+        // El envío del formulario de un adicional (ventana anidada, en un portal) también llega aquí por el árbol de
+        // React: sólo se atiende el propio.
+        if (e.target !== e.currentTarget) return;
+        enviar(e);
+      }}
+      className="flex flex-col gap-5"
+    >
       {/* Huella para «¿descartar cambios?»: los campos controlados viajan como ocultos. */}
       <input
         type="hidden"
@@ -118,7 +203,45 @@ function Formulario({
         value={JSON.stringify({ ...f, descripcion: undefined, descripcion_contenido: undefined })}
       />
 
-      <Seccion titulo="Producto">
+      {modo === 'adicional' && (
+        <div
+          role="radiogroup"
+          aria-label="Cómo se presenta al cliente"
+          className="inline-flex w-fit flex-wrap rounded-md border border-borde bg-superficie-2 p-1"
+        >
+          {(
+            [
+              { valor: 'incluida', nombre: 'Incluido en el precio', ayuda: 'El cliente ve una sola línea' },
+              { valor: 'linea', nombre: 'Línea visible', ayuda: 'Aparece como línea propia' },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.valor}
+              type="button"
+              role="radio"
+              aria-checked={f.presentacion === o.valor}
+              disabled={soloLectura}
+              title={o.ayuda}
+              onClick={() =>
+                cambiar({
+                  presentacion: o.valor,
+                  ...(o.valor === 'incluida' ? { cantidad: cantidadPadre ?? f.cantidad } : {}),
+                })
+              }
+              className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-3.5 text-[13px] font-semibold transition-colors ${
+                f.presentacion === o.valor
+                  ? 'bg-superficie text-texto sombra'
+                  : 'text-texto-suave hover:text-texto'
+              }`}
+            >
+              <Icon name={o.valor === 'incluida' ? 'candado' : 'ojo'} size={14} />
+              {o.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Seccion titulo={modo === 'cargo' ? 'Cargo' : 'Producto'}>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-texto-suave">Descripción</span>
           <EditorEnriquecido
@@ -127,58 +250,72 @@ function Formulario({
               (f.descripcion_contenido as JSONContent | null) ??
               (f.descripcion ? textoComoDocumento(f.descripcion) : null)
             }
-            etiqueta="Descripción de la partida"
-            placeholder={'Dell Pro 5 14 (P514260), 14", U7 355 S3, 32 GB, 512 GB…'}
-            minAlto={96}
+            etiqueta="Descripción"
+            placeholder={
+              modo === 'cargo'
+                ? 'Envío especial a Pachuca…'
+                : modo === 'adicional'
+                  ? 'Memoria RAM 16 GB DDR5, servicio de instalación…'
+                  : 'Dell Pro 5 14 (P514260), 14", U7 355 S3, 32 GB, 512 GB…'
+            }
+            minAlto={88}
           />
           {intento && errores.descripcion && (
             <span className="text-xs text-peligro">{errores.descripcion}</span>
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Campo etiqueta="SKU" id={`${id}-sku`}>
-            <input
-              id={`${id}-sku`}
-              value={f.sku}
-              maxLength={60}
-              disabled={soloLectura}
-              onChange={(e) => cambiar({ sku: e.target.value })}
-              className={`${control} font-mono`}
-            />
-          </Campo>
-          <Campo etiqueta="Marca" id={`${id}-marca`}>
-            <select
-              id={`${id}-marca`}
-              value={f.marca_id ?? ''}
-              disabled={soloLectura}
-              onChange={(e) => cambiar({ marca_id: e.target.value || null })}
-              className={control}
-            >
-              <option value="">—</option>
-              {catalogos.marcas.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <Campo etiqueta="Tiempo de entrega" id={`${id}-entrega`}>
-            <input
-              id={`${id}-entrega`}
-              value={f.entrega}
-              maxLength={60}
-              placeholder="10 semanas"
-              disabled={soloLectura}
-              onChange={(e) => cambiar({ entrega: e.target.value })}
-              className={control}
-            />
-          </Campo>
-          <Campo etiqueta="Cantidad" id={`${id}-cantidad`} error={intento ? errores.cantidad : undefined}>
+          {modo !== 'cargo' && (
+            <>
+              <Campo etiqueta="SKU" id={`${id}-sku`}>
+                <input
+                  id={`${id}-sku`}
+                  value={f.sku}
+                  maxLength={60}
+                  disabled={soloLectura}
+                  onChange={(e) => cambiar({ sku: e.target.value })}
+                  className={`${control} font-mono`}
+                />
+              </Campo>
+              <Campo etiqueta="Marca" id={`${id}-marca`}>
+                <select
+                  id={`${id}-marca`}
+                  value={f.marca_id ?? ''}
+                  disabled={soloLectura}
+                  onChange={(e) => cambiar({ marca_id: e.target.value || null })}
+                  className={control}
+                >
+                  <option value="">—</option>
+                  {catalogos.marcas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Campo etiqueta="Tiempo de entrega" id={`${id}-entrega`}>
+                <input
+                  id={`${id}-entrega`}
+                  value={f.entrega}
+                  maxLength={60}
+                  placeholder="10 semanas"
+                  disabled={soloLectura}
+                  onChange={(e) => cambiar({ entrega: e.target.value })}
+                  className={control}
+                />
+              </Campo>
+            </>
+          )}
+          <Campo
+            etiqueta={incluido ? 'Cantidad (igual a la partida)' : 'Cantidad'}
+            id={`${id}-cantidad`}
+            error={intento ? errores.cantidad : undefined}
+          >
             <input
               id={`${id}-cantidad`}
               inputMode="numeric"
-              value={f.cantidad}
-              disabled={soloLectura}
+              value={incluido ? (cantidadPadre ?? f.cantidad) : f.cantidad}
+              disabled={soloLectura || incluido}
               onChange={(e) => cambiar({ cantidad: e.target.value.replace(/[^\d]/g, '') })}
               className={`${control} text-right tabular ${mal('cantidad')}`}
             />
@@ -198,7 +335,7 @@ function Formulario({
               ))}
             </select>
           </Campo>
-          {esAdicional && (
+          {esAdicional && modo === 'partida' && (
             <label className="flex min-h-10 cursor-pointer items-end gap-2 pb-2 text-[13px] font-semibold">
               <input
                 type="checkbox"
@@ -215,7 +352,7 @@ function Formulario({
 
       <Seccion titulo="Costo">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Campo etiqueta="Mayorista" id={`${id}-mayorista`}>
+          <Campo etiqueta="Mayorista / proveedor" id={`${id}-mayorista`}>
             <select
               id={`${id}-mayorista`}
               value={f.mayorista_id ?? ''}
@@ -311,6 +448,121 @@ function Formulario({
         )}
       </Seccion>
 
+      {modo === 'cargo' && (
+        <Seccion titulo="Repartir entre">
+          {destinos.length === 0 ? (
+            <p className="text-[13px] text-texto-suave">Primero agrega partidas a esta propuesta.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-[13px] font-semibold">
+                <input
+                  type="checkbox"
+                  disabled={soloLectura}
+                  checked={destinos.every((d) => f.prorratear_entre.includes(d.clave))}
+                  onChange={(e) =>
+                    cambiar({ prorratear_entre: e.target.checked ? destinos.map((d) => d.clave) : [] })
+                  }
+                  className="size-4 accent-acento"
+                />
+                Todas las partidas
+              </label>
+              <ul className="flex max-h-56 flex-col overflow-y-auto rounded-md border border-borde">
+                {destinos.map((d, i) => (
+                  <li key={d.clave} className="border-b border-borde last:border-0">
+                    <label className="flex min-h-10 cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-superficie-2">
+                      <input
+                        type="checkbox"
+                        disabled={soloLectura}
+                        checked={f.prorratear_entre.includes(d.clave)}
+                        onChange={(e) =>
+                          cambiar({
+                            prorratear_entre: e.target.checked
+                              ? [...f.prorratear_entre, d.clave]
+                              : f.prorratear_entre.filter((c) => c !== d.clave),
+                          })
+                        }
+                        className="size-4 shrink-0 accent-acento"
+                      />
+                      <span className="w-6 shrink-0 text-xs text-texto-suave tabular">{i + 1}</span>
+                      <span className="line-clamp-1">{d.descripcion || 'Sin descripción'}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-texto-suave">
+                Al autorizar, el precio del cargo se reparte en proporción al precio de venta de cada partida
+                elegida y se suma a su precio unitario.
+              </p>
+              {intento && errores.prorratear_entre && (
+                <span className="text-xs text-peligro">{errores.prorratear_entre}</span>
+              )}
+            </div>
+          )}
+        </Seccion>
+      )}
+
+      {modo === 'partida' && (f.componentes.length > 0 || !soloLectura) && (
+        <Seccion titulo="Adicionales de esta partida">
+          {f.componentes.length > 0 && (
+            <ul className="flex flex-col rounded-md border border-borde">
+              {f.componentes.map((c) => {
+                const cc = costoDeFila(c);
+                return (
+                  <li
+                    key={c.clave}
+                    className="flex items-center gap-3 border-b border-borde px-3 py-2 last:border-0"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-1 text-[13px] [&_p]:inline">
+                        {c.descripcion_contenido != null ? (
+                          <TextoEnriquecido contenido={c.descripcion_contenido} respaldo={c.descripcion} />
+                        ) : (
+                          c.descripcion
+                        )}
+                      </span>
+                      <ChipPresentacion presentacion={c.presentacion} />
+                    </span>
+                    <span className="text-[13px] font-semibold tabular">
+                      {cc ? formatearMXN(cc.costoTotal) : 'Sin costo'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAdicional(c.clave)}
+                      aria-label={`${soloLectura ? 'Ver' : 'Editar'} adicional`}
+                      className="inline-flex size-8 cursor-pointer items-center justify-center rounded-sm text-texto-suave hover:bg-superficie-2 hover:text-texto"
+                    >
+                      <Icon name={soloLectura ? 'ojo' : 'herramienta'} size={15} />
+                    </button>
+                    {!soloLectura && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          cambiar({ componentes: f.componentes.filter((x) => x.clave !== c.clave) })
+                        }
+                        aria-label="Quitar adicional"
+                        className="inline-flex size-8 cursor-pointer items-center justify-center rounded-sm text-texto-suave hover:bg-superficie-2 hover:text-peligro"
+                      >
+                        <Icon name="cerrar" size={15} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!soloLectura && (
+            <button
+              type="button"
+              onClick={() => setAdicional('nuevo')}
+              className="inline-flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-md border-2 border-dashed border-texto/20 px-3.5 text-[13px] font-semibold text-acento-texto hover:border-acento"
+            >
+              <Icon name="mas" size={16} strokeWidth={2.4} />
+              Agregar adicional (memoria, instalación…)
+            </button>
+          )}
+        </Seccion>
+      )}
+
       {!soloLectura && (
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -318,16 +570,16 @@ function Formulario({
             className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
           >
             <Icon name="palomita" strokeWidth={2.2} />
-            {nueva ? 'Agregar partida' : 'Aplicar cambios'}
+            {nueva ? 'Agregar' : 'Aplicar cambios'}
           </button>
-          {nueva && (
+          {nueva && modo !== 'cargo' && (
             <button
               type="button"
-              onClick={(e) => enviar(e as unknown as FormEvent<HTMLFormElement>, true)}
+              onClick={(e) => enviar(e, true)}
               className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-4 text-sm font-semibold hover:bg-superficie-2"
             >
               <Icon name="mas" strokeWidth={2.2} />
-              Agregar y capturar otra
+              Agregar y capturar otro
             </button>
           )}
           {ventana && (
@@ -339,12 +591,45 @@ function Formulario({
               Cancelar
             </button>
           )}
-          <span className="text-xs text-texto-suave">
-            Los cambios se guardan en la cotización con «Guardar».
-          </span>
+          <span className="text-xs text-texto-suave">Se guardan en la cotización con «Guardar».</span>
         </div>
       )}
+
+      {(adicional === 'nuevo' || componenteAbierto) && (
+        <VentanaPartida
+          fila={componenteAbierto ?? null}
+          modo="adicional"
+          cantidadPadre={f.cantidad}
+          descripcionPadre={f.descripcion || 'esta partida'}
+          catalogos={catalogos}
+          soloLectura={soloLectura}
+          onCerrar={() => setAdicional(null)}
+          onGuardar={(c, otra) => {
+            const existe = f.componentes.some((x) => x.clave === c.clave);
+            cambiar({
+              componentes: existe
+                ? f.componentes.map((x) => (x.clave === c.clave ? c : x))
+                : [...f.componentes, c],
+            });
+            if (!otra) setAdicional(null);
+          }}
+        />
+      )}
     </form>
+  );
+}
+
+export function ChipPresentacion({ presentacion }: { presentacion: FilaEditable['presentacion'] }) {
+  return presentacion === 'incluida' ? (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-texto-suave">
+      <Icon name="candado" size={11} />
+      Incluido en el precio
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-acento-texto">
+      <Icon name="ojo" size={11} />
+      Línea visible
+    </span>
   );
 }
 

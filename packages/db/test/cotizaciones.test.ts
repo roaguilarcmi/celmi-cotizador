@@ -240,3 +240,182 @@ describe('guardar partidas en una transacción (Fase 3B)', () => {
     ).rejects.toThrow(/no existe o no tienes acceso/);
   });
 });
+
+describe('adicionales de una partida y cargos prorrateados (0016)', () => {
+  const guardar = (revision: string, datos: unknown) =>
+    db.query('select public.guardar_partidas($1, $2)', [revision, JSON.stringify(datos)]);
+  const partidas = (revision: string) =>
+    filas<{ descripcion: string; cantidad: number; presentacion: string; padre: string | null }>(
+      db,
+      `select pa.descripcion, pa.cantidad, pa.presentacion, padre.descripcion as padre
+       from public.partidas pa join public.propuestas pr on pr.id = pa.propuesta_id
+       left join public.partidas padre on padre.id = pa.partida_padre_id
+       where pr.revision_id = $1 order by pa.orden`,
+      [revision],
+    );
+
+  it('guarda adicionales (el incluido toma la cantidad de su partida) y repartos entre partidas', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await como(db, 'fabiola', async () => {
+      await guardar(otra.revision, [
+        {
+          id: otra.propuesta,
+          nombre: 'Propuesta 1',
+          partidas: [
+            {
+              clave: 'laptop',
+              descripcion: 'Laptop',
+              cantidad: 10,
+              componentes: [
+                { clave: 'ram', descripcion: 'Memoria RAM 16 GB', cantidad: 3, presentacion: 'incluida' },
+                { clave: 'mochila', descripcion: 'Mochila', cantidad: 2, presentacion: 'linea' },
+              ],
+            },
+            { clave: 'monitor', descripcion: 'Monitor', cantidad: 30 },
+            {
+              clave: 'envio',
+              descripcion: 'Envío especial',
+              cantidad: 1,
+              presentacion: 'prorrateada',
+              prorratear_entre: ['laptop', 'monitor'],
+            },
+          ],
+        },
+      ]);
+      expect(await partidas(otra.revision)).toEqual([
+        { descripcion: 'Laptop', cantidad: 10, presentacion: 'linea', padre: null },
+        { descripcion: 'Memoria RAM 16 GB', cantidad: 10, presentacion: 'incluida', padre: 'Laptop' },
+        { descripcion: 'Mochila', cantidad: 2, presentacion: 'linea', padre: 'Laptop' },
+        { descripcion: 'Monitor', cantidad: 30, presentacion: 'linea', padre: null },
+        { descripcion: 'Envío especial', cantidad: 1, presentacion: 'prorrateada', padre: null },
+      ]);
+      const repartos = await filas<{ destino: string }>(
+        db,
+        `select d.descripcion as destino from public.partida_prorrateos x
+         join public.partidas d on d.id = x.destino_id order by d.orden`,
+      );
+      expect(repartos.map((r) => r.destino)).toEqual(['Laptop', 'Monitor']);
+
+      // Si cambia la cantidad de la partida, el incluido la sigue.
+      await db.query(
+        `update public.partidas set cantidad = 12 where descripcion = 'Laptop' and propuesta_id = $1`,
+        [otra.propuesta],
+      );
+      const [ram] = await filas<{ cantidad: number }>(
+        db,
+        `select cantidad from public.partidas where descripcion like 'Memoria%' and propuesta_id = $1`,
+        [otra.propuesta],
+      );
+      expect(ram!.cantidad).toBe(12);
+    });
+  });
+
+  it('un cargo prorrateado sin partidas no se envía a autorización', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await expect(
+      como(db, 'fabiola', async () => {
+        await guardar(otra.revision, [
+          {
+            id: otra.propuesta,
+            nombre: 'Propuesta 1',
+            partidas: [
+              { id: otra.partida, descripcion: 'Laptop', cantidad: 2, costo: { costo_unitario: '100' } },
+              {
+                descripcion: 'Envío',
+                cantidad: 1,
+                presentacion: 'prorrateada',
+                costo: { costo_unitario: '50' },
+              },
+            ],
+          },
+        ]);
+        await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+          otra.revision,
+        ]);
+      }),
+    ).rejects.toThrow(/entre qué partidas se reparte/);
+  });
+
+  it('no se permiten incluidos en primer nivel ni adicionales de adicionales', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await expect(
+      como(db, 'fabiola', () =>
+        guardar(otra.revision, [
+          {
+            id: otra.propuesta,
+            nombre: 'P',
+            partidas: [{ descripcion: 'X', cantidad: 1, presentacion: 'incluida' }],
+          },
+        ]),
+      ),
+    ).rejects.toThrow(/Sólo un adicional/);
+  });
+
+  it('una Rev nueva copia adicionales y repartos', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    // Fuera de como(): debe quedar guardado para autorizar y crear la Rev después.
+    await Promise.resolve(
+      guardar(otra.revision, [
+        {
+          id: otra.propuesta,
+          nombre: 'P',
+          partidas: [
+            {
+              id: otra.partida,
+              clave: 'laptop',
+              descripcion: 'Laptop',
+              cantidad: 2,
+              costo: { costo_unitario: '14533.46' },
+              componentes: [
+                {
+                  descripcion: 'RAM',
+                  cantidad: 2,
+                  presentacion: 'incluida',
+                  costo: { costo_unitario: '900' },
+                },
+              ],
+            },
+            {
+              clave: 'envio',
+              descripcion: 'Envío',
+              cantidad: 1,
+              presentacion: 'prorrateada',
+              costo: { costo_unitario: '500' },
+              prorratear_entre: ['laptop'],
+            },
+          ],
+        },
+      ]),
+    );
+    // Autorizar por el camino real (superusuario: precios mientras espera).
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      otra.revision,
+    ]);
+    await db.query(
+      `insert into public.partida_precios (partida_id, precio_unitario)
+       select pa.id, round(c.costo_unitario * c.tipo_cambio * 1.2, 2) from public.partidas pa
+       join public.partida_costos c on c.partida_id = pa.id where pa.propuesta_id = $1`,
+      [otra.propuesta],
+    );
+    await db.query(`update public.revisiones set estado = 'autorizada' where id = $1`, [otra.revision]);
+    await como(db, 'fabiola', async () => {
+      const [{ id }] = (await filas<{ id: string }>(
+        db,
+        `select public.crear_revision($1, 'solicitud_cliente') as id`,
+        [otra.cotizacion],
+      )) as [{ id: string }];
+      expect(await partidas(id)).toEqual([
+        { descripcion: 'Laptop', cantidad: 2, presentacion: 'linea', padre: null },
+        { descripcion: 'RAM', cantidad: 2, presentacion: 'incluida', padre: 'Laptop' },
+        { descripcion: 'Envío', cantidad: 1, presentacion: 'prorrateada', padre: null },
+      ]);
+      const n = await filas(
+        db,
+        `select 1 from public.partida_prorrateos x join public.partidas pa on pa.id = x.partida_id
+         join public.propuestas pr on pr.id = pa.propuesta_id where pr.revision_id = $1`,
+        [id],
+      );
+      expect(n).toHaveLength(1);
+    });
+  });
+});

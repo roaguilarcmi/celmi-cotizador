@@ -43,3 +43,33 @@ describe('costo de una partida sin utilidad', () => {
     expect(c.costoTotal).toBe(543704n); // 5,437.035 → 5,437.04 (sin redondear antes de multiplicar)
   });
 });
+
+describe('cargos prorrateados (regla 2026-10-05)', () => {
+  it('reparte sin perder centavos, en proporción a los pesos', async () => {
+    const { repartir } = await import('./precios');
+    expect(repartir(300000n, [6000000n, 4000000n])).toEqual([180000n, 120000n]); // $3,000 → $1,800 y $1,200
+    const partes = repartir(100n, [1n, 1n, 1n]);
+    expect(partes).toEqual([34n, 33n, 33n]);
+    expect(partes.reduce((s, p) => s + p, 0n)).toBe(100n);
+    expect(() => repartir(100n, [0n, 0n])).toThrow();
+  });
+
+  it('suma la parte de cada línea a su precio unitario según su precio de venta', async () => {
+    const { prorratear } = await import('./precios');
+    // Envío de $3,000.00 entre 4 laptops ($15,000 c/u) y 30 monitores ($2,000 c/u): importes $60,000 y $60,000.
+    const r = prorratear(300000n, [
+      { precioUnitario: 1500000n, cantidad: 4, importe: 6000000n },
+      { precioUnitario: 200000n, cantidad: 30, importe: 6000000n },
+    ]);
+    expect(r.lineas.map((l) => l.cargo)).toEqual([150000n, 150000n]);
+    expect(r.lineas.map((l) => l.precioUnitario)).toEqual([1537500n, 205000n]); // +$375.00 y +$50.00
+    expect(r.diferencia).toBe(0n);
+  });
+
+  it('informa la diferencia de centavos cuando la parte no se divide exacto entre la cantidad', async () => {
+    const { prorratear } = await import('./precios');
+    const r = prorratear(10000n, [{ precioUnitario: 100000n, cantidad: 3, importe: 300000n }]);
+    expect(r.lineas[0]!.precioUnitario).toBe(103333n); // $100 / 3 = $33.333… → $33.33
+    expect(r.diferencia).toBe(-1n);
+  });
+});

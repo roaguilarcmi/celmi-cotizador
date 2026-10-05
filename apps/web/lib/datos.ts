@@ -316,6 +316,12 @@ export interface PartidaFila {
   cantidad: number;
   se_suma: boolean;
   oculta_al_cliente: boolean;
+  /** Adicional de otra partida (un nivel). */
+  partida_padre_id: string | null;
+  /** linea: visible · incluida: dentro del precio de su partida · prorrateada: cargo repartido. */
+  presentacion: 'linea' | 'incluida' | 'prorrateada';
+  /** Partidas entre las que se reparte (sólo cargos prorrateados). */
+  prorrateos: { destino_id: string }[];
   costo: CostoFila | null;
 }
 

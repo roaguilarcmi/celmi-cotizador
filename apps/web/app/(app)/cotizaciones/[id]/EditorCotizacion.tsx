@@ -54,8 +54,12 @@ export function EditorCotizacion({
   const [paso, setPaso] = useState<Paso>(pasoInicial);
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pegado, setPegado] = useState<{ texto: string; html: string } | null>(null);
-  /** Partida abierta en la ventana: su clave, 'nueva' o null. */
-  const [abierta, setAbierta] = useState<string | null>(null);
+  /** Lo abierto en la ventana: una partida o cargo (clave o nuevo), o un adicional de una partida. */
+  const [abierta, setAbierta] = useState<
+    | { tipo: 'partida' | 'cargo'; clave: string | null }
+    | { tipo: 'adicional'; padre: string; clave: string | null }
+    | null
+  >(null);
   const [guardando, iniciar] = useTransition();
 
   const sucio = editable && JSON.stringify(aPayload(propuestas)) !== base;
@@ -122,8 +126,13 @@ export function EditorCotizacion({
     }
   };
 
-  const indiceAbierta = propuesta?.partidas.findIndex((f) => f.clave === abierta) ?? -1;
-  const filaAbierta = indiceAbierta >= 0 ? propuesta?.partidas[indiceAbierta] : undefined;
+  const lineas = propuesta?.partidas.filter((f) => f.presentacion !== 'prorrateada') ?? [];
+  const padreAbierto =
+    abierta?.tipo === 'adicional' ? propuesta?.partidas.find((f) => f.clave === abierta.padre) : undefined;
+  const filaAbierta =
+    abierta?.tipo === 'adicional'
+      ? padreAbierto?.componentes.find((c) => c.clave === abierta.clave)
+      : propuesta?.partidas.find((f) => f.clave === abierta?.clave);
 
   return (
     <div className="animar-entrada mx-auto max-w-[1440px] pb-24">
@@ -217,7 +226,21 @@ export function EditorCotizacion({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAbierta('nueva')}
+                  onClick={() => setAbierta({ tipo: 'cargo', clave: null })}
+                  disabled={lineas.length === 0}
+                  title={
+                    lineas.length
+                      ? 'Envío especial u otro cargo que se reparte entre partidas'
+                      : 'Primero agrega partidas'
+                  }
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Icon name="columnas" size={16} />
+                  Cargo a prorratear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAbierta({ tipo: 'partida', clave: null })}
                   className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento hover:brightness-110"
                 >
                   <Icon name="mas" size={16} strokeWidth={2.4} />
@@ -244,7 +267,11 @@ export function EditorCotizacion({
                 catalogos={catalogos}
                 soloLectura={!editable}
                 onCambiar={(partidas) => actualizarPropuesta(propuesta.clave, { partidas })}
-                onAbrir={setAbierta}
+                onAbrir={(clave) => {
+                  const f = propuesta.partidas.find((x) => x.clave === clave);
+                  setAbierta({ tipo: f?.presentacion === 'prorrateada' ? 'cargo' : 'partida', clave });
+                }}
+                onAbrirAdicional={(padre, clave) => setAbierta({ tipo: 'adicional', padre, clave })}
               />
             )}
           </div>
@@ -364,21 +391,44 @@ export function EditorCotizacion({
         />
       )}
 
-      {propuesta && (abierta === 'nueva' || filaAbierta) && (
+      {propuesta && abierta && (abierta.clave === null || filaAbierta) && (
         <VentanaPartida
           fila={filaAbierta ?? null}
-          numero={filaAbierta ? indiceAbierta + 1 : propuesta.partidas.length + 1}
+          modo={abierta.tipo}
+          numero={
+            abierta.tipo === 'partida' && filaAbierta
+              ? lineas.findIndex((f) => f.clave === filaAbierta.clave) + 1
+              : undefined
+          }
           esAdicional={propuesta.es_adicional}
+          cantidadPadre={padreAbierto?.cantidad}
+          descripcionPadre={padreAbierto?.descripcion}
+          destinos={lineas.map((f) => ({ clave: f.clave, descripcion: f.descripcion }))}
           catalogos={catalogos}
           soloLectura={!editable}
           onCerrar={() => setAbierta(null)}
           onGuardar={(fila, otra) => {
-            const existe = propuesta.partidas.some((f) => f.clave === fila.clave);
-            actualizarPropuesta(propuesta.clave, {
-              partidas: existe
-                ? propuesta.partidas.map((f) => (f.clave === fila.clave ? fila : f))
-                : [...propuesta.partidas, fila],
-            });
+            if (abierta.tipo === 'adicional') {
+              actualizarPropuesta(propuesta.clave, {
+                partidas: propuesta.partidas.map((p) =>
+                  p.clave !== abierta.padre
+                    ? p
+                    : {
+                        ...p,
+                        componentes: p.componentes.some((c) => c.clave === fila.clave)
+                          ? p.componentes.map((c) => (c.clave === fila.clave ? fila : c))
+                          : [...p.componentes, fila],
+                      },
+                ),
+              });
+            } else {
+              const existe = propuesta.partidas.some((f) => f.clave === fila.clave);
+              actualizarPropuesta(propuesta.clave, {
+                partidas: existe
+                  ? propuesta.partidas.map((f) => (f.clave === fila.clave ? fila : f))
+                  : [...propuesta.partidas, fila],
+              });
+            }
             if (!otra) setAbierta(null);
           }}
         />

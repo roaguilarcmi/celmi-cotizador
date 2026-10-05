@@ -27,6 +27,7 @@ export const CONSULTAS = {
     enviada_en, autorizada_en, revision_anterior_id,
     propuestas(id, orden, nombre, tipo, es_adicional,
       partidas(id, orden, sku, marca_id, descripcion, descripcion_contenido, entrega, unidad_id, cantidad, se_suma,
+        partida_padre_id, presentacion, prorrateos:partida_prorrateos!partida_id(destino_id),
         oculta_al_cliente,
         costo:partida_costos(mayorista_id, moneda, costo_unitario, costo_anterior, tipo_cambio, vigencia)))`,
   mayoristas: 'id, nombre, activo',

@@ -5,7 +5,7 @@ import { Icon } from '@/components/Icon';
 import { Tarjeta, Titulo2 } from '@/components/ui';
 import type { RevisionDetalle } from '@/lib/datos';
 import { cambiarEstadoRevision } from '../acciones';
-import { erroresDeFila, resumenPropuesta, type PropuestaEditable } from './modelo';
+import { erroresDeFila, resumenPropuesta, todasLasFilas, type PropuestaEditable } from './modelo';
 
 const fechaHora = new Intl.DateTimeFormat('es-MX', {
   dateStyle: 'medium',
@@ -33,7 +33,7 @@ export function PasoAutorizacion({
   const [pendiente, iniciar] = useTransition();
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
 
-  const partidas = propuestas.flatMap((p) => p.partidas);
+  const partidas = propuestas.flatMap(todasLasFilas);
   const sinCosto = propuestas.reduce((s, p) => s + resumenPropuesta(p).sinCosto, 0);
   const conErrores = partidas.filter((f) => Object.keys(erroresDeFila(f)).length).length;
   const checklist: { ok: boolean; texto: string; paso?: 2 | 3; aviso?: boolean }[] = [
