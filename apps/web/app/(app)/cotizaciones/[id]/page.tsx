@@ -8,7 +8,7 @@ import { EditorCotizacion, type Paso } from './EditorCotizacion';
 export const dynamic = 'force-dynamic';
 
 const esUuid = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
-const PASOS: Record<string, Paso> = { partidas: 2, costos: 3, condiciones: 4, autorizacion: 5 };
+const PASOS: Record<string, Paso> = { partidas: 2, costos: 2, condiciones: 3, autorizacion: 4 };
 
 export default async function PaginaCotizacion({
   params,
@@ -53,7 +53,7 @@ export default async function PaginaCotizacion({
       revision={revision}
       catalogos={catalogos}
       puedeEditar={puedeEditar && sesion.permisos.has('costos.ver')}
-      pasoInicial={PASOS[paso ?? ''] ?? (revision.estado === 'borrador' ? 2 : 5)}
+      pasoInicial={PASOS[paso ?? ''] ?? (revision.estado === 'borrador' ? 2 : 4)}
     />
   );
 }

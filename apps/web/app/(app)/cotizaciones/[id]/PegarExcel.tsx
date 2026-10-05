@@ -5,6 +5,7 @@ import { empatarCatalogo, leerPegado, normalizar, type FilaPegada } from '@celmi
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
+import { leerTablaHtml } from '@/lib/pegado-html';
 import { claveNueva, type Catalogos, type FilaEditable } from './modelo';
 
 /** Empata la unidad por nombre, clave o abreviatura («PIEZA», «pieza», «PZA»). */
@@ -41,14 +42,15 @@ function revisar(f: FilaPegada, cat: Catalogos, errores: Map<number, string[]>):
   return { original: f, mayorista, marca, unidad, monedaValida, avisos };
 }
 
-function aFila(r: FilaRevisada, unidadPorOmision: string | null): FilaEditable {
+function aFila(r: FilaRevisada, unidadPorOmision: string | null, contenido: unknown): FilaEditable {
   const f = r.original;
   return {
     clave: claveNueva('partida'),
     sku: f.sku,
     marca_id: r.marca?.id ?? null,
     descripcion: f.descripcion,
-    descripcion_contenido: null,
+    // Formato de origen de la celda (negritas, cursivas…), si lo traía.
+    descripcion_contenido: contenido ?? null,
     entrega: f.entrega,
     unidad_id: r.unidad?.id ?? unidadPorOmision,
     cantidad: f.cantidad != null ? String(f.cantidad) : '',
@@ -69,6 +71,7 @@ function aFila(r: FilaRevisada, unidadPorOmision: string | null): FilaEditable {
  */
 export function PegarExcel({
   textoInicial,
+  htmlInicial = '',
   catalogos,
   propuestas,
   propuestaActual,
@@ -76,6 +79,8 @@ export function PegarExcel({
   onCerrar,
 }: {
   textoInicial: string;
+  /** Versión HTML de lo copiado (trae el formato de las celdas). */
+  htmlInicial?: string;
   catalogos: Catalogos;
   propuestas: { clave: string; nombre: string }[];
   propuestaActual: string;
@@ -90,6 +95,7 @@ export function PegarExcel({
     >
       <Contenido
         textoInicial={textoInicial}
+        htmlInicial={htmlInicial}
         catalogos={catalogos}
         propuestas={propuestas}
         propuestaActual={propuestaActual}
@@ -101,6 +107,7 @@ export function PegarExcel({
 
 function Contenido({
   textoInicial,
+  htmlInicial = '',
   catalogos,
   propuestas,
   propuestaActual,
@@ -108,6 +115,7 @@ function Contenido({
 }: Omit<Parameters<typeof PegarExcel>[0], 'onCerrar'>) {
   const ventana = useVentana();
   const [texto, setTexto] = useState(textoInicial);
+  const [html, setHtml] = useState(htmlInicial);
   const [destino, setDestino] = useState<string>(propuestaActual);
   const unidadPorOmision = catalogos.unidades[0]?.id ?? null;
 
@@ -115,8 +123,16 @@ function Contenido({
     const r = leerPegado(texto);
     const errores = new Map<number, string[]>();
     for (const e of r.errores) errores.set(e.fila, [...(errores.get(e.fila) ?? []), e.mensaje]);
-    return { ...r, revisadas: r.filas.map((f) => revisar(f, catalogos, errores)) };
-  }, [texto, catalogos]);
+    // Formato de la descripción: misma celda en la tabla HTML (mismas filas, sin las vacías, y el mismo encabezado).
+    const tabla = html ? leerTablaHtml(html) : [];
+    const columna = r.columnas.indexOf('descripcion');
+    const desde = r.conEncabezado ? 1 : 0;
+    const formatos = r.filas.map((_, i) =>
+      columna >= 0 ? (tabla[desde + i]?.[columna]?.contenido ?? null) : null,
+    );
+    return { ...r, formatos, revisadas: r.filas.map((f) => revisar(f, catalogos, errores)) };
+  }, [texto, html, catalogos]);
+  const conFormato = lectura.formatos.filter(Boolean).length;
   const conAvisos = lectura.revisadas.filter((r) => r.avisos.length).length;
 
   return (
@@ -125,7 +141,7 @@ function Contenido({
         e.preventDefault();
         if (lectura.revisadas.length)
           onAgregar(
-            lectura.revisadas.map((r) => aFila(r, unidadPorOmision)),
+            lectura.revisadas.map((r, i) => aFila(r, unidadPorOmision, lectura.formatos[i])),
             destino,
           );
       }}
@@ -136,7 +152,13 @@ function Contenido({
         <textarea
           name="pegado"
           value={texto}
-          onChange={(e) => setTexto(e.target.value)}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            // Si se edita a mano, el HTML pegado ya no corresponde.
+            if (e.nativeEvent instanceof InputEvent && e.nativeEvent.inputType !== 'insertFromPaste')
+              setHtml('');
+          }}
+          onPaste={(e) => setHtml(e.clipboardData.getData('text/html'))}
           rows={texto ? 4 : 6}
           autoFocus={!texto}
           spellCheck={false}
@@ -153,6 +175,12 @@ function Contenido({
               {lectura.revisadas.length}{' '}
               {lectura.revisadas.length === 1 ? 'partida reconocida' : 'partidas reconocidas'}
             </span>
+            {conFormato > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-pill bg-acento-suave px-2.5 py-1 font-semibold text-acento-texto">
+                <span className="font-bold">Aa</span>
+                {conFormato} con formato de origen
+              </span>
+            )}
             {conAvisos > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-pill bg-aviso-suave px-2.5 py-1 font-semibold text-aviso">
                 {conAvisos} por revisar

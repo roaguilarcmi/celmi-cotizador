@@ -1,15 +1,11 @@
 'use client';
 
 import { etiquetaRevision } from '@celmi/core';
-import { textoPlano, type ContenidoEnriquecido } from '@celmi/validation';
-import type { JSONContent } from '@tiptap/core';
 import Link from 'next/link';
 import { useEffect, useState, useTransition, type ClipboardEvent, type ReactNode } from 'react';
-import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
 import { Pill, Tarjeta } from '@/components/ui';
-import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import type { CotizacionFila, RevisionDetalle } from '@/lib/datos';
 import { guardarPartidas } from '../acciones';
 import { ESTADOS } from '../estados';
@@ -17,17 +13,18 @@ import {
   aPayload,
   claveNueva,
   desdeRevision,
-  filaVacia,
   resumenPropuesta,
   type Catalogos,
   type PropuestaEditable,
 } from './modelo';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import { PasoCondiciones } from './PasoCondiciones';
+import { VentanaPartida } from './FormularioPartida';
 import { PegarExcel } from './PegarExcel';
-import { TablaPartidas, type Vista } from './TablaPartidas';
+import { TablaPartidas } from './TablaPartidas';
 
-export type Paso = 2 | 3 | 4 | 5;
+/** 2: Partidas y costos (un solo paso, decisión 2026-10-05) · 3: Condiciones · 4: Autorización. */
+export type Paso = 2 | 3 | 4;
 
 export function EditorCotizacion({
   cotizacion,
@@ -56,13 +53,13 @@ export function EditorCotizacion({
   const [activa, setActiva] = useState(() => propuestas[0]?.clave ?? '');
   const [paso, setPaso] = useState<Paso>(pasoInicial);
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
-  const [pegado, setPegado] = useState<string | null>(null);
-  const [formato, setFormato] = useState<string | null>(null);
+  const [pegado, setPegado] = useState<{ texto: string; html: string } | null>(null);
+  /** Partida abierta en la ventana: su clave, 'nueva' o null. */
+  const [abierta, setAbierta] = useState<string | null>(null);
   const [guardando, iniciar] = useTransition();
 
   const sucio = editable && JSON.stringify(aPayload(propuestas)) !== base;
   const propuesta = propuestas.find((p) => p.clave === activa) ?? propuestas[0];
-  const unidadPorOmision = catalogos.unidades[0]?.id ?? null;
 
   const guardar = (despues?: () => void) =>
     iniciar(async () => {
@@ -91,8 +88,8 @@ export function EditorCotizacion({
   });
 
   const irA = (nuevo: Paso) => {
-    // Al salir de Partidas/Costos con cambios, primero se guardan.
-    if (sucio && nuevo > 3) guardar(() => setPaso(nuevo));
+    // Al salir de Partidas con cambios, primero se guardan.
+    if (sucio && nuevo > 2) guardar(() => setPaso(nuevo));
     else setPaso(nuevo);
   };
 
@@ -112,17 +109,21 @@ export function EditorCotizacion({
     setActiva(nueva.clave);
   };
 
-  /** Pegar varias celdas directamente sobre la tabla abre la vista previa con lo pegado. */
+  /**
+   * Pegar varias celdas directamente sobre la tabla abre la vista previa con lo pegado. Se toma también la versión
+   * HTML, que trae el formato de las celdas (negritas, cursivas…).
+   */
   const alPegar = (e: ClipboardEvent) => {
     if (!editable) return;
     const texto = e.clipboardData.getData('text/plain');
     if (texto.includes('\t') && /\n./.test(texto.trim())) {
       e.preventDefault();
-      setPegado(texto);
+      setPegado({ texto, html: e.clipboardData.getData('text/html') });
     }
   };
 
-  const filaFormato = propuesta?.partidas.find((f) => f.clave === formato);
+  const indiceAbierta = propuesta?.partidas.findIndex((f) => f.clave === abierta) ?? -1;
+  const filaAbierta = indiceAbierta >= 0 ? propuesta?.partidas[indiceAbierta] : undefined;
 
   return (
     <div className="animar-entrada mx-auto max-w-[1440px] pb-24">
@@ -155,10 +156,10 @@ export function EditorCotizacion({
       </header>
 
       <div className="mb-5">
-        <PasosWizard actual={paso} disponibles={[2, 3, 4, 5]} alElegir={(p) => irA(p as Paso)} />
+        <PasosWizard actual={paso} disponibles={[2, 3, 4]} alElegir={(p) => irA(p as Paso)} />
       </div>
 
-      {!editable && (paso === 2 || paso === 3) && (
+      {!editable && paso === 2 && (
         <p className="mb-4 flex items-center gap-2 rounded-md border border-borde bg-superficie-2 px-4 py-3 text-[13px] text-texto-suave">
           <Icon name="candado" size={16} />
           {revision.estado === 'pendiente_autorizacion'
@@ -169,7 +170,7 @@ export function EditorCotizacion({
         </p>
       )}
 
-      {(paso === 2 || paso === 3) && propuesta && (
+      {paso === 2 && propuesta && (
         <Tarjeta className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-borde px-4 py-3">
             <div role="tablist" aria-label="Propuestas" className="mr-auto flex flex-wrap gap-1.5">
@@ -208,7 +209,7 @@ export function EditorCotizacion({
               <>
                 <button
                   type="button"
-                  onClick={() => setPegado('')}
+                  onClick={() => setPegado({ texto: '', html: '' })}
                   className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2"
                 >
                   <Icon name="copiar" size={16} />
@@ -216,11 +217,7 @@ export function EditorCotizacion({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    actualizarPropuesta(propuesta.clave, {
-                      partidas: [...propuesta.partidas, filaVacia(unidadPorOmision)],
-                    })
-                  }
+                  onClick={() => setAbierta('nueva')}
                   className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento hover:brightness-110"
                 >
                   <Icon name="mas" size={16} strokeWidth={2.4} />
@@ -239,26 +236,25 @@ export function EditorCotizacion({
 
           <div className="px-3 pt-1 pb-3" onPaste={alPegar}>
             {propuesta.partidas.length === 0 ? (
-              <Vacio editable={editable} onPegar={() => setPegado('')} />
+              <Vacio editable={editable} onPegar={() => setPegado({ texto: '', html: '' })} />
             ) : (
               <TablaPartidas
                 filas={propuesta.partidas}
-                vista={(paso === 2 ? 'partidas' : 'costos') as Vista}
                 esAdicional={propuesta.es_adicional}
                 catalogos={catalogos}
                 soloLectura={!editable}
                 onCambiar={(partidas) => actualizarPropuesta(propuesta.clave, { partidas })}
-                onFormato={setFormato}
+                onAbrir={setAbierta}
               />
             )}
           </div>
 
-          <ResumenPropuesta p={propuesta} vista={paso === 2 ? 'partidas' : 'costos'} />
+          <ResumenPropuesta p={propuesta} />
         </Tarjeta>
       )}
 
-      {paso === 4 && <PasoCondiciones revision={revision} cotizacionId={cotizacion.id} editable={editable} />}
-      {paso === 5 && (
+      {paso === 3 && <PasoCondiciones revision={revision} cotizacionId={cotizacion.id} editable={editable} />}
+      {paso === 4 && (
         <PasoAutorizacion
           revision={revision}
           cotizacionId={cotizacion.id}
@@ -268,14 +264,14 @@ export function EditorCotizacion({
         />
       )}
 
-      {(paso === 2 || paso === 3) && (
+      {paso === 2 && (
         <div className="mt-4 flex justify-end">
           <button
             type="button"
-            onClick={() => irA((paso + 1) as Paso)}
+            onClick={() => irA(3)}
             className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-paso px-4 text-sm font-semibold text-white hover:brightness-110"
           >
-            Siguiente: {paso === 2 ? 'Costos' : 'Condiciones'}
+            Siguiente: Condiciones
             <Icon name="derecha" size={16} />
           </button>
         </div>
@@ -339,7 +335,8 @@ export function EditorCotizacion({
 
       {pegado !== null && propuesta && (
         <PegarExcel
-          textoInicial={pegado}
+          textoInicial={pegado.texto}
+          htmlInicial={pegado.html}
           catalogos={catalogos}
           propuestas={propuestas.map((p) => ({ clave: p.clave, nombre: p.nombre }))}
           propuestaActual={propuesta.clave}
@@ -367,85 +364,26 @@ export function EditorCotizacion({
         />
       )}
 
-      {filaFormato && propuesta && (
-        <VentanaFlotante
-          titulo="Descripción con formato"
-          detalle="Como se verá en la cotización."
-          esEdicion
-          onCerrar={() => setFormato(null)}
-        >
-          <FormularioFormato
-            inicial={
-              (filaFormato.descripcion_contenido as JSONContent | null) ??
-              textoComoDocumento(filaFormato.descripcion)
-            }
-            onGuardar={(doc) => {
-              actualizarPropuesta(propuesta.clave, {
-                partidas: propuesta.partidas.map((f) =>
-                  f.clave === filaFormato.clave
-                    ? { ...f, descripcion_contenido: doc, descripcion: doc ? textoPlano(doc) : f.descripcion }
-                    : f,
-                ),
-              });
-              setFormato(null);
-            }}
-          />
-        </VentanaFlotante>
+      {propuesta && (abierta === 'nueva' || filaAbierta) && (
+        <VentanaPartida
+          fila={filaAbierta ?? null}
+          numero={filaAbierta ? indiceAbierta + 1 : propuesta.partidas.length + 1}
+          esAdicional={propuesta.es_adicional}
+          catalogos={catalogos}
+          soloLectura={!editable}
+          onCerrar={() => setAbierta(null)}
+          onGuardar={(fila, otra) => {
+            const existe = propuesta.partidas.some((f) => f.clave === fila.clave);
+            actualizarPropuesta(propuesta.clave, {
+              partidas: existe
+                ? propuesta.partidas.map((f) => (f.clave === fila.clave ? fila : f))
+                : [...propuesta.partidas, fila],
+            });
+            if (!otra) setAbierta(null);
+          }}
+        />
       )}
     </div>
-  );
-}
-
-const textoComoDocumento = (texto: string): JSONContent => ({
-  type: 'doc',
-  content: texto
-    .split('\n')
-    .map((l) => (l ? { type: 'paragraph', content: [{ type: 'text', text: l }] } : { type: 'paragraph' })),
-});
-
-function FormularioFormato({
-  inicial,
-  onGuardar,
-}: {
-  inicial: JSONContent;
-  onGuardar: (doc: ContenidoEnriquecido | null) => void;
-}) {
-  const ventana = useVentana();
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const valor = String(new FormData(e.currentTarget).get('contenido') ?? '');
-        onGuardar(valor ? (JSON.parse(valor) as ContenidoEnriquecido) : null);
-      }}
-      className="flex flex-col gap-3"
-    >
-      <EditorEnriquecido
-        nombre="contenido"
-        inicial={inicial}
-        etiqueta="Descripción de la partida"
-        placeholder="Descripción"
-        minAlto={160}
-      />
-      <div className="flex gap-2.5">
-        <button
-          type="submit"
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-        >
-          <Icon name="palomita" strokeWidth={2.2} />
-          Aplicar
-        </button>
-        {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
   );
 }
 
@@ -589,7 +527,7 @@ function Vacio({ editable, onPegar }: { editable: boolean; onPegar: () => void }
   );
 }
 
-function ResumenPropuesta({ p, vista }: { p: PropuestaEditable; vista: Vista }) {
+function ResumenPropuesta({ p }: { p: PropuestaEditable }) {
   const r = resumenPropuesta(p);
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-borde bg-superficie-2/60 px-5 py-3 text-[13px]">
@@ -597,15 +535,11 @@ function ResumenPropuesta({ p, vista }: { p: PropuestaEditable; vista: Vista }) 
         <strong className="text-texto tabular">{r.partidas}</strong> partidas ·{' '}
         <strong className="text-texto tabular">{r.piezas}</strong> piezas
       </span>
-      {vista === 'costos' && (
-        <>
-          {r.sinCosto > 0 && <span className="font-semibold text-aviso">{r.sinCosto} sin costo</span>}
-          <span className="ml-auto text-texto-suave">
-            Costo total de la propuesta (sin IVA):{' '}
-            <strong className="text-[15px] text-texto tabular">{r.costoTexto}</strong>
-          </span>
-        </>
-      )}
+      {r.sinCosto > 0 && <span className="font-semibold text-aviso">{r.sinCosto} sin costo</span>}
+      <span className="ml-auto text-texto-suave">
+        Costo total de la propuesta (sin IVA):{' '}
+        <strong className="text-[15px] text-texto tabular">{r.costoTexto}</strong>
+      </span>
     </div>
   );
 }

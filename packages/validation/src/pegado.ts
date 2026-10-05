@@ -53,6 +53,8 @@ export interface ResultadoPegado {
   conEncabezado: boolean;
   /** Encabezados que no se usan (p. ej. «PRECIO MÍNIMO», que se omite por decisión 2026-10-05). */
   ignoradas: string[];
+  /** Campo de cada columna (para leer el formato de esa misma celda en la versión HTML de lo copiado). */
+  columnas: (CampoPegado | null)[];
 }
 
 const ORDEN_SOLICITUD: CampoPegado[] = [
@@ -190,7 +192,7 @@ function valida(a: number, mes: number, d: number): string | null {
 export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
   const celdas = separarCeldas(texto);
   const errores: ErrorPegado[] = [];
-  if (!celdas.length) return { filas: [], errores, conEncabezado: false, ignoradas: [] };
+  if (!celdas.length) return { filas: [], errores, conEncabezado: false, ignoradas: [], columnas: [] };
 
   const [primera = []] = celdas;
   const encabezado = primera.map(campoDeEncabezado);
@@ -249,7 +251,7 @@ export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
       tipoCambio,
     };
   });
-  return { filas, errores, conEncabezado, ignoradas };
+  return { filas, errores, conEncabezado, ignoradas, columnas };
 }
 
 /**
