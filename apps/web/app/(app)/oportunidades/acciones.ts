@@ -3,6 +3,7 @@
 import { leerContenido, notaSchema, oportunidadSchema, textoPlano } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { borrarBorrador } from '@/lib/acciones-borradores';
 import { leerFormulario } from '@/lib/datos';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
@@ -97,6 +98,7 @@ export async function agregarNota(
     .from('seguimiento')
     .insert({ ...nota, oportunidad_id: oportunidadId, autor_id: sesion.usuarioId });
   if (error) return { error: 'No se pudo guardar la nota.' };
+  await borrarBorrador(oportunidadId, 'nota');
   revalidatePath(`/oportunidades/${oportunidadId}`);
   revalidatePath('/');
   return { ok: 'Nota agregada.' };

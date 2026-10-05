@@ -2,15 +2,18 @@
 
 import type { JSONContent } from '@tiptap/core';
 import Link from 'next/link';
-import { useActionState, useId, useState, type ReactNode } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { BotonEnviar } from '@/components/formulario';
 import { Icon, type IconName } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
+import { BotonActivarAvisos } from '@/components/tareas/BotonActivarAvisos';
 import { FormularioTarea } from '@/components/tareas/FormularioTarea';
 import { ListaTareas } from '@/components/tareas/ListaTareas';
 import { Avatar, Pill, Tarjeta, Titulo2 } from '@/components/ui';
-import type { Estado, SeguimientoFila, TareaFila } from '@/lib/datos';
+import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
+import { descartarBorrador, guardarBorrador, type TipoBorrador } from '@/lib/acciones-borradores';
+import type { BorradorNota, BorradorTarea, Estado, SeguimientoFila, TareaFila } from '@/lib/datos';
 import { colorAvatar, fechaHora, iniciales, tonoEstado } from '@/lib/presentacion';
 import { agregarNota, editarNota, type EstadoFormulario } from '../acciones';
 
@@ -26,14 +29,14 @@ const TIPOS: { id: TipoNota; nombre: string; icono: IconName }[] = [
 /** Registros visibles de la bitácora antes de «Ver anteriores». */
 const VISIBLES = 4;
 
-// ───────────── Encabezado de sección ─────────────
+// ───────────── Piezas comunes ─────────────
 
 const TONOS = {
   tareas: { banda: 'bg-aviso-suave border-aviso/25', icono: 'bg-aviso text-white' },
   seguimiento: { banda: 'bg-acento-suave border-acento/25', icono: 'bg-paso text-white' },
 };
 
-/** Banda con color propio para distinguir cada sección de un vistazo, con su botón para desplegar el formulario. */
+/** Banda con color propio para distinguir cada sección de un vistazo, con su botón para abrir la ventana de captura. */
 function EncabezadoSeccion({
   icono,
   titulo,
@@ -49,7 +52,7 @@ function EncabezadoSeccion({
   tono: keyof typeof TONOS;
   cuenta?: number;
   extra?: ReactNode;
-  accion?: { nombre: string; abierto: boolean; panel: string; alternar: () => void };
+  accion?: { nombre: string; conBorrador: boolean; abrir: () => void };
 }) {
   const c = TONOS[tono];
   return (
@@ -72,39 +75,113 @@ function EncabezadoSeccion({
       {accion && (
         <button
           type="button"
-          onClick={accion.alternar}
-          aria-expanded={accion.abierto}
-          aria-controls={accion.panel}
-          className={`inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md px-3.5 text-[13px] font-semibold transition-colors ${
-            accion.abierto
-              ? 'bg-superficie text-texto-suave hover:text-texto'
-              : 'bg-acento text-sobre-acento hover:brightness-110'
-          }`}
+          onClick={accion.abrir}
+          aria-haspopup="dialog"
+          title={accion.conBorrador ? 'Tienes un borrador guardado' : undefined}
+          className="relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento transition-[filter] hover:brightness-110"
         >
-          <Icon name={accion.abierto ? 'cerrar' : 'mas'} size={16} strokeWidth={2.2} />
-          {accion.abierto ? 'Cerrar' : accion.nombre}
+          <Icon name={accion.conBorrador ? 'guardado' : 'mas'} size={16} strokeWidth={2.2} />
+          {accion.conBorrador ? 'Continuar borrador' : accion.nombre}
+          {accion.conBorrador && (
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-superficie bg-aviso"
+            />
+          )}
         </button>
       )}
     </div>
   );
 }
 
-/** Panel que se despliega bajo el encabezado. */
-function Desplegable({ id, abierto, children }: { id: string; abierto: boolean; children: ReactNode }) {
-  if (!abierto) return null;
+/** Franja de confirmación tras guardar desde la ventana flotante. */
+function Exito({ texto, onCerrar, children }: { texto: string; onCerrar: () => void; children?: ReactNode }) {
   return (
-    <div id={id} className="animar-entrada border-b border-borde bg-superficie-2/60 px-5 py-4">
+    <div
+      role="status"
+      className="animar-entrada flex flex-wrap items-center gap-2 border-b border-borde bg-exito-suave px-5 py-1.5 text-[13px] font-semibold text-exito"
+    >
+      <Icon name="palomita" size={16} strokeWidth={2.6} />
+      <span className="mr-auto">{texto}</span>
       {children}
+      <button
+        type="button"
+        onClick={onCerrar}
+        aria-label="Ocultar mensaje"
+        className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-superficie/60"
+      >
+        <Icon name="cerrar" size={14} />
+      </button>
     </div>
   );
 }
 
+/** Aviso dentro de la ventana cuando se continúa un borrador. */
+function AvisoBorrador({ en, onDescartar }: { en: string; onDescartar: () => void }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-aviso/30 bg-aviso-suave px-3.5 py-2 text-[13px] text-aviso">
+      <Icon name="guardado" size={16} />
+      <span className="mr-auto">Continúas un borrador guardado el {fechaHora(en)}.</span>
+      <button
+        type="button"
+        onClick={onDescartar}
+        className="min-h-8 cursor-pointer font-semibold underline-offset-2 hover:underline"
+      >
+        Empezar de cero
+      </button>
+    </div>
+  );
+}
+
+/** Estado común: abrir la ventana de captura, continuar o descartar el borrador y mostrar el resultado. */
+function useCaptura(oportunidadId: string, tipo: TipoBorrador) {
+  const [abierta, setAbierta] = useState(false);
+  const [usarBorrador, setUsarBorrador] = useState(true);
+  const [version, setVersion] = useState(0);
+  const [exito, setExito] = useState<string | null>(null);
+  return {
+    abierta,
+    usarBorrador,
+    version,
+    exito,
+    ocultarExito: () => setExito(null),
+    abrir: () => {
+      setUsarBorrador(true);
+      setExito(null);
+      setAbierta(true);
+    },
+    cerrar: () => setAbierta(false),
+    listo: (ok: string) => {
+      setAbierta(false);
+      setExito(ok);
+    },
+    guardarBorrador: async (datos: FormData) => {
+      const r = await guardarBorrador(oportunidadId, tipo, datos);
+      if (r.ok) setExito(r.ok);
+      return r;
+    },
+    empezarDeCero: () => {
+      setUsarBorrador(false);
+      setVersion((v) => v + 1);
+      void descartarBorrador(oportunidadId, tipo);
+    },
+  };
+}
+
 // ───────────── Mis tareas ─────────────
 
-export function SeccionTareas({ oportunidadId, tareas }: { oportunidadId: string; tareas: TareaFila[] }) {
-  const panel = useId();
-  const [abierto, setAbierto] = useState(false);
+export function SeccionTareas({
+  oportunidadId,
+  tareas,
+  borrador,
+}: {
+  oportunidadId: string;
+  tareas: TareaFila[];
+  borrador?: BorradorTarea;
+}) {
+  const c = useCaptura(oportunidadId, 'tarea');
   const pendientes = tareas.filter((t) => t.estado === 'pendiente').length;
+  const conBorrador = c.usarBorrador ? borrador : undefined;
   return (
     <Tarjeta className="overflow-hidden">
       <EncabezadoSeccion
@@ -121,11 +198,30 @@ export function SeccionTareas({ oportunidadId, tareas }: { oportunidadId: string
             Ver tablero
           </Link>
         }
-        accion={{ nombre: 'Nueva tarea', abierto, panel, alternar: () => setAbierto((a) => !a) }}
+        accion={{ nombre: 'Nueva tarea', conBorrador: Boolean(borrador), abrir: c.abrir }}
       />
-      <Desplegable id={panel} abierto={abierto}>
-        <FormularioTarea oportunidadId={oportunidadId} />
-      </Desplegable>
+      {c.exito && (
+        <Exito texto={c.exito} onCerrar={c.ocultarExito}>
+          {c.exito.startsWith('Tarea') && <BotonActivarAvisos compacto />}
+        </Exito>
+      )}
+      {c.abierta && (
+        <VentanaFlotante
+          titulo="Nueva tarea"
+          detalle="Personal: sólo tú la verás. Elige cuándo vence y cuándo avisarte."
+          version={c.version}
+          onCerrar={c.cerrar}
+          onBorrador={c.guardarBorrador}
+        >
+          {conBorrador && <AvisoBorrador en={conBorrador.actualizado_en} onDescartar={c.empezarDeCero} />}
+          <FormularioTarea
+            key={c.version}
+            oportunidadId={oportunidadId}
+            borrador={conBorrador}
+            onListo={c.listo}
+          />
+        </VentanaFlotante>
+      )}
       <div className="px-5 py-1">
         <ListaTareas
           tareas={tareas}
@@ -145,19 +241,21 @@ export function SeccionSeguimiento({
   estados,
   usuarioId,
   puedeRegistrar,
+  borrador,
 }: {
   oportunidadId: string;
   seguimiento: SeguimientoFila[];
   estados: Estado[];
   usuarioId: string;
   puedeRegistrar: boolean;
+  borrador?: BorradorNota;
 }) {
-  const panel = useId();
-  const [abierto, setAbierto] = useState(false);
+  const c = useCaptura(oportunidadId, 'nota');
   const [todos, setTodos] = useState(false);
   const nombreEstado = new Map(estados.map((e) => [e.id, e.nombre]));
   const visibles = todos ? seguimiento : seguimiento.slice(0, VISIBLES);
   const ocultos = seguimiento.length - visibles.length;
+  const conBorrador = c.usarBorrador ? borrador : undefined;
 
   return (
     <Tarjeta className="overflow-hidden">
@@ -168,14 +266,27 @@ export function SeccionSeguimiento({
         tono="seguimiento"
         cuenta={seguimiento.length}
         accion={
-          puedeRegistrar
-            ? { nombre: 'Registrar', abierto, panel, alternar: () => setAbierto((a) => !a) }
-            : undefined
+          puedeRegistrar ? { nombre: 'Registrar', conBorrador: Boolean(borrador), abrir: c.abrir } : undefined
         }
       />
-      <Desplegable id={panel} abierto={abierto}>
-        <FormularioNota oportunidadId={oportunidadId} onListo={() => setAbierto(false)} />
-      </Desplegable>
+      {c.exito && <Exito texto={c.exito} onCerrar={c.ocultarExito} />}
+      {c.abierta && (
+        <VentanaFlotante
+          titulo="Registrar seguimiento"
+          detalle="Lo verán todos los que participan en esta oportunidad."
+          version={c.version}
+          onCerrar={c.cerrar}
+          onBorrador={c.guardarBorrador}
+        >
+          {conBorrador && <AvisoBorrador en={conBorrador.actualizado_en} onDescartar={c.empezarDeCero} />}
+          <FormularioNota
+            key={c.version}
+            oportunidadId={oportunidadId}
+            borrador={conBorrador}
+            onListo={c.listo}
+          />
+        </VentanaFlotante>
+      )}
       <ol className="flex flex-col px-5 pt-4">
         {seguimiento.length === 0 && (
           <li className="pb-4 text-center text-[13px] text-texto-suave">
@@ -311,35 +422,39 @@ function comoDocumento(s: SeguimientoFila): JSONContent {
   };
 }
 
-/** Registrar (sin `registro`) o editar una nota propia (con `registro`). */
+/** Registrar (sin `registro`, en ventana flotante) o editar una nota propia (con `registro`, en línea). */
 function FormularioNota({
   oportunidadId,
   registro,
+  borrador,
   onListo,
 }: {
   oportunidadId: string;
   registro?: SeguimientoFila;
-  onListo: () => void;
+  borrador?: BorradorNota;
+  onListo: (ok: string) => void;
 }) {
-  const [version, setVersion] = useState(0);
+  const ventana = useVentana();
   const [tipo, setTipo] = useState<TipoNota>(
-    registro && registro.tipo !== 'cambio_estado' ? registro.tipo : 'nota',
+    registro && registro.tipo !== 'cambio_estado' ? registro.tipo : (borrador?.tipo ?? 'nota'),
   );
   const [estado, accion] = useActionState<EstadoFormulario, FormData>(
     async (previo: EstadoFormulario, datos: FormData) => {
       const r = registro
         ? await editarNota(registro.id, oportunidadId, previo, datos)
         : await agregarNota(oportunidadId, previo, datos);
-      if (r.ok) {
-        setVersion((v) => v + 1); // vacía el editor
-        onListo();
-      }
+      if (r.ok) onListo(r.ok);
       return r;
     },
     {},
   );
+  const inicial = registro
+    ? comoDocumento(registro)
+    : ((borrador?.contenido as JSONContent | null | undefined) ?? null);
+  const cancelar = ventana ? ventana.intentarCerrar : registro ? () => onListo('') : null;
+
   return (
-    <form action={accion} className="flex flex-col gap-2.5">
+    <form action={accion} className="flex flex-col gap-3">
       <input type="hidden" name="tipo" value={tipo} />
       <div role="radiogroup" aria-label="Tipo de registro" className="flex flex-wrap gap-1.5">
         {TIPOS.map((t) => (
@@ -349,8 +464,10 @@ function FormularioNota({
             role="radio"
             aria-checked={tipo === t.id}
             onClick={() => setTipo(t.id)}
-            className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-pill px-3 text-[13px] font-semibold transition-colors ${
-              tipo === t.id ? 'bg-paso text-white' : 'bg-superficie text-texto-suave hover:text-texto'
+            className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-pill border px-3 text-[13px] font-semibold transition-colors ${
+              tipo === t.id
+                ? 'border-paso bg-paso text-white'
+                : 'border-borde bg-superficie text-texto-suave hover:text-texto'
             }`}
           >
             <Icon name={t.icono} size={15} />
@@ -359,19 +476,18 @@ function FormularioNota({
         ))}
       </div>
       <EditorEnriquecido
-        key={version}
         nombre="contenido"
-        inicial={registro ? comoDocumento(registro) : null}
+        inicial={inicial}
         etiqueta="Texto del registro"
         placeholder="¿Qué pasó? Ej. «El cliente pidió cotizar también 2 docking stations»"
-        minAlto={72}
+        minAlto={ventana ? 140 : 72}
       />
       {estado.error && <p className="text-xs text-peligro">{estado.error}</p>}
       <div className="flex items-center justify-end gap-2">
-        {registro && (
+        {cancelar && (
           <button
             type="button"
-            onClick={onListo}
+            onClick={cancelar}
             className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
           >
             Cancelar

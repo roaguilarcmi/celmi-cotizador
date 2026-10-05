@@ -18,6 +18,7 @@ export const CONSULTAS = {
   perfilSesion: 'nombre, puesto, correo, roles(nombre)',
   tareas:
     'id, oportunidad_id, titulo, descripcion, notas, vence_en, estado, completada_en, avisos:tarea_avisos(id, minutos_antes, aviso_en), oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social))',
+  borradores: 'tipo, datos, actualizado_en',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -29,4 +30,5 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   seguimiento: 'seguimiento',
   perfilSesion: 'perfiles',
   tareas: 'tareas',
+  borradores: 'borradores',
 };

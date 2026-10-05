@@ -5,7 +5,15 @@ import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon } from '@/components/Icon';
 import { Avatar, Boton, Tarjeta, Titulo2 } from '@/components/ui';
-import type { ContactoFila, Esquema, Estado, OportunidadFila, SeguimientoFila, TareaFila } from '@/lib/datos';
+import type {
+  Borradores,
+  ContactoFila,
+  Esquema,
+  Estado,
+  OportunidadFila,
+  SeguimientoFila,
+  TareaFila,
+} from '@/lib/datos';
 import { colorAvatar, fechaCorta, haceCuanto, iniciales } from '@/lib/presentacion';
 import { actualizarOportunidad, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
@@ -19,6 +27,7 @@ export function FichaOportunidad({
   seguimiento,
   tareas,
   usuarioId,
+  borradores,
   puedeCambiarEstado,
   puedeEditar,
 }: {
@@ -29,6 +38,7 @@ export function FichaOportunidad({
   seguimiento: SeguimientoFila[];
   tareas: TareaFila[];
   usuarioId: string;
+  borradores: Borradores;
   puedeCambiarEstado: boolean;
   puedeEditar: boolean;
 }) {
@@ -103,7 +113,7 @@ export function FichaOportunidad({
             </p>
           </Tarjeta>
 
-          <SeccionTareas oportunidadId={o.id} tareas={tareas} />
+          <SeccionTareas oportunidadId={o.id} tareas={tareas} borrador={borradores.tarea} />
 
           <SeccionSeguimiento
             oportunidadId={o.id}
@@ -111,6 +121,7 @@ export function FichaOportunidad({
             estados={estados}
             usuarioId={usuarioId}
             puedeRegistrar={puedeEditar}
+            borrador={borradores.nota}
           />
         </div>
 

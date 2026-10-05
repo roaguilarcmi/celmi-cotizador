@@ -111,3 +111,18 @@ export type CostoPartida = z.infer<typeof costoPartidaSchema>;
 export type AutorizacionPartida = z.infer<typeof autorizacionPartidaSchema>;
 
 export * from './enriquecido';
+
+/**
+ * Borradores (decisión 2026-10-05): registros a medias que se guardan para continuarlos. Son permisivos (pueden estar
+ * incompletos) pero acotados; el texto con formato se valida aparte con `leerContenido`.
+ */
+export const borradorTareaSchema = z.object({
+  titulo: z.string().max(200).default(''),
+  fecha: z.union([z.iso.date(), z.literal('')]).default(''),
+  hora: z.union([z.iso.time({ precision: -1 }), z.literal('')]).default(''),
+  avisos: z.array(z.number().int().min(0).max(43_200)).max(6).default([]),
+});
+
+export const borradorNotaSchema = z.object({
+  tipo: z.enum(['nota', 'llamada', 'visita', 'correo']).default('nota'),
+});

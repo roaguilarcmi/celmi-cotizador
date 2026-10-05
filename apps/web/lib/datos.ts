@@ -137,6 +137,47 @@ export async function obtenerOportunidad(id: string): Promise<OportunidadFila | 
   return (exigir(r, 'la oportunidad') as unknown as OportunidadFila | null) ?? null;
 }
 
+/** Borradores propios de una oportunidad (la base sólo devuelve los de quien consulta). */
+export interface BorradorTarea {
+  titulo: string;
+  fecha: string;
+  hora: string;
+  avisos: number[];
+  notas: unknown;
+  actualizado_en: string;
+}
+export interface BorradorNota {
+  tipo: 'nota' | 'llamada' | 'visita' | 'correo';
+  contenido: unknown;
+  actualizado_en: string;
+}
+export interface Borradores {
+  tarea?: BorradorTarea;
+  nota?: BorradorNota;
+}
+
+export async function listarBorradores(oportunidadId: string): Promise<Borradores> {
+  const supabase = await clienteServidor();
+  const filas = exigir(
+    await supabase.from('borradores').select(CONSULTAS.borradores).eq('oportunidad_id', oportunidadId),
+    'tus borradores',
+  ) as { tipo: 'tarea' | 'nota'; datos: Record<string, unknown>; actualizado_en: string }[] | null;
+  const salida: Borradores = {};
+  for (const f of filas ?? []) {
+    if (f.tipo === 'tarea')
+      salida.tarea = {
+        ...(f.datos as Omit<BorradorTarea, 'actualizado_en'>),
+        actualizado_en: f.actualizado_en,
+      };
+    else
+      salida.nota = {
+        ...(f.datos as Omit<BorradorNota, 'actualizado_en'>),
+        actualizado_en: f.actualizado_en,
+      };
+  }
+  return salida;
+}
+
 export async function listarSeguimiento(
   oportunidadId?: string,
   limite = 50,

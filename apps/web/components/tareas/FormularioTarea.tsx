@@ -5,7 +5,8 @@ import { useId, useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { actualizarTarea, crearTarea } from '@/lib/acciones-tareas';
-import type { TareaFila } from '@/lib/datos';
+import { useVentana } from '@/components/VentanaFlotante';
+import type { BorradorTarea, TareaFila } from '@/lib/datos';
 import { BotonActivarAvisos } from './BotonActivarAvisos';
 
 /** Anticipaciones disponibles (se pueden elegir varias). */
@@ -39,17 +40,28 @@ function porOmision() {
 export function FormularioTarea({
   oportunidadId,
   tarea,
+  borrador,
   onListo,
 }: {
   oportunidadId?: string;
   tarea?: TareaFila;
-  onListo?: () => void;
+  /** Valores de un borrador guardado para continuarlo. */
+  borrador?: BorradorTarea;
+  /** Al guardar con éxito (con el mensaje); si no se pasa, el formulario se vacía para capturar otra. */
+  onListo?: (ok: string) => void;
 }) {
+  const ventana = useVentana();
   const id = useId();
   const [version, setVersion] = useState(0);
-  const [avisos, setAvisos] = useState<number[]>(() => tarea?.avisos.map((a) => a.minutos_antes) ?? [15]);
+  const [avisos, setAvisos] = useState<number[]>(
+    () => tarea?.avisos.map((a) => a.minutos_antes) ?? borrador?.avisos ?? [15],
+  );
   const [{ fecha, hora }, setCuando] = useState(() =>
-    tarea ? local(new Date(tarea.vence_en)) : porOmision(),
+    tarea
+      ? local(new Date(tarea.vence_en))
+      : borrador?.fecha && borrador.hora
+        ? { fecha: borrador.fecha, hora: borrador.hora }
+        : porOmision(),
   );
   const [mensaje, setMensaje] = useState<{ error?: string; ok?: string }>({});
   const [pendiente, iniciar] = useTransition();
@@ -71,7 +83,7 @@ export function FormularioTarea({
         : await crearTarea(oportunidadId!, {}, datos);
       setMensaje(r);
       if (r.ok) {
-        if (tarea) onListo?.();
+        if (onListo) onListo(r.ok);
         else {
           setVersion((v) => v + 1); // reinicia título y notas
           setCuando(porOmision());
@@ -85,6 +97,7 @@ export function FormularioTarea({
 
   return (
     <form key={version} onSubmit={enviar} className="flex flex-col gap-3">
+      <input type="hidden" name="avisos" value={JSON.stringify(avisos)} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-titulo`} className="text-xs font-semibold text-texto-suave">
           ¿Qué hay que hacer?
@@ -96,7 +109,7 @@ export function FormularioTarea({
           minLength={2}
           maxLength={200}
           autoComplete="off"
-          defaultValue={tarea?.titulo}
+          defaultValue={tarea?.titulo ?? borrador?.titulo}
           placeholder="Ej. «Llamar a Héctor para confirmar la vigencia»"
           className={`${control} w-full`}
         />
@@ -107,6 +120,7 @@ export function FormularioTarea({
           Fecha
           <input
             type="date"
+            name="fecha"
             value={fecha}
             onChange={(e) => setCuando((c) => ({ ...c, fecha: e.target.value }))}
             required
@@ -117,6 +131,7 @@ export function FormularioTarea({
           Hora
           <input
             type="time"
+            name="hora"
             value={hora}
             onChange={(e) => setCuando((c) => ({ ...c, hora: e.target.value }))}
             required
@@ -156,7 +171,7 @@ export function FormularioTarea({
         <span className="text-xs font-semibold text-texto-suave">Notas</span>
         <EditorEnriquecido
           nombre="notas"
-          inicial={(tarea?.notas as JSONContent | null) ?? null}
+          inicial={((tarea?.notas ?? borrador?.notas) as JSONContent | null) ?? null}
           etiqueta="Notas de la tarea"
           placeholder="Detalles, datos de contacto, qué preguntar… (opcional)"
           minAlto={72}
@@ -172,10 +187,10 @@ export function FormularioTarea({
           <Icon name={tarea ? 'palomita' : 'mas'} strokeWidth={2.2} />
           {pendiente ? 'Guardando…' : tarea ? 'Guardar cambios' : 'Programar tarea'}
         </button>
-        {onListo && tarea && (
+        {ventana && (
           <button
             type="button"
-            onClick={onListo}
+            onClick={ventana.intentarCerrar}
             className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
           >
             Cancelar

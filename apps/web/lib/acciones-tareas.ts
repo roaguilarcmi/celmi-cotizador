@@ -2,6 +2,7 @@
 
 import { leerContenido, tareaSchema, textoPlano } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
+import { borrarBorrador } from './acciones-borradores';
 import { obtenerSesion } from './sesion';
 import { clienteServidor } from './supabase/servidor';
 
@@ -83,6 +84,7 @@ export async function crearTarea(
   if (error || !data) return { error: 'No se pudo guardar la tarea.' };
   if (await guardarAvisos(data.id as string, leido.avisos))
     return { error: 'La tarea se guardó, pero no sus avisos.' };
+  await borrarBorrador(oportunidadId, 'tarea');
   refrescar(oportunidadId);
   return { ok: 'Tarea programada.' };
 }
