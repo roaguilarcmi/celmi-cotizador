@@ -20,7 +20,7 @@ export interface EntradaPrecio {
 }
 
 export interface EntradaPartida extends EntradaPrecio {
-  /** Cantidad entera positiva (las cantidades fraccionarias siguen pendientes de definir). */
+  /** Cantidad entera positiva (regla 2026-10-05: no hay cantidades fraccionarias). */
   cantidad: number;
 }
 
@@ -42,7 +42,7 @@ function leerEntrada({ costoUnitario, tipoCambio = '1', utilidadPct }: EntradaPr
   const pct = aEscalado(utilidadPct, ESCALA_PORCENTAJE);
   if (costo < 0n) throw new Error('El costo no puede ser negativo');
   if (tc <= 0n) throw new Error('El tipo de cambio debe ser mayor que cero');
-  // Vender bajo costo no está definido por el negocio: se rechaza hasta que se confirme.
+  // Regla 2026-10-05: no se vende con utilidad negativa.
   if (pct < 0n) throw new Error('La utilidad no puede ser negativa');
   return { costo, tc, pct };
 }
@@ -138,6 +138,34 @@ export const TASA_IVA_GENERAL = '16';
 export function conIva(c: Centavos, tasaIvaPct: string = TASA_IVA_GENERAL): Centavos {
   const tasa = aEscalado(tasaIvaPct, ESCALA_PORCENTAJE);
   return dividirRedondeando(c * (CIEN_POR_CIENTO + tasa), CIEN_POR_CIENTO);
+}
+
+/**
+ * Totales de una propuesta principal con los adicionales que el ejecutivo marcó para sumarse (regla 2026-10-05:
+ * se elige por partida). Las partidas sumadas entran al subtotal, así que el IVA se calcula sobre todo junto.
+ */
+export function totalesConAdicionales(
+  principal: readonly { importe: Centavos }[],
+  adicionalesSumados: readonly { importe: Centavos }[],
+  tasaIvaPct: string = TASA_IVA_GENERAL,
+): Totales {
+  return calcularTotales([...principal, ...adicionalesSumados], tasaIvaPct);
+}
+
+/**
+ * «Monto cotizado» del dashboard (regla 2026-10-02): la propuesta de menor total, ya con los adicionales sumados.
+ * `null` si no hay propuestas principales.
+ */
+export function menorMonto(
+  principales: readonly (readonly { importe: Centavos }[])[],
+  adicionalesSumados: readonly { importe: Centavos }[] = [],
+): Centavos | null {
+  let menor: Centavos | null = null;
+  for (const lineas of principales) {
+    const { total } = totalesConAdicionales(lineas, adicionalesSumados);
+    if (menor === null || total < menor) menor = total;
+  }
+  return menor;
 }
 
 export function calcularTotales(

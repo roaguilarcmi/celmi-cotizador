@@ -132,14 +132,29 @@ describe('información interna: costos y utilidad', () => {
 
 describe('autorización y bloqueo de partidas', () => {
   it('el ejecutivo no puede autorizar su propia revisión', async () => {
+    // Revisión enviada y con precio: lo único que falta es el permiso de autorizar.
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      deJorge.revision,
+    ]);
+    await db.query(`insert into public.partida_precios (partida_id, precio_unitario) values ($1, 16495.48)`, [
+      deJorge.partida,
+    ]);
     await como(db, 'jorge', async () => {
       await expect(
         db.query(`update public.revisiones set estado = 'autorizada' where id = $1`, [deJorge.revision]),
       ).rejects.toThrow(/row-level security/);
     });
+    await db.query(`update public.revisiones set estado = 'borrador' where id = $1`, [deJorge.revision]);
   });
 
   it('una vez autorizada, el ejecutivo ya no modifica partidas ni costos; el autorizador sí', async () => {
+    // Por el camino real: se envía (descarta precios previos), se registra el precio y se autoriza.
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      deJorge.revision,
+    ]);
+    await db.query(`insert into public.partida_precios (partida_id, precio_unitario) values ($1, 16495.48)`, [
+      deJorge.partida,
+    ]);
     await db.query(`update public.revisiones set estado = 'autorizada' where id = $1`, [deJorge.revision]);
     await como(db, 'jorge', async () => {
       const p = await db.query('update public.partidas set cantidad = 5 where id = $1', [deJorge.partida]);
