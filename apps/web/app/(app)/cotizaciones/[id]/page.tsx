@@ -80,6 +80,13 @@ export default async function PaginaCotizacion({
       revision={revision}
       catalogos={catalogos}
       puedeEditar={puedeEditar && sesion.permisos.has('costos.ver')}
+      puedeEliminar={
+        puedeEditar &&
+        !cotizacion.folio &&
+        !cotizacion.revisiones.some(
+          (r) => r.autorizada_en || r.estado === 'autorizada' || r.estado === 'emitida',
+        )
+      }
       catalogoCondiciones={catalogoCondiciones}
       condiciones={condiciones}
       esquemasFinanciamiento={esquemas.filter((e) => e.id !== 'adquisicion')}

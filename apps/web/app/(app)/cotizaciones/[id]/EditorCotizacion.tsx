@@ -24,6 +24,7 @@ import {
   type Catalogos,
   type PropuestaEditable,
 } from './modelo';
+import { EliminarCotizacion } from './EliminarCotizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import { PasoCondiciones } from './PasoCondiciones';
 import { PasoFinanciamiento } from './PasoFinanciamiento';
@@ -43,6 +44,7 @@ export function EditorCotizacion({
   catalogos,
   puedeEditar,
   pasoInicial,
+  puedeEliminar,
   catalogoCondiciones,
   condiciones,
   esquemasFinanciamiento,
@@ -54,6 +56,8 @@ export function EditorCotizacion({
   catalogos: Catalogos;
   puedeEditar: boolean;
   pasoInicial: Paso;
+  /** Sin precios autorizados todavía: se puede eliminar (2026-10-05). */
+  puedeEliminar: boolean;
   catalogoCondiciones: CondicionCatalogo[];
   condiciones: CondicionRevision[];
   esquemasFinanciamiento: Esquema[];
@@ -183,6 +187,12 @@ export function EditorCotizacion({
             <span>{cotizacion.folio ?? 'Sin folio (se asigna al emitir)'}</span>
           </p>
         </div>
+        {puedeEliminar && (
+          <EliminarCotizacion
+            cotizacionId={cotizacion.id}
+            oportunidadId={cotizacion.oportunidad?.id ?? null}
+          />
+        )}
       </header>
 
       <div className="mb-5">

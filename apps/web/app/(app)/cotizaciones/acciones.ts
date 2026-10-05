@@ -146,3 +146,24 @@ export async function guardarFinanciamiento(
   refrescar(cotizacionId);
   return { ok: 'Financiamiento guardado.' };
 }
+
+/**
+ * Elimina una cotización mientras no tenga precios autorizados (decisión 2026-10-05); la base lo exige y conserva el
+ * registro en la auditoría.
+ */
+export async function eliminarCotizacion(
+  cotizacionId: string,
+  oportunidadId: string | null,
+): Promise<Resultado> {
+  await obtenerSesion();
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase.from('cotizaciones').delete().eq('id', cotizacionId).select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo eliminar la cotización.') };
+  if (!data?.length) return { error: 'Ya no se puede eliminar: tiene precios autorizados.' };
+  revalidatePath('/cotizaciones');
+  if (oportunidadId) {
+    revalidatePath(`/oportunidades/${oportunidadId}`);
+    redirect(`/oportunidades/${oportunidadId}`);
+  }
+  redirect('/cotizaciones');
+}

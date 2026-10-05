@@ -419,3 +419,37 @@ describe('adicionales de una partida y cargos prorrateados (0016)', () => {
     });
   });
 });
+
+describe('eliminar cotizaciones (0018)', () => {
+  const eliminar = (id: string) => db.query('delete from public.cotizaciones where id = $1', [id]);
+
+  it('sin precios autorizados se elimina, con sus revisiones y partidas', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await como(db, 'fabiola', async () => {
+      expect((await eliminar(otra.cotizacion)).affectedRows).toBe(1);
+      await db.exec('reset role');
+      const quedan = await filas(db, 'select 1 from public.partidas where id = $1', [otra.partida]);
+      expect(quedan).toHaveLength(0);
+    });
+  });
+
+  it('con precios autorizados (aunque haya una Rev nueva en borrador) ya no se elimina', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      otra.revision,
+    ]);
+    await db.query(`insert into public.partida_precios (partida_id, precio_unitario) values ($1, 16495.48)`, [
+      otra.partida,
+    ]);
+    await db.query(`update public.revisiones set estado = 'autorizada' where id = $1`, [otra.revision]);
+    await como(db, 'fabiola', async () => {
+      await db.query(`select public.crear_revision($1, 'solicitud_cliente')`, [otra.cotizacion]);
+      expect((await eliminar(otra.cotizacion)).affectedRows).toBe(0);
+    });
+  });
+
+  it('nadie elimina cotizaciones de oportunidades ajenas', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await como(db, 'jorge', async () => expect((await eliminar(otra.cotizacion)).affectedRows).toBe(0));
+  });
+});
