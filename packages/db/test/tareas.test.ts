@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 const crear = (oportunidad: string, responsable: string) =>
   db.query(
-    `insert into public.tareas (oportunidad_id, responsable_id, titulo, vence_en, aviso_en) values ($1, $2, 'Enviar propuesta', $3, $3)`,
+    `insert into public.tareas (oportunidad_id, responsable_id, titulo, vence_en) values ($1, $2, 'Enviar propuesta', $3)`,
     [oportunidad, responsable, mañana()],
   );
 
@@ -76,15 +76,75 @@ describe('tareas personales (decisión 2026-10-05)', () => {
     ).rejects.toThrow(/row-level security|no cambia de responsable/);
   });
 
-  it('no se borran, y el aviso no puede quedar después del vencimiento', async () => {
+  it('no se borran', async () => {
     await expect(como(db, 'jorge', () => db.query('delete from public.tareas'))).rejects.toThrow(
       /permission denied/,
     );
+  });
+});
+
+describe('varios avisos por tarea (decisión 2026-10-05)', () => {
+  const avisos = () =>
+    filas<{ minutos_antes: number; aviso_en: Date }>(
+      db,
+      'select minutos_antes, aviso_en from public.tarea_avisos where tarea_id = $1 order by minutos_antes',
+      [tareaDeJorge],
+    );
+
+  it('la hora de cada aviso la calcula la base a partir del vencimiento', async () => {
+    await como(db, 'jorge', async () => {
+      // Aunque se intente mandar otra hora, la base la recalcula.
+      await db.query(
+        `insert into public.tarea_avisos (tarea_id, minutos_antes, aviso_en) values ($1, 15, '2000-01-01'), ($1, 1440, '2000-01-01')`,
+        [tareaDeJorge],
+      );
+      const [t] = await filas<{ vence_en: Date }>(db, 'select vence_en from public.tareas where id = $1', [
+        tareaDeJorge,
+      ]);
+      const a = await avisos();
+      expect(a.map((x) => x.minutos_antes)).toEqual([15, 1440]);
+      expect(t!.vence_en.getTime() - a[0]!.aviso_en.getTime()).toBe(15 * 60_000);
+      expect(t!.vence_en.getTime() - a[1]!.aviso_en.getTime()).toBe(1440 * 60_000);
+    });
+  });
+
+  it('al reprogramar la tarea, los avisos se mueven con ella', async () => {
+    await db.query(
+      `insert into public.tarea_avisos (tarea_id, minutos_antes, aviso_en) values ($1, 60, now())`,
+      [tareaDeJorge],
+    );
+    await como(db, 'jorge', async () => {
+      await db.query(`update public.tareas set vence_en = vence_en + interval '2 days' where id = $1`, [
+        tareaDeJorge,
+      ]);
+      const [t] = await filas<{ vence_en: Date }>(db, 'select vence_en from public.tareas where id = $1', [
+        tareaDeJorge,
+      ]);
+      const [a] = await avisos();
+      expect(t!.vence_en.getTime() - a!.aviso_en.getTime()).toBe(60 * 60_000);
+    });
+  });
+
+  it('nadie más ve ni agrega avisos a tareas ajenas', async () => {
+    await como(db, 'fabiola', async () =>
+      expect(await filas(db, 'select id from public.tarea_avisos')).toHaveLength(0),
+    );
+    await expect(
+      como(db, 'fabiola', () =>
+        db.query(
+          `insert into public.tarea_avisos (tarea_id, minutos_antes, aviso_en) values ($1, 5, now())`,
+          [tareaDeJorge],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it('no se admiten anticipaciones negativas ni repetidas', async () => {
     await expect(
       como(db, 'jorge', () =>
         db.query(
-          `insert into public.tareas (oportunidad_id, responsable_id, titulo, vence_en, aviso_en) values ($1, $2, 'X tarea', now(), now() + interval '1 hour')`,
-          [deJorge.oportunidad, USUARIOS.jorge.id],
+          `insert into public.tarea_avisos (tarea_id, minutos_antes, aviso_en) values ($1, -5, now())`,
+          [tareaDeJorge],
         ),
       ),
     ).rejects.toThrow(/check constraint/);

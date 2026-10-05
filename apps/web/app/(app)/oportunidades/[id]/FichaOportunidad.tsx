@@ -1,23 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
-import { Icon, type IconName } from '@/components/Icon';
-import { Avatar, Boton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
-import { FormularioTarea } from '@/components/tareas/FormularioTarea';
-import { ListaTareas } from '@/components/tareas/ListaTareas';
+import { Icon } from '@/components/Icon';
+import { Avatar, Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { ContactoFila, Esquema, Estado, OportunidadFila, SeguimientoFila, TareaFila } from '@/lib/datos';
-import { colorAvatar, fechaCorta, fechaHora, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
-import { actualizarOportunidad, agregarNota, type EstadoFormulario } from '../acciones';
+import { colorAvatar, fechaCorta, haceCuanto, iniciales } from '@/lib/presentacion';
+import { actualizarOportunidad, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
-
-const TIPOS: { id: 'nota' | 'llamada' | 'visita' | 'correo'; nombre: string; icono: IconName }[] = [
-  { id: 'nota', nombre: 'Nota', icono: 'cotizaciones' },
-  { id: 'llamada', nombre: 'Llamada', icono: 'telefono' },
-  { id: 'visita', nombre: 'Visita', icono: 'clientes' },
-  { id: 'correo', nombre: 'Correo', icono: 'mensaje' },
-];
+import { SeccionSeguimiento, SeccionTareas } from './Secciones';
 
 export function FichaOportunidad({
   o,
@@ -26,6 +18,7 @@ export function FichaOportunidad({
   contactos,
   seguimiento,
   tareas,
+  usuarioId,
   puedeCambiarEstado,
   puedeEditar,
 }: {
@@ -35,11 +28,11 @@ export function FichaOportunidad({
   contactos: ContactoFila[];
   seguimiento: SeguimientoFila[];
   tareas: TareaFila[];
+  usuarioId: string;
   puedeCambiarEstado: boolean;
   puedeEditar: boolean;
 }) {
   const [editando, setEditando] = useState(false);
-  const nombreEstado = new Map(estados.map((e) => [e.id, e.nombre]));
   const esquema = esquemas.find((e) => e.id === o.esquema_id);
 
   return (
@@ -110,78 +103,15 @@ export function FichaOportunidad({
             </p>
           </Tarjeta>
 
-          <Tarjeta className="p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <Titulo2>Mis tareas</Titulo2>
-              <span className="text-xs text-texto-suave">Personales: sólo tú las ves</span>
-            </div>
-            <div className="mt-4">
-              <FormularioTarea oportunidadId={o.id} />
-            </div>
-            <div className="mt-2">
-              <ListaTareas tareas={tareas} vacio="Sin tareas pendientes en esta oportunidad." />
-            </div>
-          </Tarjeta>
+          <SeccionTareas oportunidadId={o.id} tareas={tareas} />
 
-          <Tarjeta className="p-6">
-            <Titulo2>Seguimiento</Titulo2>
-            {puedeEditar && <NuevaNota oportunidadId={o.id} />}
-            <ol className="mt-5 flex flex-col">
-              {seguimiento.length === 0 && (
-                <li className="py-6 text-center text-[13px] text-texto-suave">
-                  Aún no hay movimientos registrados.
-                </li>
-              )}
-              {seguimiento.map((s, i) => (
-                <li key={s.id} className="relative flex gap-3.5 pb-5">
-                  {i < seguimiento.length - 1 && (
-                    <span aria-hidden="true" className="absolute top-9 bottom-0 left-[17px] w-px bg-borde" />
-                  )}
-                  {s.tipo === 'cambio_estado' ? (
-                    <span className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-acento-suave text-acento-texto">
-                      <Icon name="derecha" size={16} />
-                    </span>
-                  ) : (
-                    <Avatar
-                      iniciales={iniciales(s.autor?.nombre ?? '?')}
-                      color={colorAvatar(s.autor?.nombre ?? '?')}
-                      tamano={36}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1 pt-1">
-                    <div className="text-[13px]">
-                      <strong>{s.autor?.nombre ?? 'Sistema'}</strong>{' '}
-                      {s.tipo === 'cambio_estado' ? (
-                        <span className="text-texto-suave">
-                          cambió el estado{' '}
-                          {s.estado_anterior && (
-                            <>
-                              de{' '}
-                              <Pill tono={tonoEstado(s.estado_anterior)} punto={false}>
-                                {nombreEstado.get(s.estado_anterior) ?? s.estado_anterior}
-                              </Pill>{' '}
-                            </>
-                          )}
-                          a{' '}
-                          <Pill tono={tonoEstado(s.estado_nuevo ?? '')} punto={false}>
-                            {nombreEstado.get(s.estado_nuevo ?? '') ?? s.estado_nuevo}
-                          </Pill>
-                        </span>
-                      ) : (
-                        <span className="text-texto-suave">
-                          registró {TIPOS.find((t) => t.id === s.tipo)?.nombre.toLowerCase()}
-                        </span>
-                      )}
-                      <span className="text-texto-suave"> · {fechaHora(s.en)}</span>
-                    </div>
-                    {s.texto && (
-                      <p className="mt-1.5 text-sm leading-relaxed whitespace-pre-line">{s.texto}</p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Tarjeta>
+          <SeccionSeguimiento
+            oportunidadId={o.id}
+            seguimiento={seguimiento}
+            estados={estados}
+            usuarioId={usuarioId}
+            puedeRegistrar={puedeEditar}
+          />
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-5">
@@ -253,62 +183,6 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: React.ReactN
       <dt className="text-xs font-semibold text-texto-suave">{etiqueta}</dt>
       <dd className="mt-0.5">{children}</dd>
     </div>
-  );
-}
-
-function NuevaNota({ oportunidadId }: { oportunidadId: string }) {
-  const formulario = useRef<HTMLFormElement>(null);
-  const [tipo, setTipo] = useState<(typeof TIPOS)[number]['id']>('nota');
-  const [estado, accion] = useActionState<EstadoFormulario, FormData>(
-    async (previo: EstadoFormulario, datos: FormData) => {
-      const r = await agregarNota(oportunidadId, previo, datos);
-      if (r.ok) formulario.current?.reset();
-      return r;
-    },
-    {},
-  );
-  return (
-    <form
-      ref={formulario}
-      action={accion}
-      className="mt-4 rounded-md border border-borde bg-superficie-2 p-3"
-    >
-      <input type="hidden" name="tipo" value={tipo} />
-      <div role="radiogroup" aria-label="Tipo de registro" className="mb-2 flex flex-wrap gap-1.5">
-        {TIPOS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="radio"
-            aria-checked={tipo === t.id}
-            onClick={() => setTipo(t.id)}
-            className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-pill px-3 text-[13px] font-semibold transition-colors ${
-              tipo === t.id ? 'bg-paso text-white' : 'bg-superficie text-texto-suave hover:text-texto'
-            }`}
-          >
-            <Icon name={t.icono} size={15} />
-            {t.nombre}
-          </button>
-        ))}
-      </div>
-      <label className="sr-only" htmlFor={`nota-${oportunidadId}`}>
-        Texto
-      </label>
-      <textarea
-        id={`nota-${oportunidadId}`}
-        name="texto"
-        rows={2}
-        required
-        placeholder="¿Qué pasó? Ej. «El cliente pidió cotizar también 2 docking stations»"
-        className="w-full resize-y rounded-md border border-borde bg-superficie px-3 py-2.5 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave"
-      />
-      {estado.error && <p className="mt-1 text-xs text-peligro">{estado.error}</p>}
-      <div className="mt-2 flex justify-end">
-        <div className="w-40">
-          <BotonEnviar>Registrar</BotonEnviar>
-        </div>
-      </div>
-    </form>
   );
 }
 

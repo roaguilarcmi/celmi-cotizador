@@ -88,15 +88,20 @@ export const notaSchema = z.object({
   texto: z.string().trim().min(2, 'Escribe la nota').max(2000),
 });
 
-/** Minutos de anticipación del aviso; «sin» = sin aviso (decisión 2026-10-05: se elige al crear la tarea). */
-export const OPCIONES_AVISO = ['0', '15', '60', '1440', 'sin'] as const;
-
-/** Tarea personal. `vence_en` llega en ISO 8601 (el navegador convierte su hora local). */
+/**
+ * Tarea personal (decisiones 2026-10-05: sólo para uno mismo, varios avisos, notas con formato).
+ * `vence_en` llega en ISO 8601 (el navegador convierte su hora local). Las notas se validan aparte con
+ * `leerContenido`.
+ */
 export const tareaSchema = z.object({
   titulo: z.string().trim().min(2, 'Escribe qué hay que hacer').max(200),
-  descripcion: z.string().trim().max(2000).default(''),
   vence_en: z.iso.datetime({ offset: true, message: 'Elige la fecha y hora' }),
-  aviso: z.enum(OPCIONES_AVISO).default('0'),
+  /** Minutos de anticipación de cada aviso (varios por tarea; vacío = sin aviso). */
+  avisos: z
+    .array(z.number().int().min(0, 'Anticipación no válida').max(43_200, 'Máximo 30 días antes'))
+    .max(6, 'Máximo 6 avisos por tarea')
+    .default([])
+    .transform((xs) => [...new Set(xs)].sort((a, b) => a - b)),
 });
 
 export type Cliente = z.infer<typeof clienteSchema>;
@@ -104,3 +109,5 @@ export type Contacto = z.infer<typeof contactoSchema>;
 export type DatosOportunidad = z.infer<typeof oportunidadSchema>;
 export type CostoPartida = z.infer<typeof costoPartidaSchema>;
 export type AutorizacionPartida = z.infer<typeof autorizacionPartidaSchema>;
+
+export * from './enriquecido';

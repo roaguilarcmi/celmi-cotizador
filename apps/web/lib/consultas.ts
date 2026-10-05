@@ -14,10 +14,10 @@ export const CONSULTAS = {
     ejecutivo_id, cliente:clientes(id, razon_social), contacto:contactos(id, tratamiento, nombre, puesto, correo, telefono),
     ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(id, nombre)`,
   seguimiento:
-    'id, oportunidad_id, tipo, texto, estado_anterior, estado_nuevo, en, autor:perfiles!seguimiento_autor_id_fkey(nombre)',
+    'id, oportunidad_id, autor_id, tipo, texto, contenido, estado_anterior, estado_nuevo, en, editado_en, autor:perfiles!seguimiento_autor_id_fkey(nombre)',
   perfilSesion: 'nombre, puesto, correo, roles(nombre)',
   tareas:
-    'id, oportunidad_id, titulo, descripcion, vence_en, aviso_en, estado, completada_en, oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social))',
+    'id, oportunidad_id, titulo, descripcion, notas, vence_en, estado, completada_en, avisos:tarea_avisos(id, minutos_antes, aviso_en), oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social))',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */

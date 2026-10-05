@@ -98,13 +98,73 @@ describe('notas de seguimiento', () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it('la bitácora no se edita ni se borra', async () => {
-    await expect(
-      como(db, 'alejandro', () => db.query(`update public.seguimiento set texto = 'cambiado'`)),
-    ).rejects.toThrow(/permission denied/);
+  it('nadie edita notas ajenas ni cambios de estado, y nada se borra', async () => {
+    await como(db, 'alejandro', async () => {
+      const r = await db.query(`update public.seguimiento set texto = 'cambiado'`);
+      expect(r.affectedRows).toBe(0);
+    });
+    await como(db, 'jorge', async () => {
+      const r = await db.query(
+        `update public.seguimiento set texto = 'cambiado' where tipo = 'cambio_estado' and oportunidad_id = $1`,
+        [op.oportunidad],
+      );
+      expect(r.affectedRows).toBe(0);
+    });
     await expect(como(db, 'alejandro', () => db.query('delete from public.seguimiento'))).rejects.toThrow(
       /permission denied/,
     );
+  });
+
+  // `como()` revierte al terminar: cada prueba crea su nota dentro de la misma sesión.
+  const conNota = <T>(fn: () => Promise<T>) =>
+    como(db, 'jhovanny', async () => {
+      await db.query(
+        `insert into public.seguimiento (oportunidad_id, autor_id, tipo, texto) values ($1, $2, 'llamada', 'Confirmó 2 equipos')`,
+        [op.oportunidad, USUARIOS.jhovanny.id],
+      );
+      return fn();
+    });
+
+  it('el autor edita su nota (tipo, texto, contenido): queda marcada y auditada', async () => {
+    await conNota(async () => {
+      const r = await db.query(
+        `update public.seguimiento set tipo = 'visita', texto = 'Confirmó 3 equipos', contenido = '{"type":"doc"}'
+         where autor_id = $1 and texto = 'Confirmó 2 equipos'`,
+        [USUARIOS.jhovanny.id],
+      );
+      expect(r.affectedRows).toBe(1);
+      await db.exec('reset role');
+      const [s] = await filas<{ id: string; editado: boolean }>(
+        db,
+        `select id, editado_en is not null as editado from public.seguimiento where texto = 'Confirmó 3 equipos'`,
+      );
+      expect(s!.editado).toBe(true);
+      const [a] = await filas<{ antes: { texto: string }; despues: { texto: string } }>(
+        db,
+        `select antes, despues from public.auditoria where tabla = 'seguimiento' and registro_id = $1 and accion = 'UPDATE'`,
+        [s!.id],
+      );
+      expect(a!.antes.texto).toBe('Confirmó 2 equipos');
+      expect(a!.despues.texto).toBe('Confirmó 3 equipos');
+    });
+  });
+
+  it('al editar no se puede cambiar autor ni convertir en cambio de estado', async () => {
+    await expect(
+      conNota(() =>
+        db.query(`update public.seguimiento set autor_id = $1 where autor_id = $2`, [
+          USUARIOS.jorge.id,
+          USUARIOS.jhovanny.id,
+        ]),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      conNota(() =>
+        db.query(`update public.seguimiento set tipo = 'cambio_estado' where autor_id = $1`, [
+          USUARIOS.jhovanny.id,
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security/);
   });
 
   it('una nota actualiza la última actividad sin ensuciar la auditoría', async () => {

@@ -35,6 +35,7 @@ export default async function PaginaOportunidad({ params }: { params: Promise<{ 
       contactos={cliente?.contactos ?? []}
       seguimiento={seguimiento}
       tareas={tareas}
+      usuarioId={sesion.usuarioId}
       puedeCambiarEstado={editarTodas || o.ejecutivo_id === sesion.usuarioId}
       // Colaboradores también editan datos y registran seguimiento (la base lo permite a participantes).
       puedeEditar

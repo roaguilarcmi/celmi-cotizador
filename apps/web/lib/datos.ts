@@ -59,11 +59,16 @@ export interface OportunidadFila {
 
 export interface SeguimientoFila {
   id: string;
+  autor_id: string | null;
   tipo: 'nota' | 'llamada' | 'visita' | 'correo' | 'cambio_estado';
   texto: string;
+  /** Texto con formato (JSON validado); null en registros anteriores o de sistema. */
+  contenido: unknown;
   estado_anterior: string | null;
   estado_nuevo: string | null;
   en: string;
+  /** Última edición de su autor (la versión anterior queda en la auditoría). */
+  editado_en: string | null;
   autor: { nombre: string } | null;
 }
 
@@ -73,7 +78,9 @@ export interface TareaFila {
   titulo: string;
   descripcion: string;
   vence_en: string;
-  aviso_en: string | null;
+  /** Documento de texto con formato (validado al guardar y al mostrar). */
+  notas: unknown;
+  avisos: { id: string; minutos_antes: number; aviso_en: string }[];
   estado: 'pendiente' | 'completada' | 'cancelada';
   completada_en: string | null;
   oportunidad: { id: string; nombre: string; cliente: { razon_social: string } | null } | null;
