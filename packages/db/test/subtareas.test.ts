@@ -35,14 +35,57 @@ describe('subtareas (decisión 2026-10-05)', () => {
     });
   });
 
-  it('una tarea principal sí necesita fecha', async () => {
+  it('una tarea puede no tener fecha ni oportunidad (0012), y sus subtareas tampoco', async () => {
+    await como(db, 'jorge', async () => {
+      const [libre] = await filas<{ id: string }>(
+        db,
+        `insert into public.tareas (titulo) values ('Revisar correo de mayoristas') returning id`,
+      );
+      const [s] = await subtarea(libre!.id);
+      expect(s!.oportunidad_id).toBeNull();
+    });
+  });
+
+  it('las etapas de trabajo se recorren y sólo «completada» marca la fecha de completado', async () => {
+    await como(db, 'jorge', async () => {
+      for (const estado of ['en_curso', 'en_espera', 'completada', 'pendiente']) {
+        await db.query('update public.tareas set estado = $1 where id = $2', [estado, principal]);
+        const [t] = await filas<{ completada: boolean }>(
+          db,
+          'select completada_en is not null as completada from public.tareas where id = $1',
+          [principal],
+        );
+        expect(t!.completada).toBe(estado === 'completada');
+      }
+    });
+  });
+
+  it('sin hora: sólo avisos con días de anticipación', async () => {
+    const conAviso = (minutos: number) =>
+      como(db, 'jorge', async () => {
+        const [t] = await filas<{ id: string }>(
+          db,
+          `insert into public.tareas (titulo, vence_en, sin_hora) values ('Entregar propuesta', $1, true) returning id`,
+          [mañana()],
+        );
+        await db.query(
+          'insert into public.tarea_avisos (tarea_id, minutos_antes, aviso_en) values ($1, $2, now())',
+          [t!.id, minutos],
+        );
+      });
+    await expect(conAviso(15)).rejects.toThrow(/días de anticipación/);
+    await expect(conAviso(1440)).resolves.toBeUndefined();
+  });
+
+  it('nadie liga su tarea a una oportunidad que no ve', async () => {
+    const deFabiola = await crearOportunidad(db, 'fabiola');
     await expect(
       como(db, 'jorge', () =>
-        db.query(`insert into public.tareas (oportunidad_id, titulo) values ($1, 'Sin fecha')`, [
-          deJorge.oportunidad,
+        db.query(`insert into public.tareas (oportunidad_id, titulo) values ($1, 'Espiar')`, [
+          deFabiola.oportunidad,
         ]),
       ),
-    ).rejects.toThrow(/tarea_principal_con_fecha/);
+    ).rejects.toThrow(/row-level security/);
   });
 
   it('un solo nivel: una subtarea no tiene subtareas', async () => {

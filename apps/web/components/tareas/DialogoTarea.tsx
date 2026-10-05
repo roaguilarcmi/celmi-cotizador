@@ -14,8 +14,9 @@ export function DialogoTarea({ tarea, onCerrar }: { tarea: TareaFila; onCerrar: 
     <VentanaFlotante
       titulo="Detalle de la tarea"
       detalle={
-        tarea.oportunidad &&
-        [tarea.oportunidad.cliente?.razon_social, tarea.oportunidad.nombre].filter(Boolean).join(' · ')
+        tarea.oportunidad
+          ? [tarea.oportunidad.cliente?.razon_social, tarea.oportunidad.nombre].filter(Boolean).join(' · ')
+          : 'Tarea libre (sin oportunidad)'
       }
       esEdicion
       onCerrar={onCerrar}

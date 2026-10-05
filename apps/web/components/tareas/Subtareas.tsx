@@ -5,6 +5,7 @@ import { Icon } from '@/components/Icon';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import { cambiarEstadoTarea, crearSubtarea } from '@/lib/acciones-tareas';
 import type { SubtareaFila, TareaFila } from '@/lib/datos';
+import type { EstadoTarea } from '@/lib/etapas-tareas';
 import { FormularioTarea } from './FormularioTarea';
 import { subtareasVigentes } from './AvanceSubtareas';
 import { cuando, TONOS_CUANDO } from './cuando';
@@ -64,7 +65,7 @@ export function Subtareas({ tarea }: { tarea: TareaFila }) {
 function FilaSubtarea({ s, onAbrir }: { s: SubtareaFila; onAbrir: () => void }) {
   const [pendiente, iniciar] = useTransition();
   const hecha = s.estado === 'completada';
-  const c = s.vence_en ? cuando(s.vence_en) : null;
+  const c = s.vence_en ? cuando(s.vence_en, s.sin_hora) : null;
   return (
     <li
       className={`group flex min-h-11 items-center gap-2.5 border-b border-borde/70 px-1 last:border-0 ${pendiente ? 'opacity-60' : ''}`}
@@ -185,7 +186,7 @@ function AgregarSubtarea({ padreId }: { padreId: string }) {
 function EstadoSubtarea({ s, onCancelada }: { s: SubtareaFila; onCancelada: () => void }) {
   const [pendiente, iniciar] = useTransition();
   const hecha = s.estado === 'completada';
-  const cambiar = (estado: 'pendiente' | 'completada' | 'cancelada') =>
+  const cambiar = (estado: EstadoTarea) =>
     iniciar(async () => {
       const r = await cambiarEstadoTarea(s.id, estado);
       if (!r.error && estado === 'cancelada') onCancelada();

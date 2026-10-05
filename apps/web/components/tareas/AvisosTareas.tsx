@@ -47,13 +47,13 @@ export function AvisosTareas() {
       setVisibles((v) => (v.some((x) => x.id === a.id) ? v : [...v, a]));
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         const n = new Notification(a.titulo, {
-          body: `${a.oportunidad} · vence ${hora.format(new Date(a.venceEn))}`,
+          body: `${a.oportunidad ? `${a.oportunidad} · ` : ''}vence ${hora.format(new Date(a.venceEn))}`,
           tag: clave(a),
           icon: '/logo-celmi-color.svg',
         });
         n.onclick = () => {
           window.focus();
-          router.push(`/oportunidades/${a.oportunidadId}`);
+          router.push(a.oportunidadId ? `/oportunidades/${a.oportunidadId}` : '/tareas');
           n.close();
         };
       }
@@ -119,13 +119,13 @@ export function AvisosTareas() {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{a.titulo}</div>
             <div className="mt-0.5 text-xs text-texto-suave">
-              {a.oportunidad} · vence {hora.format(new Date(a.venceEn))}
+              {a.oportunidad && `${a.oportunidad} · `}vence {hora.format(new Date(a.venceEn))}
             </div>
             <button
               type="button"
               onClick={() => {
                 setVisibles((v) => v.filter((x) => x.id !== a.id));
-                router.push(`/oportunidades/${a.oportunidadId}`);
+                router.push(a.oportunidadId ? `/oportunidades/${a.oportunidadId}` : '/tareas');
               }}
               className="mt-2 cursor-pointer text-xs font-semibold text-acento-texto hover:underline"
             >

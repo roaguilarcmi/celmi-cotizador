@@ -1,5 +1,6 @@
 import { CONSULTAS } from './consultas';
 import { clienteServidor } from './supabase/servidor';
+import { ESTADOS_ABIERTOS, type EstadoTarea } from './etapas-tareas';
 
 /*
  * Consultas de la Fase 2. Todas usan la sesión del usuario: las reglas RLS de la base deciden qué filas ve
@@ -74,14 +75,17 @@ export interface SeguimientoFila {
 
 export interface TareaFila {
   id: string;
-  oportunidad_id: string;
+  /** Nulo: tarea libre, no ligada a una oportunidad. */
+  oportunidad_id: string | null;
   titulo: string;
   descripcion: string;
-  vence_en: string;
+  /** Nulo: sin fecha. Con `sin_hora`, vence al final de ese día. */
+  vence_en: string | null;
+  sin_hora: boolean;
   /** Documento de texto con formato (validado al guardar y al mostrar). */
   notas: unknown;
   avisos: { id: string; minutos_antes: number; aviso_en: string }[];
-  estado: 'pendiente' | 'completada' | 'cancelada';
+  estado: EstadoTarea;
   completada_en: string | null;
   oportunidad: { id: string; nombre: string; cliente: { razon_social: string } | null } | null;
   /** Subtareas (un nivel), en orden de creación. */
@@ -95,7 +99,8 @@ export interface SubtareaFila {
   descripcion: string;
   notas: unknown;
   vence_en: string | null;
-  estado: 'pendiente' | 'completada' | 'cancelada';
+  sin_hora: boolean;
+  estado: EstadoTarea;
   completada_en: string | null;
   creado_en: string;
   avisos: { id: string; minutos_antes: number; aviso_en: string }[];
@@ -160,6 +165,9 @@ export interface BorradorTarea {
   avisos: number[];
   /** Títulos de subtareas capturadas (borradores anteriores no las traen). */
   subtareas?: string[];
+  con_fecha?: boolean;
+  /** Oportunidad elegida al crear desde «Mis tareas» ('' = ninguna). */
+  oportunidad?: string;
   notas: unknown;
   actualizado_en: string;
 }
@@ -173,10 +181,12 @@ export interface Borradores {
   nota?: BorradorNota;
 }
 
-export async function listarBorradores(oportunidadId: string): Promise<Borradores> {
+/** Borradores propios de una oportunidad, o los de «Mis tareas» (`null`: sin oportunidad). */
+export async function listarBorradores(oportunidadId: string | null): Promise<Borradores> {
   const supabase = await clienteServidor();
+  const q = supabase.from('borradores').select(CONSULTAS.borradores);
   const filas = exigir(
-    await supabase.from('borradores').select(CONSULTAS.borradores).eq('oportunidad_id', oportunidadId),
+    await (oportunidadId ? q.eq('oportunidad_id', oportunidadId) : q.is('oportunidad_id', null)),
     'tus borradores',
   ) as { tipo: 'tarea' | 'nota'; datos: Record<string, unknown>; actualizado_en: string }[] | null;
   const salida: Borradores = {};
@@ -222,11 +232,20 @@ export async function listarMisTareas(filtro?: {
     .from('tareas')
     .select(CONSULTAS.tareas)
     .is('tarea_padre_id', null)
-    .order('vence_en')
+    .order('vence_en', { nullsFirst: false })
+    .order('creado_en')
     .order('creado_en', { referencedTable: 'subtareas' });
   if (filtro?.oportunidadId) q = q.eq('oportunidad_id', filtro.oportunidadId);
-  if (filtro?.soloPendientes) q = q.eq('estado', 'pendiente');
+  if (filtro?.soloPendientes) q = q.in('estado', ESTADOS_ABIERTOS);
   return (exigir(await q, 'tus tareas') ?? []) as unknown as TareaFila[];
+}
+
+/** Oportunidades para ligar una tarea desde «Mis tareas» (sólo las que ve quien consulta). */
+export async function listarOportunidadesParaTareas(): Promise<
+  { id: string; nombre: string; cliente: string }[]
+> {
+  const ops = await listarOportunidades();
+  return ops.map((o) => ({ id: o.id, nombre: o.nombre, cliente: o.cliente?.razon_social ?? '' }));
 }
 
 /** FormData → objeto, con cadenas vacías como «no capturado» para que apliquen los valores por omisión. */

@@ -31,13 +31,19 @@ function leerBorrador(tipo: TipoBorrador, datos: FormData) {
     hora: String(datos.get('hora') ?? ''),
     avisos,
     subtareas,
+    con_fecha: datos.get('con_fecha') !== 'no',
+    oportunidad: String(datos.get('oportunidad_id') ?? ''),
   });
   if (!r.success) return { error: 'El borrador no es válido.' } as const;
   return { datos: { ...r.data, notas: texto.doc } } as const;
 }
 
+/** Ruta que muestra los borradores de esa oportunidad (o «Mis tareas» si no hay). */
+const rutaDe = (oportunidadId: string | null) =>
+  oportunidadId ? `/oportunidades/${oportunidadId}` : '/tareas';
+
 export async function guardarBorrador(
-  oportunidadId: string,
+  oportunidadId: string | null,
   tipo: TipoBorrador,
   datos: FormData,
 ): Promise<{ error?: string; ok?: string }> {
@@ -53,18 +59,19 @@ export async function guardarBorrador(
       { onConflict: 'usuario_id,oportunidad_id,tipo' },
     );
   if (error) return { error: 'No se pudo guardar el borrador.' };
-  revalidatePath(`/oportunidades/${oportunidadId}`);
+  revalidatePath(rutaDe(oportunidadId));
   return { ok: 'Borrador guardado.' };
 }
 
-export async function descartarBorrador(oportunidadId: string, tipo: TipoBorrador) {
+export async function descartarBorrador(oportunidadId: string | null, tipo: TipoBorrador) {
   await obtenerSesion();
   await borrarBorrador(oportunidadId, tipo);
-  revalidatePath(`/oportunidades/${oportunidadId}`);
+  revalidatePath(rutaDe(oportunidadId));
 }
 
 /** También se usa al guardar el registro definitivo. */
-export async function borrarBorrador(oportunidadId: string, tipo: TipoBorrador) {
+export async function borrarBorrador(oportunidadId: string | null, tipo: TipoBorrador) {
   const supabase = await clienteServidor();
-  await supabase.from('borradores').delete().eq('oportunidad_id', oportunidadId).eq('tipo', tipo);
+  const q = supabase.from('borradores').delete().eq('tipo', tipo);
+  await (oportunidadId ? q.eq('oportunidad_id', oportunidadId) : q.is('oportunidad_id', null));
 }

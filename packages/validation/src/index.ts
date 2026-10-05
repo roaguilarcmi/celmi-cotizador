@@ -93,16 +93,28 @@ export const notaSchema = z.object({
  * `vence_en` llega en ISO 8601 (el navegador convierte su hora local). Las notas se validan aparte con
  * `leerContenido`.
  */
-export const tareaSchema = z.object({
-  titulo: z.string().trim().min(2, 'Escribe qué hay que hacer').max(200),
-  vence_en: z.iso.datetime({ offset: true, message: 'Elige la fecha y hora' }),
-  /** Minutos de anticipación de cada aviso (varios por tarea; vacío = sin aviso). */
-  avisos: z
-    .array(z.number().int().min(0, 'Anticipación no válida').max(43_200, 'Máximo 30 días antes'))
-    .max(6, 'Máximo 6 avisos por tarea')
-    .default([])
-    .transform((xs) => [...new Set(xs)].sort((a, b) => a - b)),
-});
+export const tareaSchema = z
+  .object({
+    titulo: z.string().trim().min(2, 'Escribe qué hay que hacer').max(200),
+    /** Fecha opcional (decisión 2026-10-05: puede haber tareas sin horario programado). */
+    vence_en: z.iso.datetime({ offset: true, message: 'La fecha no es válida' }).nullable().default(null),
+    /** Con fecha pero sin hora: vence al final del día y sólo admite avisos de días antes. */
+    sin_hora: z.boolean().default(false),
+    /** Minutos de anticipación de cada aviso (varios por tarea; vacío = sin aviso). */
+    avisos: z
+      .array(z.number().int().min(0, 'Anticipación no válida').max(43_200, 'Máximo 30 días antes'))
+      .max(6, 'Máximo 6 avisos por tarea')
+      .default([])
+      .transform((xs) => [...new Set(xs)].sort((a, b) => a - b)),
+  })
+  .refine((t) => t.vence_en !== null || (t.avisos.length === 0 && !t.sin_hora), {
+    message: 'Para programar avisos, ponle fecha a la tarea',
+    path: ['avisos'],
+  })
+  .refine((t) => !t.sin_hora || t.avisos.every((m) => m % 1440 === 0), {
+    message: 'Sin hora, los avisos sólo pueden ser con días de anticipación',
+    path: ['avisos'],
+  });
 
 export type Cliente = z.infer<typeof clienteSchema>;
 export type Contacto = z.infer<typeof contactoSchema>;
@@ -122,6 +134,9 @@ export const borradorTareaSchema = z.object({
   hora: z.union([z.iso.time({ precision: -1 }), z.literal('')]).default(''),
   avisos: z.array(z.number().int().min(0).max(43_200)).max(6).default([]),
   subtareas: z.array(z.string().max(200)).max(30).default([]),
+  con_fecha: z.boolean().default(true),
+  /** Oportunidad elegida al crear desde «Mis tareas» (vacío = sin oportunidad). */
+  oportunidad: z.union([z.uuid(), z.literal('')]).default(''),
 });
 
 export const borradorNotaSchema = z.object({
@@ -141,15 +156,6 @@ export const subtareasNuevasSchema = z
   .default([]);
 
 /**
- * Subtarea (decisión 2026-10-05): como una tarea, pero la fecha es opcional y sin fecha no hay avisos.
+ * Subtarea: mismas reglas que una tarea (desde 2026-10-05 ambas tienen fecha opcional).
  */
-export const subtareaSchema = z
-  .object({
-    titulo: tituloSubtareaSchema,
-    vence_en: z.iso.datetime({ offset: true, message: 'La fecha no es válida' }).nullable().default(null),
-    avisos: tareaSchema.shape.avisos,
-  })
-  .refine((s) => s.vence_en !== null || s.avisos.length === 0, {
-    message: 'Para programar avisos, ponle fecha a la subtarea',
-    path: ['avisos'],
-  });
+export const subtareaSchema = tareaSchema;

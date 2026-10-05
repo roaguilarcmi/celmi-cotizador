@@ -55,3 +55,23 @@ describe('borradores (decisión 2026-10-05)', () => {
     );
   });
 });
+
+describe('borradores sin oportunidad (0012)', () => {
+  it('desde «Mis tareas» hay un borrador por persona y tipo, aunque no tenga oportunidad', async () => {
+    await como(db, 'jorge', async () => {
+      const guardarLibre = (titulo: string) =>
+        db.query(
+          `insert into public.borradores (oportunidad_id, tipo, datos) values (null, 'tarea', $1)
+           on conflict (usuario_id, oportunidad_id, tipo) do update set datos = excluded.datos`,
+          [JSON.stringify({ titulo })],
+        );
+      await guardarLibre('Uno');
+      await guardarLibre('Dos');
+      const r = await filas<{ titulo: string }>(
+        db,
+        `select datos->>'titulo' as titulo from public.borradores where oportunidad_id is null`,
+      );
+      expect(r).toEqual([{ titulo: 'Dos' }]);
+    });
+  });
+});

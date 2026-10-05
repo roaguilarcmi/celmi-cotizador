@@ -4,6 +4,7 @@ import { MenuLateral } from '@/components/MenuLateral';
 import { AvisosTareas } from '@/components/tareas/AvisosTareas';
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
+import { ESTADOS_ABIERTOS } from '@/lib/etapas-tareas';
 
 /** Tareas pendientes vencidas o que vencen en las próximas 24 h (para el contador del menú). */
 async function tareasPorVencer(): Promise<number> {
@@ -11,7 +12,7 @@ async function tareasPorVencer(): Promise<number> {
   const { count } = await supabase
     .from('tareas')
     .select('id', { count: 'exact', head: true })
-    .eq('estado', 'pendiente')
+    .in('estado', ESTADOS_ABIERTOS)
     .is('tarea_padre_id', null)
     .lte('vence_en', new Date(Date.now() + 86_400_000).toISOString());
   return count ?? 0;

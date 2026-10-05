@@ -6,12 +6,14 @@ import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { cambiarEstadoTarea } from '@/lib/acciones-tareas';
 import type { TareaFila } from '@/lib/datos';
+import { ETAPAS, estaAbierta, type EstadoTarea } from '@/lib/etapas-tareas';
 import { AvanceSubtareas } from './AvanceSubtareas';
+import { cuando, TONOS_CUANDO } from './cuando';
 import { DialogoTarea } from './DialogoTarea';
 import { nombreAviso } from './FormularioTarea';
+import { MenuTarea } from './MenuTarea';
 
 export { cuando, TONOS_CUANDO } from './cuando';
-import { cuando, TONOS_CUANDO } from './cuando';
 
 export function ListaTareas({
   tareas,
@@ -26,16 +28,16 @@ export function ListaTareas({
   vacio?: string;
 }) {
   const [verCerradas, setVerCerradas] = useState(false);
-  const pendientes = tareas.filter((t) => t.estado === 'pendiente');
-  const cerradas = tareas.filter((t) => t.estado !== 'pendiente');
+  const abiertas = tareas.filter((t) => estaAbierta(t.estado));
+  const cerradas = tareas.filter((t) => !estaAbierta(t.estado));
 
   return (
     <div>
-      {pendientes.length === 0 ? (
+      {abiertas.length === 0 ? (
         vacio && <p className="py-3 text-[13px] text-texto-suave">{vacio}</p>
       ) : (
         <ul className="flex flex-col">
-          {pendientes.map((t) => (
+          {abiertas.map((t) => (
             <FilaTarea key={t.id} t={t} mostrarOportunidad={mostrarOportunidad} compacta={compacta} />
           ))}
         </ul>
@@ -67,7 +69,7 @@ export function ListaTareas({
 export function useAccionesTarea(t: TareaFila) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const cambiar = (estado: 'pendiente' | 'completada' | 'cancelada') =>
+  const cambiar = (estado: EstadoTarea) =>
     iniciar(async () => {
       const r = await cambiarEstadoTarea(t.id, estado);
       setError(r.error ?? null);
@@ -75,26 +77,57 @@ export function useAccionesTarea(t: TareaFila) {
   return { pendiente, error, cambiar };
 }
 
+/**
+ * Etiquetas de la tarea. La fecha es un botón que abre los detalles (decisión 2026-10-05); «Sin fecha» también, para
+ * poder programarla.
+ */
 export function DetallesTarea({
   t,
   mostrarOportunidad,
+  mostrarEtapa,
   compacta,
+  onAbrir,
 }: {
   t: TareaFila;
   mostrarOportunidad?: boolean;
+  /** En la lista (sin columnas) se indica la etapa; en el tablero ya la dice la columna. */
+  mostrarEtapa?: boolean;
   compacta?: boolean;
+  onAbrir: () => void;
 }) {
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
-  const c = cuando(t.vence_en);
+  const c = cuando(t.vence_en, t.sin_hora);
+  const etapa = ETAPAS.find((e) => e.id === t.estado);
   return (
     <>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-texto-suave">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-texto-suave">
         {!hecha && !cancelada && (
-          <span className={`rounded-pill px-2 py-0.5 font-semibold ${TONOS_CUANDO[c.tono]}`}>{c.texto}</span>
+          <button
+            type="button"
+            onClick={onAbrir}
+            title="Abrir detalles"
+            className={`inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-pill px-2.5 font-semibold transition-[filter,box-shadow] hover:ring-2 hover:ring-acento/40 ${TONOS_CUANDO[c.tono]}`}
+          >
+            <Icon name="reloj" size={12} />
+            {c.texto}
+          </button>
         )}
-        {cancelada && <span>Cancelada</span>}
-        {hecha && <span className="font-semibold text-exito">Completada</span>}
+        {(hecha || cancelada) && (
+          <button
+            type="button"
+            onClick={onAbrir}
+            className={`min-h-7 cursor-pointer font-semibold hover:underline ${hecha ? 'text-exito' : ''}`}
+          >
+            {hecha ? 'Completada' : 'Cancelada'}
+          </button>
+        )}
+        {mostrarEtapa && etapa && !hecha && t.estado !== 'pendiente' && (
+          <span className={`inline-flex items-center gap-1.5 font-semibold ${etapa.texto}`}>
+            <span aria-hidden="true" className={`size-2 rounded-full ${etapa.punto}`} />
+            {etapa.nombre}
+          </span>
+        )}
         {!hecha && !cancelada && t.avisos.length > 0 && (
           <span
             className="inline-flex items-center gap-1"
@@ -137,12 +170,14 @@ function FilaTarea({
   compacta?: boolean;
 }) {
   const { pendiente, error, cambiar } = useAccionesTarea(t);
-  const [editando, setEditando] = useState(false);
+  const [abierta, setAbierta] = useState(false);
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
 
   return (
-    <li className="flex items-start gap-3 border-b border-borde py-3 last:border-0">
+    <li
+      className={`flex items-start gap-3 border-b border-borde py-3 last:border-0 ${pendiente ? 'opacity-60' : ''}`}
+    >
       <button
         type="button"
         role="checkbox"
@@ -157,48 +192,23 @@ function FilaTarea({
         {hecha && <Icon name="palomita" size={14} strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className={`text-sm font-semibold ${hecha || cancelada ? 'text-texto-suave line-through' : ''}`}>
-          {t.titulo}
-        </div>
-        <DetallesTarea t={t} mostrarOportunidad={mostrarOportunidad} compacta={compacta} />
+        <MenuTarea
+          titulo={t.titulo}
+          estado={t.estado}
+          onMover={cambiar}
+          onAbrir={() => setAbierta(true)}
+          className={`text-sm font-semibold ${hecha || cancelada ? 'text-texto-suave line-through' : ''}`}
+        />
+        <DetallesTarea
+          t={t}
+          mostrarOportunidad={mostrarOportunidad}
+          mostrarEtapa
+          compacta={compacta}
+          onAbrir={() => setAbierta(true)}
+        />
         {error && <p className="mt-1 text-xs text-peligro">{error}</p>}
       </div>
-      <div className="flex shrink-0 gap-1">
-        {!cancelada && (
-          <button
-            type="button"
-            onClick={() => setEditando(true)}
-            aria-label={`Editar o reprogramar «${t.titulo}»`}
-            title="Editar o reprogramar"
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-texto-suave hover:bg-superficie-2 hover:text-texto"
-          >
-            <Icon name="herramienta" size={16} />
-          </button>
-        )}
-        {!hecha && !cancelada && (
-          <button
-            type="button"
-            onClick={() => cambiar('cancelada')}
-            disabled={pendiente}
-            aria-label={`Cancelar «${t.titulo}»`}
-            title="Cancelar tarea"
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-texto-suave hover:bg-superficie-2 hover:text-peligro"
-          >
-            <Icon name="cerrar" size={16} />
-          </button>
-        )}
-        {cancelada && (
-          <button
-            type="button"
-            onClick={() => cambiar('pendiente')}
-            disabled={pendiente}
-            className="min-h-9 cursor-pointer rounded-md px-2 text-xs font-semibold text-acento-texto hover:bg-acento-suave"
-          >
-            Reabrir
-          </button>
-        )}
-      </div>
-      {editando && <DialogoTarea tarea={t} onCerrar={() => setEditando(false)} />}
+      {abierta && <DialogoTarea tarea={t} onCerrar={() => setAbierta(false)} />}
     </li>
   );
 }

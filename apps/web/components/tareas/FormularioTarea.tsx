@@ -43,21 +43,35 @@ export interface TareaEditable {
   titulo: string;
   notas: unknown;
   vence_en: string | null;
+  sin_hora?: boolean;
   avisos: { minutos_antes: number }[];
 }
 
+/** Oportunidad que se puede ligar al crear una tarea desde «Mis tareas». */
+export interface OportunidadElegible {
+  id: string;
+  nombre: string;
+  cliente: string;
+}
+
+/** Sin hora sólo caben avisos con días de anticipación. */
+const avisoDeDias = (m: number) => m % 1440 === 0;
+
 /**
- * Crear (con `oportunidadId`), editar/reprogramar (con `tarea`) o editar una subtarea (`esSubtarea`: la fecha es
- * opcional y sin fecha no hay avisos).
+ * Crear (desde una oportunidad con `oportunidadId`, o desde «Mis tareas» con `oportunidades` para elegir una o
+ * ninguna), editar/reprogramar (con `tarea`) o editar una subtarea (`esSubtarea`). La fecha es opcional y, con
+ * fecha, la hora también (decisión 2026-10-05).
  */
 export function FormularioTarea({
   oportunidadId,
   tarea,
+  oportunidades,
   esSubtarea = false,
   borrador,
   onListo,
 }: {
   oportunidadId?: string;
+  oportunidades?: OportunidadElegible[];
   tarea?: TareaEditable;
   esSubtarea?: boolean;
   /** Valores de un borrador guardado para continuarlo. */
@@ -71,7 +85,12 @@ export function FormularioTarea({
   const [avisos, setAvisos] = useState<number[]>(
     () => tarea?.avisos.map((a) => a.minutos_antes) ?? borrador?.avisos ?? (esSubtarea ? [] : [15]),
   );
-  const [conFecha, setConFecha] = useState(() => !esSubtarea || Boolean(tarea?.vence_en));
+  const [conFecha, setConFecha] = useState(() =>
+    tarea ? Boolean(tarea.vence_en) : (borrador?.con_fecha ?? true),
+  );
+  const [sinHora, setSinHora] = useState(
+    () => tarea?.sin_hora ?? (Boolean(borrador?.fecha) && borrador?.hora === ''),
+  );
   const [{ fecha, hora }, setCuando] = useState(() =>
     tarea?.vence_en
       ? local(new Date(tarea.vence_en))
@@ -90,18 +109,20 @@ export function FormularioTarea({
     e.preventDefault();
     const datos = new FormData(e.currentTarget);
     if (conFecha) {
-      const vence = new Date(`${fecha}T${hora}`);
-      if (Number.isNaN(vence.getTime())) return setMensaje({ error: 'Elige la fecha y hora.' });
+      // Sin hora, vence al final de ese día.
+      const vence = new Date(`${fecha}T${sinHora ? '23:59' : hora}`);
+      if (Number.isNaN(vence.getTime()))
+        return setMensaje({ error: sinHora ? 'Elige la fecha.' : 'Elige la fecha y hora.' });
       // El navegador conoce la zona horaria de quien captura: se envía el instante exacto en ISO.
       datos.set('vence_en', vence.toISOString());
-      datos.set('avisos', JSON.stringify(avisos));
+      datos.set('avisos', JSON.stringify(sinHora ? avisos.filter(avisoDeDias) : avisos));
     } else {
       datos.set('vence_en', '');
       datos.set('avisos', '[]');
     }
     iniciar(async () => {
       const r = !tarea
-        ? await crearTarea(oportunidadId!, {}, datos)
+        ? await crearTarea(oportunidadId ?? null, {}, datos)
         : esSubtarea
           ? await actualizarSubtarea(tarea.id, {}, datos)
           : await actualizarTarea(tarea.id, {}, datos);
@@ -122,6 +143,8 @@ export function FormularioTarea({
   return (
     <form key={version} onSubmit={enviar} className="flex flex-col gap-3.5">
       <input type="hidden" name="avisos" value={conFecha ? JSON.stringify(avisos) : '[]'} />
+      <input type="hidden" name="con_fecha" value={conFecha ? 'si' : 'no'} />
+      <input type="hidden" name="sin_hora" value={conFecha && sinHora ? 'si' : 'no'} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-titulo`} className="text-xs font-semibold text-texto-suave">
           ¿Qué hay que hacer?
@@ -141,17 +164,51 @@ export function FormularioTarea({
         />
       </div>
 
-      {esSubtarea && (
-        <label className="inline-flex min-h-9 w-fit cursor-pointer items-center gap-2.5 text-[13px] font-semibold">
-          <input
-            type="checkbox"
-            checked={conFecha}
-            onChange={(e) => setConFecha(e.target.checked)}
-            className="size-4 accent-acento"
-          />
-          Ponerle fecha (y avisos)
-        </label>
+      {oportunidades && !tarea && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`${id}-oportunidad`} className="text-xs font-semibold text-texto-suave">
+            Oportunidad <span className="font-normal">(opcional)</span>
+          </label>
+          <select
+            id={`${id}-oportunidad`}
+            name="oportunidad_id"
+            defaultValue={borrador?.oportunidad ?? ''}
+            className={`${control} w-full`}
+          >
+            <option value="">Sin oportunidad · tarea libre</option>
+            {oportunidades.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.cliente ? `${o.cliente} · ${o.nombre}` : o.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
+
+      <div
+        role="radiogroup"
+        aria-label="¿Tiene fecha?"
+        className="inline-flex w-fit rounded-md border border-borde bg-superficie-2 p-1"
+      >
+        {[
+          { valor: true, nombre: 'Con fecha', icono: 'reloj' as const },
+          { valor: false, nombre: 'Sin fecha', icono: 'cerrar' as const },
+        ].map((o) => (
+          <button
+            key={o.nombre}
+            type="button"
+            role="radio"
+            aria-checked={conFecha === o.valor}
+            onClick={() => setConFecha(o.valor)}
+            className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-3.5 text-[13px] font-semibold transition-colors ${
+              conFecha === o.valor ? 'bg-superficie text-texto sombra' : 'text-texto-suave hover:text-texto'
+            }`}
+          >
+            <Icon name={o.icono} size={14} />
+            {o.nombre}
+          </button>
+        ))}
+      </div>
 
       {conFecha && (
         <>
@@ -167,25 +224,41 @@ export function FormularioTarea({
                 className={control}
               />
             </label>
-            <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
-              Hora
+            {!sinHora && (
+              <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
+                Hora
+                <input
+                  type="time"
+                  name="hora"
+                  value={hora}
+                  onChange={(e) => setCuando((c) => ({ ...c, hora: e.target.value }))}
+                  required
+                  className={control}
+                />
+              </label>
+            )}
+            <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-semibold">
               <input
-                type="time"
-                name="hora"
-                value={hora}
-                onChange={(e) => setCuando((c) => ({ ...c, hora: e.target.value }))}
-                required
-                className={control}
+                type="checkbox"
+                checked={sinHora}
+                onChange={(e) => setSinHora(e.target.checked)}
+                className="size-4 accent-acento"
               />
+              Sin hora (cualquier momento del día)
             </label>
           </div>
 
           <fieldset>
             <legend className="mb-1.5 text-xs font-semibold text-texto-suave">
-              Avisos <span className="font-normal">(elige uno o varios; ninguno = sin aviso)</span>
+              Avisos{' '}
+              <span className="font-normal">
+                {sinHora
+                  ? '(sin hora, sólo con días de anticipación)'
+                  : '(elige uno o varios; ninguno = sin aviso)'}
+              </span>
             </legend>
             <div className="flex flex-wrap gap-1.5">
-              {OPCIONES_AVISO.map((o) => {
+              {OPCIONES_AVISO.filter((o) => !sinHora || avisoDeDias(o.minutos)).map((o) => {
                 const activo = avisos.includes(o.minutos);
                 return (
                   <button

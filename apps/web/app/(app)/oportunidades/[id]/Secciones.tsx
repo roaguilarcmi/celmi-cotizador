@@ -13,6 +13,7 @@ import { ListaTareas } from '@/components/tareas/ListaTareas';
 import { Avatar, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { descartarBorrador, guardarBorrador, type TipoBorrador } from '@/lib/acciones-borradores';
+import { estaAbierta } from '@/lib/etapas-tareas';
 import type { BorradorNota, BorradorTarea, Estado, SeguimientoFila, TareaFila } from '@/lib/datos';
 import { colorAvatar, fechaHora, iniciales, tonoEstado } from '@/lib/presentacion';
 import { agregarNota, editarNota, type EstadoFormulario } from '../acciones';
@@ -180,7 +181,7 @@ export function SeccionTareas({
   borrador?: BorradorTarea;
 }) {
   const c = useCaptura(oportunidadId, 'tarea');
-  const pendientes = tareas.filter((t) => t.estado === 'pendiente').length;
+  const pendientes = tareas.filter((t) => estaAbierta(t.estado)).length;
   const conBorrador = c.usarBorrador ? borrador : undefined;
   return (
     <Tarjeta className="overflow-hidden">
