@@ -1,8 +1,19 @@
 import { PASOS_WIZARD } from '@/lib/navegacion';
 import { Icon } from './Icon';
 
-/** Wizard en píldoras (dirección C): pasos completados, actual y pendientes. */
-export function PasosWizard({ actual }: { actual: number }) {
+/**
+ * Wizard en píldoras (dirección C): pasos completados, actual y pendientes. Con `alElegir`, los pasos de
+ * `disponibles` se pueden abrir con un clic.
+ */
+export function PasosWizard({
+  actual,
+  disponibles = [],
+  alElegir,
+}: {
+  actual: number;
+  disponibles?: number[];
+  alElegir?: (paso: number) => void;
+}) {
   return (
     <div className="-mx-1 overflow-x-auto px-1 pb-1.5">
       <ol
@@ -12,19 +23,15 @@ export function PasosWizard({ actual }: { actual: number }) {
         {PASOS_WIZARD.map((paso, i) => {
           const hecho = i < actual;
           const esActual = i === actual;
-          return (
-            <li
-              key={paso.largo}
-              title={paso.largo}
-              aria-current={esActual ? 'step' : undefined}
-              className={`flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-3 text-[13px] transition-colors ${
-                esActual
-                  ? 'flex-[2] bg-paso font-bold text-white'
-                  : hecho
-                    ? 'flex-1 bg-acento-suave font-medium text-acento-texto'
-                    : 'flex-1 font-medium text-texto-suave'
-              }`}
-            >
+          const clase = `flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-pill px-3 text-[13px] transition-colors ${
+            esActual
+              ? 'bg-paso font-bold text-white'
+              : hecho
+                ? 'bg-acento-suave font-medium text-acento-texto'
+                : 'font-medium text-texto-suave'
+          }`;
+          const contenido = (
+            <>
               {hecho ? (
                 <Icon name="palomita" size={16} strokeWidth={2.4} />
               ) : (
@@ -38,6 +45,27 @@ export function PasosWizard({ actual }: { actual: number }) {
               )}
               {esActual ? paso.largo : paso.corto}
               {hecho && <span className="sr-only">(completado)</span>}
+            </>
+          );
+          const elegible = alElegir && !esActual && disponibles.includes(i);
+          return (
+            <li
+              key={paso.largo}
+              title={paso.largo}
+              aria-current={esActual ? 'step' : undefined}
+              className={esActual ? 'flex flex-[2]' : 'flex flex-1'}
+            >
+              {elegible ? (
+                <button
+                  type="button"
+                  onClick={() => alElegir(i)}
+                  className={`${clase} cursor-pointer hover:ring-2 hover:ring-acento/40`}
+                >
+                  {contenido}
+                </button>
+              ) : (
+                <span className={clase}>{contenido}</span>
+              )}
             </li>
           );
         })}

@@ -145,3 +145,98 @@ describe('reglas de la cotización (Fase 3A, decisiones 2026-10-05)', () => {
     ).rejects.toThrow(/a partir de una autorizada/);
   });
 });
+
+describe('guardar partidas en una transacción (Fase 3B)', () => {
+  it('agrega, reordena (intercambiando posiciones), borra y guarda costos de una vez', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await como(db, 'fabiola', async () => {
+      const guardar = (datos: unknown) =>
+        db.query('select public.guardar_partidas($1, $2)', [otra.revision, JSON.stringify(datos)]);
+      await guardar([
+        {
+          id: otra.propuesta,
+          nombre: 'Propuesta 1',
+          partidas: [
+            {
+              descripcion: 'Monitor Dell Pro P22',
+              cantidad: 30,
+              costo: { costo_unitario: '2329.18', moneda: 'MXN', vigencia: '2026-10-09' },
+            },
+            {
+              id: otra.partida,
+              descripcion: 'Laptop Dell Pro 14 Essential',
+              cantidad: 2,
+              costo: { costo_unitario: '14533.46' },
+            },
+          ],
+        },
+        {
+          nombre: 'Accesorios',
+          es_adicional: true,
+          partidas: [{ descripcion: 'Teclado y mouse', cantidad: 30, se_suma: true }],
+        },
+      ]);
+      const r = await filas<{
+        propuesta: string;
+        orden: number;
+        descripcion: string;
+        costo: string | null;
+        se_suma: boolean;
+      }>(
+        db,
+        `select pr.nombre as propuesta, pa.orden, pa.descripcion, c.costo_unitario::text as costo, pa.se_suma
+         from public.partidas pa join public.propuestas pr on pr.id = pa.propuesta_id
+         left join public.partida_costos c on c.partida_id = pa.id
+         where pr.revision_id = $1 order by pr.orden, pa.orden`,
+        [otra.revision],
+      );
+      expect(r).toEqual([
+        {
+          propuesta: 'Propuesta 1',
+          orden: 1,
+          descripcion: 'Monitor Dell Pro P22',
+          costo: '2329.18',
+          se_suma: false,
+        },
+        {
+          propuesta: 'Propuesta 1',
+          orden: 2,
+          descripcion: 'Laptop Dell Pro 14 Essential',
+          costo: '14533.46',
+          se_suma: false,
+        },
+        { propuesta: 'Accesorios', orden: 1, descripcion: 'Teclado y mouse', costo: null, se_suma: true },
+      ]);
+      // Guardar otra vez sin la propuesta de accesorios la borra con sus partidas.
+      const [laptop] = await filas<{ id: string }>(
+        db,
+        `select id from public.partidas where descripcion like 'Laptop%' and propuesta_id = $1`,
+        [otra.propuesta],
+      );
+      await guardar([
+        {
+          id: otra.propuesta,
+          nombre: 'Propuesta 1',
+          partidas: [{ id: laptop!.id, descripcion: 'Laptop', cantidad: 3 }],
+        },
+      ]);
+      const quedan = await filas(db, 'select 1 from public.propuestas where revision_id = $1', [
+        otra.revision,
+      ]);
+      expect(quedan).toHaveLength(1);
+    });
+  });
+
+  it('no se guarda nada si la revisión ya está en autorización, ni se tocan revisiones ajenas', async () => {
+    const otra = await crearOportunidad(db, 'fabiola');
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      otra.revision,
+    ]);
+    await expect(
+      como(db, 'fabiola', () => db.query('select public.guardar_partidas($1, $2)', [otra.revision, '[]'])),
+    ).rejects.toThrow(/ya no se puede modificar/);
+    await expect(
+      como(db, 'jorge', () => db.query('select public.guardar_partidas($1, $2)', [otra.revision, '[]'])),
+    ).rejects.toThrow(/no existe o no tienes acceso/);
+  });
+});

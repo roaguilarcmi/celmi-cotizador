@@ -34,3 +34,12 @@ describe('adicionales sumados por partida (regla 2026-10-05)', () => {
     expect(menorMonto([])).toBeNull();
   });
 });
+
+describe('costo de una partida sin utilidad', () => {
+  it('convierte con el tipo de cambio y multiplica por la cantidad', async () => {
+    const { costoPartida } = await import('./precios');
+    const c = costoPartida({ costoUnitario: '100.00', tipoCambio: '18.12345', cantidad: 3 });
+    expect(c.costoUnitarioMXN).toBe(181235n); // 1,812.345 → 1,812.35
+    expect(c.costoTotal).toBe(543704n); // 5,437.035 → 5,437.04 (sin redondear antes de multiplicar)
+  });
+});

@@ -8,6 +8,7 @@ import { Avatar, Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type {
   Borradores,
   ContactoFila,
+  CotizacionFila,
   Esquema,
   Estado,
   OportunidadFila,
@@ -17,6 +18,7 @@ import type {
 import { colorAvatar, fechaCorta, haceCuanto, iniciales } from '@/lib/presentacion';
 import { actualizarOportunidad, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
+import { SeccionCotizaciones } from './SeccionCotizaciones';
 import { SeccionSeguimiento, SeccionTareas } from './Secciones';
 
 export function FichaOportunidad({
@@ -28,6 +30,7 @@ export function FichaOportunidad({
   tareas,
   usuarioId,
   borradores,
+  cotizaciones,
   puedeCambiarEstado,
   puedeEditar,
 }: {
@@ -39,6 +42,7 @@ export function FichaOportunidad({
   tareas: TareaFila[];
   usuarioId: string;
   borradores: Borradores;
+  cotizaciones: CotizacionFila[];
   puedeCambiarEstado: boolean;
   puedeEditar: boolean;
 }) {
@@ -95,23 +99,7 @@ export function FichaOportunidad({
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
-          <Tarjeta className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Titulo2>Cotizaciones</Titulo2>
-              <button
-                type="button"
-                disabled
-                title="Disponible en la Fase 3"
-                className="inline-flex min-h-10 cursor-not-allowed items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento opacity-50"
-              >
-                <Icon name="mas" strokeWidth={2.2} /> Nueva cotización
-              </button>
-            </div>
-            <p className="mt-3 rounded-md border border-dashed border-borde px-4 py-6 text-center text-[13px] text-texto-suave">
-              Aquí aparecerán las cotizaciones de esta oportunidad, con sus propuestas, revisiones y folio.
-              Llegan en la Fase 3.
-            </p>
-          </Tarjeta>
+          <SeccionCotizaciones oportunidadId={o.id} cotizaciones={cotizaciones} puedeCrear={puedeEditar} />
 
           <SeccionTareas oportunidadId={o.id} tareas={tareas} borrador={borradores.tarea} />
 

@@ -372,7 +372,7 @@ export function AutorizacionDemo() {
       </header>
 
       <div className="mb-5">
-        <PasosWizard actual={4} />
+        <PasosWizard actual={5} />
       </div>
 
       <div className="mb-5 flex flex-wrap gap-4">

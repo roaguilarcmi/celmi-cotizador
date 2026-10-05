@@ -268,3 +268,150 @@ export function leerFormulario(datos: FormData): Record<string, string | undefin
   }
   return salida;
 }
+
+// ───────────── Cotizaciones (Fase 3) ─────────────
+
+export type EstadoRevision = 'borrador' | 'pendiente_autorizacion' | 'autorizada' | 'rechazada' | 'emitida';
+
+export interface CotizacionFila {
+  id: string;
+  oportunidad_id: string;
+  folio: string | null;
+  creado_en: string;
+  oportunidad: {
+    id: string;
+    nombre: string;
+    ejecutivo_id: string;
+    cliente: { razon_social: string } | null;
+  } | null;
+  revisiones: {
+    id: string;
+    numero: number;
+    estado: EstadoRevision;
+    motivo: 'inicial' | 'solicitud_cliente' | 'mejora_precio';
+    creado_en: string;
+    enviada_en: string | null;
+    autorizada_en: string | null;
+  }[];
+}
+
+export interface CostoFila {
+  mayorista_id: string | null;
+  moneda: string;
+  costo_unitario: string;
+  costo_anterior: string | null;
+  tipo_cambio: string;
+  vigencia: string | null;
+}
+
+export interface PartidaFila {
+  id: string;
+  orden: number;
+  sku: string;
+  marca_id: string | null;
+  descripcion: string;
+  descripcion_contenido: unknown;
+  entrega: string;
+  unidad_id: string | null;
+  cantidad: number;
+  se_suma: boolean;
+  oculta_al_cliente: boolean;
+  costo: CostoFila | null;
+}
+
+export interface PropuestaFila {
+  id: string;
+  orden: number;
+  nombre: string;
+  tipo: string;
+  es_adicional: boolean;
+  partidas: PartidaFila[];
+}
+
+export interface RevisionDetalle {
+  id: string;
+  cotizacion_id: string;
+  numero: number;
+  estado: EstadoRevision;
+  motivo: 'inicial' | 'solicitud_cliente' | 'mejora_precio';
+  vigencia_hasta: string | null;
+  condiciones: unknown;
+  comentario_autorizacion: string;
+  enviada_en: string | null;
+  autorizada_en: string | null;
+  revision_anterior_id: string | null;
+  propuestas: PropuestaFila[];
+}
+
+export interface CatalogosCotizacion {
+  mayoristas: { id: string; nombre: string }[];
+  marcas: { id: string; nombre: string }[];
+  unidades: { id: string; nombre: string; abreviatura: string | null }[];
+  monedas: { codigo: string; nombre: string }[];
+}
+
+export async function listarCotizaciones(filtro?: { oportunidadId?: string }): Promise<CotizacionFila[]> {
+  const supabase = await clienteServidor();
+  let q = supabase
+    .from('cotizaciones')
+    .select(CONSULTAS.cotizaciones)
+    .order('creado_en', { ascending: false })
+    .order('numero', { referencedTable: 'revisiones', ascending: false });
+  if (filtro?.oportunidadId) q = q.eq('oportunidad_id', filtro.oportunidadId);
+  return (exigir(await q, 'las cotizaciones') ?? []) as unknown as CotizacionFila[];
+}
+
+/** Una cotización con la revisión pedida (o la más reciente) completa: propuestas, partidas y costos. */
+export async function obtenerCotizacion(
+  id: string,
+  numero?: number,
+): Promise<{ cotizacion: CotizacionFila; revision: RevisionDetalle } | null> {
+  const supabase = await clienteServidor();
+  const c = exigir(
+    await supabase
+      .from('cotizaciones')
+      .select(CONSULTAS.cotizaciones)
+      .eq('id', id)
+      .order('numero', { referencedTable: 'revisiones', ascending: false })
+      .maybeSingle(),
+    'la cotización',
+  ) as unknown as CotizacionFila | null;
+  if (!c) return null;
+  const elegida = c.revisiones.find((r) => r.numero === numero) ?? c.revisiones[0];
+  if (!elegida) return null;
+  const r = exigir(
+    await supabase
+      .from('revisiones')
+      .select(CONSULTAS.revision)
+      .eq('id', elegida.id)
+      .order('orden', { referencedTable: 'propuestas' })
+      .order('orden', { referencedTable: 'propuestas.partidas' })
+      .maybeSingle(),
+    'la revisión',
+  ) as unknown as RevisionDetalle | null;
+  if (!r) return null;
+  // partida_costos es uno a uno con partidas (su llave es la partida): la API lo entrega como objeto; por si acaso
+  // llegara como lista, se normaliza.
+  for (const p of r.propuestas)
+    for (const pa of p.partidas) {
+      const costo = pa.costo as CostoFila | CostoFila[] | null;
+      pa.costo = Array.isArray(costo) ? (costo[0] ?? null) : costo;
+    }
+  return { cotizacion: c, revision: r };
+}
+
+export async function listarCatalogosCotizacion(): Promise<CatalogosCotizacion> {
+  const supabase = await clienteServidor();
+  const [mayoristas, marcas, unidades, monedas] = await Promise.all([
+    supabase.from('mayoristas').select(CONSULTAS.mayoristas).eq('activo', true).order('nombre'),
+    supabase.from('marcas').select(CONSULTAS.marcas).eq('activa', true).order('nombre'),
+    supabase.from('unidades').select(CONSULTAS.unidades).eq('activa', true).order('nombre'),
+    supabase.from('monedas').select(CONSULTAS.monedas).eq('activa', true).order('codigo'),
+  ]);
+  return {
+    mayoristas: (exigir(mayoristas, 'los mayoristas') ?? []) as unknown as CatalogosCotizacion['mayoristas'],
+    marcas: (exigir(marcas, 'las marcas') ?? []) as unknown as CatalogosCotizacion['marcas'],
+    unidades: (exigir(unidades, 'las unidades') ?? []) as unknown as CatalogosCotizacion['unidades'],
+    monedas: (exigir(monedas, 'las monedas') ?? []) as unknown as CatalogosCotizacion['monedas'],
+  };
+}

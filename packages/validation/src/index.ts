@@ -1,18 +1,8 @@
 import { z } from 'zod';
 
-/** Decimal en texto ("14533.46"); el texto evita errores de punto flotante entre cliente y servidor. */
-export const decimalTexto = (maxDecimales: number) =>
-  z
-    .string()
-    .trim()
-    .regex(new RegExp(`^\\d+(\\.\\d{1,${maxDecimales}})?$`), `Número con hasta ${maxDecimales} decimales`);
+import { dinero, porcentaje, tipoCambio } from './numeros';
 
-export const dinero = decimalTexto(2);
-export const tipoCambio = decimalTexto(5).refine(
-  (v) => Number(v) > 0,
-  'El tipo de cambio debe ser mayor que cero',
-);
-export const porcentaje = decimalTexto(4);
+export * from './numeros';
 
 export const monedaSchema = z.enum(['MXN', 'USD']);
 
@@ -159,3 +149,5 @@ export const subtareasNuevasSchema = z
  * Subtarea: mismas reglas que una tarea (desde 2026-10-05 ambas tienen fecha opcional).
  */
 export const subtareaSchema = tareaSchema;
+export * from './pegado';
+export * from './cotizacion';

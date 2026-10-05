@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import {
   listarBorradores,
+  listarCotizaciones,
   listarEsquemas,
   listarEstados,
   listarMisTareas,
@@ -20,13 +21,14 @@ export default async function PaginaOportunidad({ params }: { params: Promise<{ 
   // RLS: si la oportunidad no es suya (ni colabora, ni es admin), la base no la devuelve.
   const o = await obtenerOportunidad(id);
   if (!o) notFound();
-  const [estados, esquemas, seguimiento, cliente, tareas, borradores] = await Promise.all([
+  const [estados, esquemas, seguimiento, cliente, tareas, borradores, cotizaciones] = await Promise.all([
     listarEstados(false),
     listarEsquemas(false),
     listarSeguimiento(id),
     o.cliente ? obtenerCliente(o.cliente.id) : Promise.resolve(null),
     listarMisTareas({ oportunidadId: id }),
     listarBorradores(id),
+    listarCotizaciones({ oportunidadId: id }),
   ]);
   const editarTodas = sesion.permisos.has('oportunidades.editar_todas');
   return (
@@ -39,6 +41,7 @@ export default async function PaginaOportunidad({ params }: { params: Promise<{ 
       tareas={tareas}
       usuarioId={sesion.usuarioId}
       borradores={borradores}
+      cotizaciones={cotizaciones}
       puedeCambiarEstado={editarTodas || o.ejecutivo_id === sesion.usuarioId}
       // Colaboradores también editan datos y registran seguimiento (la base lo permite a participantes).
       puedeEditar

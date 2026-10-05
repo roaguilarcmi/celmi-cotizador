@@ -20,6 +20,19 @@ export const CONSULTAS = {
     'id, oportunidad_id, titulo, descripcion, notas, vence_en, sin_hora, estado, etapa_id, completada_en, avisos:tarea_avisos(id, minutos_antes, aviso_en), oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social)), subtareas:tareas!tarea_padre_id(id, titulo, descripcion, notas, vence_en, sin_hora, estado, orden, completada_en, creado_en, avisos:tarea_avisos(id, minutos_antes, aviso_en))',
   borradores: 'tipo, datos, actualizado_en',
   etapas: 'id, nombre, color, orden, es_final',
+  cotizaciones: `id, oportunidad_id, folio, creado_en,
+    oportunidad:oportunidades(id, nombre, ejecutivo_id, cliente:clientes(razon_social)),
+    revisiones(id, numero, estado, motivo, creado_en, enviada_en, autorizada_en)`,
+  revision: `id, cotizacion_id, numero, estado, motivo, vigencia_hasta, condiciones, comentario_autorizacion,
+    enviada_en, autorizada_en, revision_anterior_id,
+    propuestas(id, orden, nombre, tipo, es_adicional,
+      partidas(id, orden, sku, marca_id, descripcion, descripcion_contenido, entrega, unidad_id, cantidad, se_suma,
+        oculta_al_cliente,
+        costo:partida_costos(mayorista_id, moneda, costo_unitario, costo_anterior, tipo_cambio, vigencia)))`,
+  mayoristas: 'id, nombre, activo',
+  marcas: 'id, nombre, activa',
+  unidades: 'id, nombre, abreviatura, activa',
+  monedas: 'codigo, nombre, activa',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -33,4 +46,10 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   tareas: 'tareas',
   borradores: 'borradores',
   etapas: 'etapas_tarea',
+  cotizaciones: 'cotizaciones',
+  revision: 'revisiones',
+  mayoristas: 'mayoristas',
+  marcas: 'marcas',
+  unidades: 'unidades',
+  monedas: 'monedas',
 };

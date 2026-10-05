@@ -57,6 +57,14 @@ export function precioUnitario(entrada: EntradaPrecio): Centavos {
   return dividirRedondeando(costo * tc * (CIEN_POR_CIENTO + pct), UNO_TC * CIEN_POR_CIENTO);
 }
 
+/**
+ * Costo de una partida en MXN, sin utilidad (lo que ve quien captura costos). Mismo redondeo que calcularPartida:
+ * el total se calcula con el costo convertido sin redondear.
+ */
+export function costoPartida(entrada: { costoUnitario: string; tipoCambio?: string; cantidad: number }) {
+  return calcularPartida({ ...entrada, utilidadPct: '0' });
+}
+
 export function calcularPartida(entrada: EntradaPartida): ResultadoPartida {
   const { cantidad } = entrada;
   if (!Number.isSafeInteger(cantidad) || cantidad <= 0) {

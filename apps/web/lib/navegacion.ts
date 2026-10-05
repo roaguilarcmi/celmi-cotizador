@@ -78,8 +78,10 @@ export const PASOS_WIZARD = [
   { corto: 'Esquema', largo: 'Esquema de adquisición' },
   { corto: 'Partidas', largo: 'Partidas' },
   { corto: 'Costos', largo: 'Costos y proveedores' },
-  { corto: 'Margen', largo: 'Margen y autorización' },
+  // Condiciones antes de autorizar (2026-10-05): quien autoriza ve la cotización completa y la vigencia no cambia
+  // después de autorizada.
   { corto: 'Condiciones', largo: 'Condiciones comerciales' },
+  { corto: 'Autorización', largo: 'Margen y autorización' },
   { corto: 'Vista previa', largo: 'Vista previa' },
   { corto: 'Emisión', largo: 'Emisión' },
 ] as const;
