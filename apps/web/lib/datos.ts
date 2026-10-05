@@ -67,6 +67,18 @@ export interface SeguimientoFila {
   autor: { nombre: string } | null;
 }
 
+export interface TareaFila {
+  id: string;
+  oportunidad_id: string;
+  titulo: string;
+  descripcion: string;
+  vence_en: string;
+  aviso_en: string | null;
+  estado: 'pendiente' | 'completada' | 'cancelada';
+  completada_en: string | null;
+  oportunidad: { id: string; nombre: string; cliente: { razon_social: string } | null } | null;
+}
+
 /** Falla visible: un error de consulta nunca debe parecer «no hay datos» o «no existe». */
 function exigir<T>(r: { data: T; error: { code?: string; message: string } | null }, que: string): T {
   if (r.error) {
@@ -132,6 +144,18 @@ export async function listarSeguimiento(
   return (exigir(await q, 'el seguimiento') ?? []) as unknown as (SeguimientoFila & {
     oportunidad_id: string;
   })[];
+}
+
+/** Tareas de quien tiene la sesión (son personales: la base sólo devuelve las suyas). */
+export async function listarMisTareas(filtro?: {
+  oportunidadId?: string;
+  soloPendientes?: boolean;
+}): Promise<TareaFila[]> {
+  const supabase = await clienteServidor();
+  let q = supabase.from('tareas').select(CONSULTAS.tareas).order('vence_en');
+  if (filtro?.oportunidadId) q = q.eq('oportunidad_id', filtro.oportunidadId);
+  if (filtro?.soloPendientes) q = q.eq('estado', 'pendiente');
+  return (exigir(await q, 'tus tareas') ?? []) as unknown as TareaFila[];
 }
 
 /** FormData → objeto, con cadenas vacías como «no capturado» para que apliquen los valores por omisión. */

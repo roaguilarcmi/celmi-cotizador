@@ -1,7 +1,20 @@
 import type { ReactNode } from 'react';
 import { CierrePorInactividad } from '@/components/CierrePorInactividad';
 import { MenuLateral } from '@/components/MenuLateral';
+import { AvisosTareas } from '@/components/tareas/AvisosTareas';
 import { obtenerSesion } from '@/lib/sesion';
+import { clienteServidor } from '@/lib/supabase/servidor';
+
+/** Tareas pendientes vencidas o que vencen en las próximas 24 h (para el contador del menú). */
+async function tareasPorVencer(): Promise<number> {
+  const supabase = await clienteServidor();
+  const { count } = await supabase
+    .from('tareas')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado', 'pendiente')
+    .lte('vence_en', new Date(Date.now() + 86_400_000).toISOString());
+  return count ?? 0;
+}
 
 export default async function LayoutApp({ children }: { children: ReactNode }) {
   const sesion = await obtenerSesion();
@@ -10,6 +23,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
+  const porVencer = sesion.demo ? 0 : await tareasPorVencer();
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
@@ -17,6 +31,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
         usuario={{ nombre: sesion.nombre, rol: sesion.rol, iniciales }}
         permisos={[...sesion.permisos]}
         demo={sesion.demo}
+        contadores={{ tareas: porVencer }}
       />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-9 lg:py-7">
         {sesion.demo && (
@@ -27,7 +42,12 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
         )}
         {children}
       </main>
-      {!sesion.demo && <CierrePorInactividad />}
+      {!sesion.demo && (
+        <>
+          <CierrePorInactividad />
+          <AvisosTareas />
+        </>
+      )}
     </div>
   );
 }

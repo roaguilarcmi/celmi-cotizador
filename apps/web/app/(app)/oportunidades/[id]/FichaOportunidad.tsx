@@ -5,7 +5,9 @@ import { useActionState, useRef, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon, type IconName } from '@/components/Icon';
 import { Avatar, Boton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
-import type { ContactoFila, Esquema, Estado, OportunidadFila, SeguimientoFila } from '@/lib/datos';
+import { FormularioTarea } from '@/components/tareas/FormularioTarea';
+import { ListaTareas } from '@/components/tareas/ListaTareas';
+import type { ContactoFila, Esquema, Estado, OportunidadFila, SeguimientoFila, TareaFila } from '@/lib/datos';
 import { colorAvatar, fechaCorta, fechaHora, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
 import { actualizarOportunidad, agregarNota, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
@@ -23,6 +25,7 @@ export function FichaOportunidad({
   esquemas,
   contactos,
   seguimiento,
+  tareas,
   puedeCambiarEstado,
   puedeEditar,
 }: {
@@ -31,6 +34,7 @@ export function FichaOportunidad({
   esquemas: Esquema[];
   contactos: ContactoFila[];
   seguimiento: SeguimientoFila[];
+  tareas: TareaFila[];
   puedeCambiarEstado: boolean;
   puedeEditar: boolean;
 }) {
@@ -104,6 +108,19 @@ export function FichaOportunidad({
               Aquí aparecerán las cotizaciones de esta oportunidad, con sus propuestas, revisiones y folio.
               Llegan en la Fase 3.
             </p>
+          </Tarjeta>
+
+          <Tarjeta className="p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <Titulo2>Mis tareas</Titulo2>
+              <span className="text-xs text-texto-suave">Personales: sólo tú las ves</span>
+            </div>
+            <div className="mt-4">
+              <FormularioTarea oportunidadId={o.id} />
+            </div>
+            <div className="mt-2">
+              <ListaTareas tareas={tareas} vacio="Sin tareas pendientes en esta oportunidad." />
+            </div>
           </Tarjeta>
 
           <Tarjeta className="p-6">

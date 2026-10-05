@@ -16,6 +16,8 @@ export const CONSULTAS = {
   seguimiento:
     'id, oportunidad_id, tipo, texto, estado_anterior, estado_nuevo, en, autor:perfiles!seguimiento_autor_id_fkey(nombre)',
   perfilSesion: 'nombre, puesto, correo, roles(nombre)',
+  tareas:
+    'id, oportunidad_id, titulo, descripcion, vence_en, aviso_en, estado, completada_en, oportunidad:oportunidades(id, nombre, cliente:clientes(razon_social))',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -26,4 +28,5 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   oportunidades: 'oportunidades',
   seguimiento: 'seguimiento',
   perfilSesion: 'perfiles',
+  tareas: 'tareas',
 };

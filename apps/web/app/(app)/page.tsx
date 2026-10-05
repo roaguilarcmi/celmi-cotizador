@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { Avatar, Pill, Tarjeta, Titulo2, type Tono } from '@/components/ui';
-import { listarEstados, listarOportunidades, listarSeguimiento } from '@/lib/datos';
+import { ListaTareas } from '@/components/tareas/ListaTareas';
+import { listarEstados, listarMisTareas, listarOportunidades, listarSeguimiento } from '@/lib/datos';
 import { colorAvatar, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
@@ -39,11 +40,12 @@ export default async function Inicio() {
   if (sesion.demo) return <DashboardMuestra />;
 
   const supabase = await clienteServidor();
-  const [oportunidades, estados, actividad, clientes] = await Promise.all([
+  const [oportunidades, estados, actividad, clientes, misTareas] = await Promise.all([
     listarOportunidades(),
     listarEstados(false),
     listarSeguimiento(undefined, 8),
     supabase.from('clientes').select('id', { count: 'exact', head: true }),
+    listarMisTareas({ soloPendientes: true }),
   ]);
 
   const nombre = sesion.nombre.split(/\s+/)[0] ?? '';
@@ -220,41 +222,56 @@ export default async function Inicio() {
           </Tarjeta>
         </div>
 
-        <Tarjeta className="min-w-0 flex-[1_1_300px] p-5">
-          <div className="mb-2">
-            <Titulo2>Actividad</Titulo2>
-          </div>
-          {actividad.length === 0 ? (
-            <p className="py-4 text-[13px] text-texto-suave">
-              Las notas, llamadas, visitas y cambios de estado aparecerán aquí.
-            </p>
-          ) : (
-            actividad.map((a) => (
-              <Link
-                key={a.id}
-                href={`/oportunidades/${a.oportunidad_id}`}
-                className="-mx-2 flex gap-3 rounded-md px-2 py-2.5 hover:bg-superficie-2"
-              >
-                <Avatar
-                  iniciales={iniciales(a.autor?.nombre ?? '?')}
-                  color={colorAvatar(a.autor?.nombre ?? '?')}
-                  tamano={30}
-                />
-                <div className="min-w-0 text-[13px] leading-snug">
-                  <strong>{a.autor?.nombre.split(' ')[0] ?? 'Sistema'}</strong>{' '}
-                  {a.tipo === 'cambio_estado'
-                    ? `movió a «${nombreEstado.get(a.estado_nuevo ?? '') ?? a.estado_nuevo}»`
-                    : `registró ${a.tipo === 'nota' ? 'una nota' : a.tipo === 'llamada' ? 'una llamada' : a.tipo === 'visita' ? 'una visita' : 'un correo'}`}{' '}
-                  en{' '}
-                  <span className="font-semibold">
-                    {nombreOportunidad.get(a.oportunidad_id) ?? 'una oportunidad'}
-                  </span>
-                  <div className="text-xs text-texto-suave">{haceCuanto(a.en)}</div>
-                </div>
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+          <Tarjeta className="px-5 pt-5 pb-2">
+            <div className="flex items-baseline justify-between">
+              <Titulo2>Mis tareas</Titulo2>
+              <Link href="/tareas" className="text-sm font-semibold text-acento-texto hover:underline">
+                Ver todas
               </Link>
-            ))
-          )}
-        </Tarjeta>
+            </div>
+            <ListaTareas
+              tareas={misTareas.slice(0, 5)}
+              mostrarOportunidad
+              vacio="Sin tareas pendientes. Prográmalas desde cada oportunidad."
+            />
+          </Tarjeta>
+          <Tarjeta className="p-5">
+            <div className="mb-2">
+              <Titulo2>Actividad</Titulo2>
+            </div>
+            {actividad.length === 0 ? (
+              <p className="py-4 text-[13px] text-texto-suave">
+                Las notas, llamadas, visitas y cambios de estado aparecerán aquí.
+              </p>
+            ) : (
+              actividad.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/oportunidades/${a.oportunidad_id}`}
+                  className="-mx-2 flex gap-3 rounded-md px-2 py-2.5 hover:bg-superficie-2"
+                >
+                  <Avatar
+                    iniciales={iniciales(a.autor?.nombre ?? '?')}
+                    color={colorAvatar(a.autor?.nombre ?? '?')}
+                    tamano={30}
+                  />
+                  <div className="min-w-0 text-[13px] leading-snug">
+                    <strong>{a.autor?.nombre.split(' ')[0] ?? 'Sistema'}</strong>{' '}
+                    {a.tipo === 'cambio_estado'
+                      ? `movió a «${nombreEstado.get(a.estado_nuevo ?? '') ?? a.estado_nuevo}»`
+                      : `registró ${a.tipo === 'nota' ? 'una nota' : a.tipo === 'llamada' ? 'una llamada' : a.tipo === 'visita' ? 'una visita' : 'un correo'}`}{' '}
+                    en{' '}
+                    <span className="font-semibold">
+                      {nombreOportunidad.get(a.oportunidad_id) ?? 'una oportunidad'}
+                    </span>
+                    <div className="text-xs text-texto-suave">{haceCuanto(a.en)}</div>
+                  </div>
+                </Link>
+              ))
+            )}
+          </Tarjeta>
+        </div>
       </div>
     </div>
   );

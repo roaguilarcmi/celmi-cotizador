@@ -9,9 +9,6 @@ import { BotonTema } from './BotonTema';
 import { Icon } from './Icon';
 import { Avatar } from './ui';
 
-/** Pendientes de autorización (datos de muestra hasta la Fase 4). */
-const PENDIENTES = 2;
-
 /**
  * Menú lateral. En escritorio se puede compactar a una barra de íconos para dar más espacio al módulo.
  * El estado vive en <html data-menu="compacto"> (aplicado antes de pintar, sin parpadeo) y en localStorage.
@@ -20,9 +17,11 @@ interface Props {
   usuario: { nombre: string; rol: string; iniciales: string };
   permisos: string[];
   demo: boolean;
+  /** Número a mostrar junto a una sección (p. ej. tareas por vencer). */
+  contadores?: Record<string, number>;
 }
 
-export function MenuLateral({ usuario, permisos, demo }: Props) {
+export function MenuLateral({ usuario, permisos, demo, contadores = {} }: Props) {
   const ruta = usePathname();
   const activo = (slug: string) => (slug === '' ? ruta === '/' : ruta.startsWith(`/${slug}`));
   const [menu, guardarMenu] = usePreferencia('celmi-menu');
@@ -88,9 +87,9 @@ export function MenuLateral({ usuario, permisos, demo }: Props) {
               >
                 <Icon name={s.icono} size={compacto ? 20 : 18} />
                 <span className="flex-1 lg:compacto:sr-only">{s.titulo}</span>
-                {s.slug === 'autorizaciones' && (
+                {(contadores[s.slug] ?? 0) > 0 && (
                   <span className="min-w-5.5 rounded-pill bg-[#F5B544] px-1.5 text-center text-xs font-bold text-[#2B1B00] lg:compacto:absolute lg:compacto:top-0.5 lg:compacto:right-0.5 lg:compacto:min-w-4.5 lg:compacto:px-1 lg:compacto:text-[10px]">
-                    {PENDIENTES}
+                    {contadores[s.slug]}
                     <span className="sr-only"> pendientes</span>
                   </span>
                 )}

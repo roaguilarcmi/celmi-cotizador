@@ -14,6 +14,13 @@ export interface Seccion {
 export const SECCIONES: Seccion[] = [
   { slug: '', titulo: 'Inicio', icono: 'inicio', fase: 2, descripcion: 'Dashboard personalizado.' },
   {
+    slug: 'tareas',
+    titulo: 'Mis tareas',
+    icono: 'reloj',
+    fase: 2,
+    descripcion: 'Tareas personales con aviso programado, creadas desde cada oportunidad.',
+  },
+  {
     slug: 'oportunidades',
     titulo: 'Oportunidades',
     icono: 'oportunidades',
