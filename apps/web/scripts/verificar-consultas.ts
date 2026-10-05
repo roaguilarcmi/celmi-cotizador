@@ -33,5 +33,13 @@ for (const [nombre, columnas] of Object.entries(CONSULTAS)) {
   );
   if (!bien) fallas++;
 }
+// Función de la API: etapas personales. Con la clave de servicio no hay sesión ni acceso al esquema interno `app`
+// (42501): eso prueba que la API la encontró y la ejecutó. Lo que se busca detectar es que no exista (PGRST202).
+{
+  const { error } = await supabase.rpc('mis_etapas_tarea').select(CONSULTAS.etapas);
+  const bien = !error || error.code === '42501';
+  console.log(`${bien ? '✔' : '✘'} mis_etapas_tarea()${bien ? '' : ` · ${error?.code} ${error?.message}`}`);
+  if (!bien) fallas++;
+}
 console.log(fallas ? `\n${fallas} consulta(s) con error.` : '\nTodas las consultas responden.');
 process.exit(fallas ? 1 : 0);

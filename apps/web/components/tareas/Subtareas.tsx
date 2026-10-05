@@ -1,21 +1,59 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 import { Icon } from '@/components/Icon';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
-import { cambiarEstadoTarea, crearSubtarea } from '@/lib/acciones-tareas';
+import { cambiarEstadoTarea, crearSubtarea, reordenarSubtareas } from '@/lib/acciones-tareas';
 import type { SubtareaFila, TareaFila } from '@/lib/datos';
 import type { EstadoTarea } from '@/lib/etapas-tareas';
+import { mover } from '@/lib/reordenar';
 import { FormularioTarea } from './FormularioTarea';
 import { subtareasVigentes } from './AvanceSubtareas';
 import { cuando, TONOS_CUANDO } from './cuando';
 
-/** Lista de subtareas de una tarea existente, con agregado rápido y detalle de cada una. */
+/**
+ * Lista de subtareas de una tarea existente: agregado rápido, detalle de cada una y reordenamiento (arrastrando la
+ * manija o con ↑ ↓ sobre ella; decisión 2026-10-05).
+ */
 export function Subtareas({ tarea }: { tarea: TareaFila }) {
-  const vigentes = subtareasVigentes(tarea);
+  const desdeServidor = subtareasVigentes(tarea);
+  // Orden local para que el cambio se vea al instante; se adopta el del servidor cuando llega uno nuevo.
+  const [vigentes, setVigentes] = useState(desdeServidor);
+  const [previas, setPrevias] = useState(tarea.subtareas);
+  if (tarea.subtareas !== previas) {
+    setPrevias(tarea.subtareas);
+    setVigentes(desdeServidor);
+  }
   const hechas = vigentes.filter((s) => s.estado === 'completada').length;
   const [abierta, setAbierta] = useState<string | null>(null);
   const subAbierta = vigentes.find((s) => s.id === abierta);
+  const [arrastrando, setArrastrando] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const lista = useRef<HTMLUListElement>(null);
+  const enfocar = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!enfocar.current) return;
+    lista.current?.querySelector<HTMLElement>(`[data-manija="${enfocar.current}"]`)?.focus();
+    enfocar.current = null;
+  }, [vigentes]);
+
+  const guardarOrden = async (orden: typeof vigentes) => {
+    const r = await reordenarSubtareas(
+      tarea.id,
+      orden.map((x) => x.id),
+    );
+    setError(r.error ?? null);
+  };
+
+  const teclas = (i: number, id: string) => (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const nuevo = mover(vigentes, i, i + (e.key === 'ArrowUp' ? -1 : 1));
+    enfocar.current = id;
+    setVigentes(nuevo);
+    void guardarOrden(nuevo);
+  };
 
   return (
     <section aria-labelledby={`subtareas-${tarea.id}`} className="mt-6 border-t border-borde pt-5">
@@ -39,12 +77,34 @@ export function Subtareas({ tarea }: { tarea: TareaFila }) {
       </div>
 
       {vigentes.length > 0 && (
-        <ul className="flex flex-col">
-          {vigentes.map((s) => (
-            <FilaSubtarea key={s.id} s={s} onAbrir={() => setAbierta(s.id)} />
+        <ul ref={lista} className="flex flex-col">
+          {vigentes.map((s, i) => (
+            <FilaSubtarea
+              key={s.id}
+              s={s}
+              onAbrir={() => setAbierta(s.id)}
+              arrastrada={arrastrando === i}
+              manija={{
+                posicion: i + 1,
+                total: vigentes.length,
+                onKeyDown: teclas(i, s.id),
+                onDragStart: () => setArrastrando(i),
+                onDragEnd: () => {
+                  setArrastrando(null);
+                  void guardarOrden(vigentes);
+                },
+              }}
+              onDragOver={() => {
+                if (arrastrando === null || arrastrando === i) return false;
+                setVigentes((xs) => mover(xs, arrastrando, i));
+                setArrastrando(i);
+                return true;
+              }}
+            />
           ))}
         </ul>
       )}
+      {error && <p className="mt-1 text-xs text-peligro">{error}</p>}
       <AgregarSubtarea padreId={tarea.id} />
 
       {subAbierta && (
@@ -62,14 +122,56 @@ export function Subtareas({ tarea }: { tarea: TareaFila }) {
   );
 }
 
-function FilaSubtarea({ s, onAbrir }: { s: SubtareaFila; onAbrir: () => void }) {
+function FilaSubtarea({
+  s,
+  onAbrir,
+  arrastrada,
+  manija,
+  onDragOver,
+}: {
+  s: SubtareaFila;
+  onAbrir: () => void;
+  arrastrada: boolean;
+  manija: {
+    posicion: number;
+    total: number;
+    onKeyDown: (e: KeyboardEvent) => void;
+    onDragStart: () => void;
+    onDragEnd: () => void;
+  };
+  /** Devuelve si la fila acepta lo que se arrastra (para permitir soltar). */
+  onDragOver: () => boolean;
+}) {
   const [pendiente, iniciar] = useTransition();
   const hecha = s.estado === 'completada';
   const c = s.vence_en ? cuando(s.vence_en, s.sin_hora) : null;
   return (
     <li
-      className={`group flex min-h-11 items-center gap-2.5 border-b border-borde/70 px-1 last:border-0 ${pendiente ? 'opacity-60' : ''}`}
+      onDragOver={(e) => {
+        if (onDragOver()) e.preventDefault();
+      }}
+      className={`group flex min-h-11 items-center gap-1.5 border-b border-borde/70 pr-1 transition-shadow last:border-0 ${
+        pendiente ? 'opacity-60' : ''
+      } ${arrastrada ? 'relative z-10 rounded-md border-transparent bg-superficie shadow-lg ring-2 ring-acento' : ''}`}
     >
+      <button
+        type="button"
+        draggable
+        data-manija={s.id}
+        onDragStart={(e) => {
+          e.stopPropagation(); // no es la tarjeta del tablero la que se arrastra
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', s.id);
+          manija.onDragStart();
+        }}
+        onDragEnd={manija.onDragEnd}
+        onKeyDown={manija.onKeyDown}
+        aria-label={`Mover «${s.titulo}» (posición ${manija.posicion} de ${manija.total}); usa las flechas`}
+        title="Arrastra para reordenar"
+        className="inline-flex size-8 shrink-0 cursor-grab items-center justify-center rounded-md text-texto-suave opacity-40 group-hover:opacity-100 hover:bg-superficie-2 focus-visible:opacity-100 active:cursor-grabbing"
+      >
+        <Icon name="arrastrar" size={17} strokeWidth={4} />
+      </button>
       <button
         type="button"
         role="checkbox"

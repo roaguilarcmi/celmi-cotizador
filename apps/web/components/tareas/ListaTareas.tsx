@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
-import { cambiarEstadoTarea } from '@/lib/acciones-tareas';
+import { cambiarEstadoTarea, moverTareaAEtapa } from '@/lib/acciones-tareas';
 import type { TareaFila } from '@/lib/datos';
-import { ETAPAS, estaAbierta, type EstadoTarea } from '@/lib/etapas-tareas';
+import { COLORES_ETAPA, estaAbierta, etapaDe, type EstadoTarea } from '@/lib/etapas-tareas';
 import { AvanceSubtareas } from './AvanceSubtareas';
 import { cuando, TONOS_CUANDO } from './cuando';
 import { DialogoTarea } from './DialogoTarea';
+import { useEtapas } from './EtapasContexto';
 import { nombreAviso } from './FormularioTarea';
 import { MenuTarea } from './MenuTarea';
 
@@ -74,7 +75,12 @@ export function useAccionesTarea(t: TareaFila) {
       const r = await cambiarEstadoTarea(t.id, estado);
       setError(r.error ?? null);
     });
-  return { pendiente, error, cambiar };
+  const moverA = (etapaId: string) =>
+    iniciar(async () => {
+      const r = await moverTareaAEtapa(t.id, etapaId);
+      setError(r.error ?? null);
+    });
+  return { pendiente, error, cambiar, moverA };
 }
 
 /**
@@ -98,7 +104,7 @@ export function DetallesTarea({
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
   const c = cuando(t.vence_en, t.sin_hora);
-  const etapa = ETAPAS.find((e) => e.id === t.estado);
+  const etapa = etapaDe(t, useEtapas());
   return (
     <>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-texto-suave">
@@ -122,9 +128,11 @@ export function DetallesTarea({
             {hecha ? 'Completada' : 'Cancelada'}
           </button>
         )}
-        {mostrarEtapa && etapa && !hecha && t.estado !== 'pendiente' && (
-          <span className={`inline-flex items-center gap-1.5 font-semibold ${etapa.texto}`}>
-            <span aria-hidden="true" className={`size-2 rounded-full ${etapa.punto}`} />
+        {mostrarEtapa && etapa && !hecha && !cancelada && (
+          <span
+            className={`inline-flex items-center gap-1.5 font-semibold ${COLORES_ETAPA[etapa.color].texto}`}
+          >
+            <span aria-hidden="true" className={`size-2 rounded-full ${COLORES_ETAPA[etapa.color].punto}`} />
             {etapa.nombre}
           </span>
         )}
@@ -169,7 +177,7 @@ function FilaTarea({
   mostrarOportunidad?: boolean;
   compacta?: boolean;
 }) {
-  const { pendiente, error, cambiar } = useAccionesTarea(t);
+  const { pendiente, error, cambiar, moverA } = useAccionesTarea(t);
   const [abierta, setAbierta] = useState(false);
   const hecha = t.estado === 'completada';
   const cancelada = t.estado === 'cancelada';
@@ -195,7 +203,9 @@ function FilaTarea({
         <MenuTarea
           titulo={t.titulo}
           estado={t.estado}
-          onMover={cambiar}
+          etapaId={t.etapa_id}
+          onMover={moverA}
+          onCancelar={() => cambiar('cancelada')}
           onAbrir={() => setAbierta(true)}
           className={`text-sm font-semibold ${hecha || cancelada ? 'text-texto-suave line-through' : ''}`}
         />

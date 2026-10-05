@@ -9,7 +9,7 @@ import {
 } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { borrarBorrador } from './acciones-borradores';
-import { ESTADOS_ABIERTOS, nombreEtapa, type EstadoTarea as Etapa } from './etapas-tareas';
+import { ESTADOS_ABIERTOS, type EstadoTarea as Etapa } from './etapas-tareas';
 import { obtenerSesion } from './sesion';
 import { clienteServidor } from './supabase/servidor';
 
@@ -146,6 +146,37 @@ export async function actualizarTarea(
   return { ok: 'Tarea actualizada.' };
 }
 
+/** Mueve una tarea a otra etapa de su pipeline; la base ajusta el estado (la final la completa). */
+export async function moverTareaAEtapa(id: string, etapaId: string): Promise<EstadoTarea> {
+  await obtenerSesion();
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('tareas')
+    .update({ etapa_id: etapaId })
+    .eq('id', id)
+    .is('tarea_padre_id', null)
+    .select('oportunidad_id')
+    .maybeSingle();
+  if (error || !data) return { error: 'No se pudo mover la tarea.' };
+  refrescar(data.oportunidad_id as string | null);
+  return { ok: 'Tarea movida.' };
+}
+
+/** Guarda el nuevo orden de las subtareas de una tarea (lista completa de ids, en orden). */
+export async function reordenarSubtareas(padreId: string, ids: string[]): Promise<EstadoTarea> {
+  await obtenerSesion();
+  if (ids.length > 100 || ids.some((i) => typeof i !== 'string')) return { error: 'Orden no válido.' };
+  const supabase = await clienteServidor();
+  const resultados = await Promise.all(
+    ids.map((id, orden) =>
+      supabase.from('tareas').update({ orden }).eq('id', id).eq('tarea_padre_id', padreId),
+    ),
+  );
+  if (resultados.some((r) => r.error)) return { error: 'No se pudo guardar el orden.' };
+  refrescar();
+  return { ok: 'Orden guardado.' };
+}
+
 /** Agrega una subtarea rápida (sólo el título, como en Asana); la oportunidad la hereda de la principal. */
 export async function crearSubtarea(padreId: string, titulo: string): Promise<EstadoTarea> {
   await obtenerSesion();
@@ -202,7 +233,7 @@ export async function cambiarEstadoTarea(id: string, estado: Etapa): Promise<Est
         ? 'Tarea completada.'
         : estado === 'cancelada'
           ? 'Tarea cancelada.'
-          : `Tarea movida a «${nombreEtapa(estado)}».`,
+          : 'Tarea reabierta.',
   };
 }
 

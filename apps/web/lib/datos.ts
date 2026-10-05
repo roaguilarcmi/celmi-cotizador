@@ -1,6 +1,6 @@
 import { CONSULTAS } from './consultas';
 import { clienteServidor } from './supabase/servidor';
-import { ESTADOS_ABIERTOS, type EstadoTarea } from './etapas-tareas';
+import { ESTADOS_ABIERTOS, type EstadoTarea, type EtapaTarea } from './etapas-tareas';
 
 /*
  * Consultas de la Fase 2. Todas usan la sesión del usuario: las reglas RLS de la base deciden qué filas ve
@@ -82,6 +82,8 @@ export interface TareaFila {
   /** Nulo: sin fecha. Con `sin_hora`, vence al final de ese día. */
   vence_en: string | null;
   sin_hora: boolean;
+  /** Etapa del pipeline personal (sólo tareas principales). */
+  etapa_id: string | null;
   /** Documento de texto con formato (validado al guardar y al mostrar). */
   notas: unknown;
   avisos: { id: string; minutos_antes: number; aviso_en: string }[];
@@ -101,6 +103,8 @@ export interface SubtareaFila {
   vence_en: string | null;
   sin_hora: boolean;
   estado: EstadoTarea;
+  /** Posición entre sus hermanas (se reordenan arrastrando). */
+  orden: number;
   completada_en: string | null;
   creado_en: string;
   avisos: { id: string; minutos_antes: number; aviso_en: string }[];
@@ -234,10 +238,18 @@ export async function listarMisTareas(filtro?: {
     .is('tarea_padre_id', null)
     .order('vence_en', { nullsFirst: false })
     .order('creado_en')
+    .order('orden', { referencedTable: 'subtareas' })
     .order('creado_en', { referencedTable: 'subtareas' });
   if (filtro?.oportunidadId) q = q.eq('oportunidad_id', filtro.oportunidadId);
   if (filtro?.soloPendientes) q = q.in('estado', ESTADOS_ABIERTOS);
   return (exigir(await q, 'tus tareas') ?? []) as unknown as TareaFila[];
+}
+
+/** Etapas del pipeline personal; la base crea las de omisión la primera vez. */
+export async function listarMisEtapas(): Promise<EtapaTarea[]> {
+  const supabase = await clienteServidor();
+  return (exigir(await supabase.rpc('mis_etapas_tarea').select(CONSULTAS.etapas), 'tus etapas') ??
+    []) as unknown as EtapaTarea[];
 }
 
 /** Oportunidades para ligar una tarea desde «Mis tareas» (sólo las que ve quien consulta). */

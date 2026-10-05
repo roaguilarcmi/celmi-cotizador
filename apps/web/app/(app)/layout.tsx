@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { CierrePorInactividad } from '@/components/CierrePorInactividad';
 import { MenuLateral } from '@/components/MenuLateral';
 import { AvisosTareas } from '@/components/tareas/AvisosTareas';
+import { EtapasTareas } from '@/components/tareas/EtapasContexto';
+import { listarMisEtapas } from '@/lib/datos';
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { ESTADOS_ABIERTOS } from '@/lib/etapas-tareas';
@@ -25,7 +27,9 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
-  const porVencer = sesion.demo ? 0 : await tareasPorVencer();
+  const [porVencer, etapas] = sesion.demo
+    ? [0, []]
+    : await Promise.all([tareasPorVencer(), listarMisEtapas()]);
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
@@ -42,7 +46,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
             datos de muestra y no se pide inicio de sesión.
           </p>
         )}
-        {children}
+        <EtapasTareas etapas={etapas}>{children}</EtapasTareas>
       </main>
       {!sesion.demo && (
         <>

@@ -3,25 +3,33 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
-import { ETAPAS, estaAbierta, type EstadoTarea } from '@/lib/etapas-tareas';
+import { COLORES_ETAPA, estaAbierta, type EstadoTarea } from '@/lib/etapas-tareas';
+import { useEtapas } from './EtapasContexto';
 
 /**
- * Título de la tarea que, al hacer clic, abre «Mover a…» con las etapas del pipeline (decisión 2026-10-05), además de
- * «Abrir detalles» y «Cancelar» (una cancelada se reabre moviéndola a cualquier etapa). El menú se dibuja en una capa fija para que no lo recorten las columnas.
+ * Título de la tarea que, al hacer clic, abre «Mover a…» con las etapas del pipeline personal (decisión 2026-10-05),
+ * además de «Abrir detalles» y «Cancelar» (una cancelada se reabre moviéndola a cualquier etapa). El menú se dibuja
+ * en una capa fija para que no lo recorten las columnas.
  */
 export function MenuTarea({
   titulo,
   estado,
+  etapaId,
   onMover,
+  onCancelar,
   onAbrir,
   className = '',
 }: {
   titulo: string;
   estado: EstadoTarea;
-  onMover: (estado: EstadoTarea) => void;
+  /** Etapa actual (se omite de «Mover a», salvo si la tarea está cancelada). */
+  etapaId: string | null;
+  onMover: (etapaId: string) => void;
+  onCancelar: () => void;
   onAbrir: () => void;
   className?: string;
 }) {
+  const etapas = useEtapas();
   const idMenu = useId();
   const boton = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -116,25 +124,33 @@ export function MenuTarea({
             <div className="mx-3 mt-2 mb-1 text-[11px] font-bold tracking-wide text-texto-suave uppercase">
               Mover a
             </div>
-            {ETAPAS.filter((e) => e.id !== estado).map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                role="menuitem"
-                onClick={() => elegir(() => onMover(e.id))}
-                className={opcion}
-              >
-                <span aria-hidden="true" className={`size-2.5 rounded-full ${e.punto}`} />
-                {e.nombre}
-              </button>
-            ))}
+            {etapas
+              .filter((e) => estado === 'cancelada' || e.id !== etapaId)
+              .map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => elegir(() => onMover(e.id))}
+                  className={opcion}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`size-2.5 rounded-full ${COLORES_ETAPA[e.color].punto}`}
+                  />
+                  {e.nombre}
+                  {e.es_final && (
+                    <span className="ml-auto text-[11px] font-normal text-texto-suave">la cierra</span>
+                  )}
+                </button>
+              ))}
             {estaAbierta(estado) && (
               <>
                 <div className="my-1.5 border-t border-borde" />
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => elegir(() => onMover('cancelada'))}
+                  onClick={() => elegir(onCancelar)}
                   className={`${opcion} text-peligro`}
                 >
                   <Icon name="cerrar" size={15} />
