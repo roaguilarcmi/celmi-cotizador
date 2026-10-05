@@ -9,7 +9,6 @@ import type {
   Borradores,
   ContactoFila,
   CotizacionFila,
-  Esquema,
   Estado,
   OportunidadFila,
   SeguimientoFila,
@@ -18,13 +17,13 @@ import type {
 import { colorAvatar, fechaCorta, haceCuanto, iniciales } from '@/lib/presentacion';
 import { actualizarOportunidad, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
+import { TIPOS_OPORTUNIDAD, type TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { SeccionCotizaciones } from './SeccionCotizaciones';
 import { SeccionSeguimiento, SeccionTareas } from './Secciones';
 
 export function FichaOportunidad({
   o,
   estados,
-  esquemas,
   contactos,
   seguimiento,
   tareas,
@@ -36,7 +35,6 @@ export function FichaOportunidad({
 }: {
   o: OportunidadFila;
   estados: Estado[];
-  esquemas: Esquema[];
   contactos: ContactoFila[];
   seguimiento: SeguimientoFila[];
   tareas: TareaFila[];
@@ -47,7 +45,6 @@ export function FichaOportunidad({
   puedeEditar: boolean;
 }) {
   const [editando, setEditando] = useState(false);
-  const esquema = esquemas.find((e) => e.id === o.esquema_id);
 
   return (
     <div className="animar-entrada mx-auto max-w-[1440px]">
@@ -88,14 +85,7 @@ export function FichaOportunidad({
         )}
       </header>
 
-      {editando && (
-        <EditarOportunidad
-          o={o}
-          contactos={contactos}
-          esquemas={esquemas}
-          onListo={() => setEditando(false)}
-        />
-      )}
+      {editando && <EditarOportunidad o={o} contactos={contactos} onListo={() => setEditando(false)} />}
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
@@ -145,7 +135,7 @@ export function FichaOportunidad({
                   'Sin contacto'
                 )}
               </Dato>
-              <Dato etiqueta="Esquema de adquisición">{esquema?.nombre ?? '—'}</Dato>
+              <Dato etiqueta="Tipo">{TIPOS_OPORTUNIDAD[o.tipo]?.nombre ?? '—'}</Dato>
               <Dato etiqueta="Ciudad de entrega">{o.ciudad_entrega || '—'}</Dato>
               <Dato etiqueta="Ejecutivo responsable">
                 {o.ejecutivo && (
@@ -188,12 +178,10 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: React.ReactN
 function EditarOportunidad({
   o,
   contactos,
-  esquemas,
   onListo,
 }: {
   o: OportunidadFila;
   contactos: ContactoFila[];
-  esquemas: Esquema[];
   onListo: () => void;
 }) {
   const [estado, accion] = useActionState<EstadoFormulario, FormData>(
@@ -238,13 +226,13 @@ function EditarOportunidad({
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="ed-esquema" className="text-[13px] font-semibold">
-            Esquema de adquisición
+          <label htmlFor="ed-tipo" className="text-[13px] font-semibold">
+            Tipo
           </label>
-          <select id="ed-esquema" name="esquema_id" defaultValue={o.esquema_id ?? ''} className={select}>
-            {esquemas.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
+          <select id="ed-tipo" name="tipo" defaultValue={o.tipo} className={select}>
+            {(Object.keys(TIPOS_OPORTUNIDAD) as TipoOportunidad[]).map((t) => (
+              <option key={t} value={t}>
+                {TIPOS_OPORTUNIDAD[t].nombre}
               </option>
             ))}
           </select>

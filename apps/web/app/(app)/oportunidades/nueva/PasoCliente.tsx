@@ -7,28 +7,20 @@ import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
 import { Tarjeta, Titulo2 } from '@/components/ui';
-import type { ClienteFila, Esquema } from '@/lib/datos';
+import type { ClienteFila } from '@/lib/datos';
 import { colorAvatar, iniciales } from '@/lib/presentacion';
+import { TIPOS_OPORTUNIDAD, type TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { FormularioCliente } from '../../clientes/FormularioCliente';
 import { crearOportunidad, type EstadoFormulario } from '../acciones';
 
-const DESCRIPCION_ESQUEMA: Record<string, string> = {
-  adquisicion: 'Compra-venta: pago total o anticipo y resto previo a la entrega.',
-  arrendamiento_vjm: 'Al terminar, los bienes regresan a la financiera.',
-  arrendamiento_fpo: 'Al terminar, los bienes pueden adquirirse por un valor residual.',
-  credito_simple: 'Financiamiento a plazo fijo.',
-};
-
 export function PasoCliente({
   clientes,
-  esquemas,
   clienteInicial,
   ejecutivos,
   usuarioId,
   puedeCrearCliente,
 }: {
   clientes: ClienteFila[];
-  esquemas: Esquema[];
   clienteInicial: string | null;
   /** Sólo para administradores: a nombre de quién queda la oportunidad. */
   ejecutivos: { id: string; nombre: string }[] | null;
@@ -39,7 +31,7 @@ export function PasoCliente({
   const [clienteId, setClienteId] = useState<string | null>(clienteInicial);
   const [busqueda, setBusqueda] = useState('');
   const [nuevoCliente, setNuevoCliente] = useState(false);
-  const [esquema, setEsquema] = useState<string>('adquisicion');
+  const [tipo, setTipo] = useState<TipoOportunidad>('arrendamiento');
   const idObs = useId();
 
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
@@ -163,7 +155,7 @@ export function PasoCliente({
       {cliente && !nuevoCliente && (
         <form action={accion} className="animar-entrada">
           <input type="hidden" name="cliente_id" value={cliente.id} />
-          <input type="hidden" name="esquema_id" value={esquema} />
+          <input type="hidden" name="tipo" value={tipo} />
           <Tarjeta className="mb-5 p-6">
             <Titulo2>2 · La oportunidad</Titulo2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -231,25 +223,25 @@ export function PasoCliente({
           </Tarjeta>
 
           <Tarjeta className="mb-5 p-6">
-            <Titulo2>3 · Esquema de adquisición</Titulo2>
+            <Titulo2>3 · Tipo</Titulo2>
             <p className="mt-1 text-[13px] text-texto-suave">
-              El esquema principal; las alternativas financieras (plazos y corridas) se definen en la
-              cotización.
+              Sólo el tipo general. Los esquemas de financiamiento y sus plazos se eligen por propuesta al
+              cotizar.
             </p>
             <div
               role="radiogroup"
-              aria-label="Esquema de adquisición"
+              aria-label="Tipo de oportunidad"
               className="mt-4 grid gap-3 sm:grid-cols-2"
             >
-              {esquemas.map((e) => {
-                const activo = esquema === e.id;
+              {(Object.keys(TIPOS_OPORTUNIDAD) as TipoOportunidad[]).map((t) => {
+                const activo = tipo === t;
                 return (
                   <button
-                    key={e.id}
+                    key={t}
                     type="button"
                     role="radio"
                     aria-checked={activo}
-                    onClick={() => setEsquema(e.id)}
+                    onClick={() => setTipo(t)}
                     className={`flex cursor-pointer flex-col gap-1 rounded-md border-2 p-4 text-left transition-colors ${
                       activo
                         ? 'border-acento bg-acento-suave/50'
@@ -257,7 +249,7 @@ export function PasoCliente({
                     }`}
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="font-bold">{e.nombre}</span>
+                      <span className="font-bold">{TIPOS_OPORTUNIDAD[t].nombre}</span>
                       <span
                         aria-hidden="true"
                         className={`inline-flex size-5 items-center justify-center rounded-full border-2 ${
@@ -267,12 +259,7 @@ export function PasoCliente({
                         {activo && <Icon name="palomita" size={12} strokeWidth={3} />}
                       </span>
                     </span>
-                    <span className="text-[13px] text-texto-suave">{DESCRIPCION_ESQUEMA[e.id] ?? ''}</span>
-                    {e.plazos_meses.length > 0 && (
-                      <span className="mt-1 text-xs font-semibold text-acento-texto">
-                        Plazos: {e.plazos_meses.join(', ')} meses
-                      </span>
-                    )}
+                    <span className="text-[13px] text-texto-suave">{TIPOS_OPORTUNIDAD[t].descripcion}</span>
                   </button>
                 );
               })}
@@ -300,7 +287,7 @@ export function PasoCliente({
           >
             <div className="mr-auto text-sm">
               <div className="font-bold">{cliente.razon_social}</div>
-              <div className="text-nav-texto">Siguiente: esquema y partidas de la cotización (Fase 3)</div>
+              <div className="text-nav-texto">Siguiente: crea la cotización desde la oportunidad</div>
             </div>
             <div className="w-full sm:w-64">
               <BotonEnviar>Crear oportunidad</BotonEnviar>

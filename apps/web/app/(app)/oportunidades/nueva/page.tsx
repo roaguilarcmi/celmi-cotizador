@@ -1,5 +1,5 @@
 import { EnConstruccion } from '@/components/EnConstruccion';
-import { listarClientes, listarEsquemas } from '@/lib/datos';
+import { listarClientes } from '@/lib/datos';
 import { exigirPermiso } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { PasoCliente } from './PasoCliente';
@@ -16,9 +16,8 @@ export default async function NuevaOportunidad({
   const { cliente } = await searchParams;
   const esAdmin = sesion.permisos.has('oportunidades.editar_todas');
 
-  const [clientes, esquemas, ejecutivos] = await Promise.all([
+  const [clientes, ejecutivos] = await Promise.all([
     listarClientes(),
-    listarEsquemas(),
     esAdmin
       ? clienteServidor().then(async (s) => {
           const { data } = await s
@@ -35,7 +34,6 @@ export default async function NuevaOportunidad({
   return (
     <PasoCliente
       clientes={clientes}
-      esquemas={esquemas}
       clienteInicial={clientes.some((c) => c.id === cliente) ? (cliente ?? null) : null}
       ejecutivos={ejecutivos}
       usuarioId={sesion.usuarioId}

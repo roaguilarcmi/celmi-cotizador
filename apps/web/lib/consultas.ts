@@ -10,7 +10,7 @@ export const CONSULTAS = {
   esquemas: 'id, nombre, plazos_meses, activo',
   clientes:
     'id, razon_social, rfc, direccion, ciudad, creado_en, contactos(id, cliente_id, tratamiento, nombre, puesto, correo, telefono), oportunidades(id)',
-  oportunidades: `id, nombre, estado_id, esquema_id, ciudad_entrega, observaciones_internas, creado_en, actualizado_en,
+  oportunidades: `id, nombre, estado_id, esquema_id, tipo, ciudad_entrega, observaciones_internas, creado_en, actualizado_en,
     ejecutivo_id, cliente:clientes(id, razon_social), contacto:contactos(id, tratamiento, nombre, puesto, correo, telefono),
     ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(id, nombre)`,
   seguimiento:
@@ -21,7 +21,7 @@ export const CONSULTAS = {
   borradores: 'tipo, datos, actualizado_en',
   etapas: 'id, nombre, color, orden, es_final',
   cotizaciones: `id, oportunidad_id, folio, creado_en,
-    oportunidad:oportunidades(id, nombre, ejecutivo_id, cliente:clientes(razon_social)),
+    oportunidad:oportunidades(id, nombre, ejecutivo_id, tipo, cliente:clientes(razon_social)),
     revisiones(id, numero, estado, motivo, creado_en, enviada_en, autorizada_en)`,
   revision: `id, cotizacion_id, numero, estado, motivo, vigencia_hasta, condiciones, comentario_autorizacion,
     enviada_en, autorizada_en, revision_anterior_id,
@@ -29,11 +29,16 @@ export const CONSULTAS = {
       partidas(id, orden, sku, marca_id, descripcion, descripcion_contenido, entrega, unidad_id, cantidad, se_suma,
         partida_padre_id, presentacion, prorrateos:partida_prorrateos!partida_id(destino_id),
         oculta_al_cliente,
-        costo:partida_costos(mayorista_id, moneda, costo_unitario, costo_anterior, tipo_cambio, vigencia)))`,
+        costo:partida_costos(mayorista_id, moneda, costo_unitario, costo_anterior, tipo_cambio, vigencia),
+        precio:partida_precios(precio_unitario)))`,
   mayoristas: 'id, nombre, activo',
   marcas: 'id, nombre, activa',
   unidades: 'id, nombre, abreviatura, activa',
   monedas: 'codigo, nombre, activa',
+  condiciones: 'id, nombre, contenido, orden, activa',
+  revisionCondiciones: 'id, orden, condicion_id, contenido',
+  financiamientos:
+    'id, propuesta_id, esquema_id, plazo_meses, mensualidad, valor_residual, factor, tasa_interes, gastos_apertura, orden',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -53,4 +58,7 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   marcas: 'marcas',
   unidades: 'unidades',
   monedas: 'monedas',
+  condiciones: 'condiciones_comerciales',
+  revisionCondiciones: 'revision_condiciones',
+  financiamientos: 'propuesta_financiamientos',
 };

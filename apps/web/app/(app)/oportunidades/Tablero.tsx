@@ -6,18 +6,18 @@ import { AtajoBuscar } from '@/components/AtajoBuscar';
 import { Buscador, paraBuscar } from '@/components/Buscador';
 import { Icon } from '@/components/Icon';
 import { Avatar, Pill, Tarjeta } from '@/components/ui';
-import type { Esquema, Estado, OportunidadFila } from '@/lib/datos';
+import type { Estado, OportunidadFila } from '@/lib/datos';
 import { usePreferencia } from '@/lib/preferencias';
 import { colorAvatar, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
 import { cambiarEstado } from './acciones';
 import { SelectorEstado } from './SelectorEstado';
+import { TIPOS_OPORTUNIDAD } from '@/lib/tipos-oportunidad';
 
 type Vista = 'tablero' | 'tabla';
 
 export function Tablero({
   oportunidades: iniciales0,
   estados,
-  esquemas,
   usuarioId,
   verTodas,
   editarTodas,
@@ -25,7 +25,6 @@ export function Tablero({
 }: {
   oportunidades: OportunidadFila[];
   estados: Estado[];
-  esquemas: Esquema[];
   usuarioId: string;
   verTodas: boolean;
   editarTodas: boolean;
@@ -41,7 +40,6 @@ export function Tablero({
   const [sobre, setSobre] = useState<string | null>(null);
   const [, iniciar] = useTransition();
 
-  const nombreEsquema = new Map(esquemas.map((e) => [e.id, e.nombre]));
   const abiertos = estados.filter((e) => !e.final);
   const finales = new Set(estados.filter((e) => e.final).map((e) => e.id));
   const puedeMover = (o: OportunidadFila) => editarTodas || o.ejecutivo_id === usuarioId;
@@ -212,7 +210,7 @@ export function Tablero({
                         <TarjetaOportunidad
                           key={o.id}
                           o={o}
-                          esquema={o.esquema_id ? nombreEsquema.get(o.esquema_id) : undefined}
+                          esquema={TIPOS_OPORTUNIDAD[o.tipo]?.nombre}
                           arrastrable={puedeMover(o)}
                           mostrarEjecutivo={verTodas}
                         />
@@ -244,7 +242,7 @@ export function Tablero({
                     <TarjetaOportunidad
                       key={o.id}
                       o={o}
-                      esquema={o.esquema_id ? nombreEsquema.get(o.esquema_id) : undefined}
+                      esquema={TIPOS_OPORTUNIDAD[o.tipo]?.nombre}
                       arrastrable={puedeMover(o)}
                       mostrarEjecutivo={verTodas}
                       estado={estados.find((e) => e.id === o.estado_id)}
@@ -293,7 +291,7 @@ export function Tablero({
                     </td>
                     <td className="px-4 py-3 text-texto-suave">{o.cliente?.razon_social}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-texto-suave">
-                      {o.esquema_id ? nombreEsquema.get(o.esquema_id) : '—'}
+                      {TIPOS_OPORTUNIDAD[o.tipo]?.nombre ?? '—'}
                     </td>
                     {verTodas && <td className="px-4 py-3 whitespace-nowrap">{o.ejecutivo?.nombre}</td>}
                     <td className="px-4 py-3">

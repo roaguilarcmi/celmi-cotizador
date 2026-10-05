@@ -1,6 +1,13 @@
 import { notFound } from 'next/navigation';
 import { EnConstruccion } from '@/components/EnConstruccion';
-import { listarCatalogosCotizacion, obtenerCotizacion } from '@/lib/datos';
+import {
+  listarCatalogosCotizacion,
+  listarCondicionesCatalogo,
+  listarCondicionesDeRevision,
+  listarEsquemas,
+  listarFinanciamiento,
+  obtenerCotizacion,
+} from '@/lib/datos';
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { EditorCotizacion, type Paso } from './EditorCotizacion';
@@ -8,7 +15,21 @@ import { EditorCotizacion, type Paso } from './EditorCotizacion';
 export const dynamic = 'force-dynamic';
 
 const esUuid = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
-const PASOS: Record<string, Paso> = { partidas: 2, costos: 2, condiciones: 3, autorizacion: 4 };
+const PASOS: Record<string, Paso> = {
+  partidas: 1,
+  costos: 1,
+  condiciones: 2,
+  autorizacion: 3,
+  financiamiento: 4,
+};
+/** Paso inicial según el estado: capturando, esperando autorización o ya autorizada (financiamiento). */
+const PASO_POR_ESTADO: Record<string, Paso> = {
+  borrador: 1,
+  rechazada: 1,
+  pendiente_autorizacion: 3,
+  autorizada: 4,
+  emitida: 4,
+};
 
 export default async function PaginaCotizacion({
   params,
@@ -30,6 +51,12 @@ export default async function PaginaCotizacion({
   ]);
   if (!datos) notFound();
   const { cotizacion, revision } = datos;
+  const [catalogoCondiciones, condiciones, esquemas, financiamiento] = await Promise.all([
+    listarCondicionesCatalogo(),
+    listarCondicionesDeRevision(revision.id),
+    listarEsquemas(),
+    listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
+  ]);
 
   // Edita quien participa en la oportunidad (ejecutivo o colaborador) o quien puede editar todas; la base lo
   // vuelve a exigir al guardar.
@@ -53,7 +80,12 @@ export default async function PaginaCotizacion({
       revision={revision}
       catalogos={catalogos}
       puedeEditar={puedeEditar && sesion.permisos.has('costos.ver')}
-      pasoInicial={PASOS[paso ?? ''] ?? (revision.estado === 'borrador' ? 2 : 4)}
+      catalogoCondiciones={catalogoCondiciones}
+      condiciones={condiciones}
+      esquemasFinanciamiento={esquemas.filter((e) => e.id !== 'adquisicion')}
+      financiamiento={financiamiento}
+      tipoOportunidad={cotizacion.oportunidad?.tipo ?? 'arrendamiento'}
+      pasoInicial={PASOS[paso ?? ''] ?? PASO_POR_ESTADO[revision.estado] ?? 1}
     />
   );
 }

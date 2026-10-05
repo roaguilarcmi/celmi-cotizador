@@ -48,6 +48,8 @@ export interface OportunidadFila {
   nombre: string;
   estado_id: string;
   esquema_id: string | null;
+  /** Tipo general: adquisición o arrendamiento (2026-10-05). */
+  tipo: 'adquisicion' | 'arrendamiento';
   ciudad_entrega: string;
   observaciones_internas: string;
   creado_en: string;
@@ -282,6 +284,7 @@ export interface CotizacionFila {
     id: string;
     nombre: string;
     ejecutivo_id: string;
+    tipo: 'adquisicion' | 'arrendamiento';
     cliente: { razon_social: string } | null;
   } | null;
   revisiones: {
@@ -323,6 +326,8 @@ export interface PartidaFila {
   /** Partidas entre las que se reparte (sólo cargos prorrateados). */
   prorrateos: { destino_id: string }[];
   costo: CostoFila | null;
+  /** Precio de venta autorizado (lo registra quien autoriza). */
+  precio: { precio_unitario: string } | null;
 }
 
 export interface PropuestaFila {
@@ -402,6 +407,8 @@ export async function obtenerCotizacion(
     for (const pa of p.partidas) {
       const costo = pa.costo as CostoFila | CostoFila[] | null;
       pa.costo = Array.isArray(costo) ? (costo[0] ?? null) : costo;
+      const precio = pa.precio as PartidaFila['precio'] | PartidaFila['precio'][];
+      pa.precio = Array.isArray(precio) ? (precio[0] ?? null) : precio;
     }
   return { cotizacion: c, revision: r };
 }
@@ -420,4 +427,66 @@ export async function listarCatalogosCotizacion(): Promise<CatalogosCotizacion> 
     unidades: (exigir(unidades, 'las unidades') ?? []) as unknown as CatalogosCotizacion['unidades'],
     monedas: (exigir(monedas, 'las monedas') ?? []) as unknown as CatalogosCotizacion['monedas'],
   };
+}
+
+// ───────────── Condiciones y financiamiento (2026-10-05) ─────────────
+
+export interface CondicionCatalogo {
+  id: string;
+  nombre: string;
+  contenido: unknown;
+  orden: number;
+  activa: boolean;
+}
+
+export interface CondicionRevision {
+  id: string;
+  orden: number;
+  condicion_id: string | null;
+  contenido: unknown;
+}
+
+export interface FinanciamientoFila {
+  id: string;
+  propuesta_id: string;
+  esquema_id: string;
+  plazo_meses: number;
+  mensualidad: string | null;
+  valor_residual: string | null;
+  factor: string | null;
+  tasa_interes: string | null;
+  gastos_apertura: string | null;
+  orden: number;
+}
+
+export async function listarCondicionesCatalogo(soloActivas = true): Promise<CondicionCatalogo[]> {
+  const supabase = await clienteServidor();
+  let q = supabase.from('condiciones_comerciales').select(CONSULTAS.condiciones).order('orden');
+  if (soloActivas) q = q.eq('activa', true);
+  return (exigir(await q, 'las condiciones') ?? []) as unknown as CondicionCatalogo[];
+}
+
+export async function listarCondicionesDeRevision(revisionId: string): Promise<CondicionRevision[]> {
+  const supabase = await clienteServidor();
+  return (exigir(
+    await supabase
+      .from('revision_condiciones')
+      .select(CONSULTAS.revisionCondiciones)
+      .eq('revision_id', revisionId)
+      .order('orden'),
+    'las condiciones de la cotización',
+  ) ?? []) as unknown as CondicionRevision[];
+}
+
+export async function listarFinanciamiento(propuestaIds: string[]): Promise<FinanciamientoFila[]> {
+  if (!propuestaIds.length) return [];
+  const supabase = await clienteServidor();
+  return (exigir(
+    await supabase
+      .from('propuesta_financiamientos')
+      .select(CONSULTAS.financiamientos)
+      .in('propuesta_id', propuestaIds)
+      .order('orden'),
+    'el financiamiento',
+  ) ?? []) as unknown as FinanciamientoFila[];
 }

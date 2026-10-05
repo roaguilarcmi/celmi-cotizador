@@ -76,3 +76,45 @@ export const propuestasCotizacionSchema = z
 
 export type PropuestaCotizacion = z.infer<typeof propuestaCotizacionSchema>;
 export type PartidaCotizacion = z.infer<typeof partidaCotizacionSchema>;
+
+/** Condiciones elegidas para una revisión, en orden (ajustables sólo para esa cotización). */
+export const condicionesRevisionSchema = z
+  .array(
+    z.object({
+      condicion_id: z
+        .union([uuid, z.literal('')])
+        .nullable()
+        .default(null),
+      contenido: contenidoEnriquecidoSchema,
+    }),
+  )
+  .max(60, 'Máximo 60 condiciones');
+
+const decimales = (n: number, mensaje: string) =>
+  z
+    .union([
+      z.literal(''),
+      z
+        .string()
+        .trim()
+        .regex(new RegExp(`^\\d+(\\.\\d{1,${n}})?$`), mensaje),
+    ])
+    .default('');
+
+/** Una fila de la propuesta de financiamiento: esquema y plazo con sus montos (se capturan, no se calculan). */
+export const financiamientoSchema = z
+  .array(
+    z.object({
+      propuesta_id: uuid,
+      esquema_id: z.string().min(1).max(60),
+      plazo_meses: z.number({ error: 'Plazo no válido' }).int('Plazo en meses enteros').min(1).max(240),
+      mensualidad: decimales(2, 'Mensualidad con máximo 2 decimales'),
+      valor_residual: decimales(2, 'Valor residual con máximo 2 decimales'),
+      factor: decimales(6, 'Factor con máximo 6 decimales'),
+      tasa_interes: decimales(4, 'Tasa con máximo 4 decimales'),
+      gastos_apertura: decimales(2, 'Gastos con máximo 2 decimales'),
+    }),
+  )
+  .max(500);
+
+export type FinanciamientoCaptura = z.infer<typeof financiamientoSchema>[number];

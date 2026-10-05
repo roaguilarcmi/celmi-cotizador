@@ -75,13 +75,14 @@ export const SECCIONES: Seccion[] = [
 /** El paso actual muestra el nombre completo; los demás, el corto (el completo queda en el título). */
 export const PASOS_WIZARD = [
   { corto: 'Cliente', largo: 'Cliente y oportunidad' },
-  { corto: 'Esquema', largo: 'Esquema de adquisición' },
   // Un solo paso para partidas y costos (2026-10-05): toda la información en una tabla compacta.
   { corto: 'Partidas', largo: 'Partidas y costos' },
   // Condiciones antes de autorizar (2026-10-05): quien autoriza ve la cotización completa y la vigencia no cambia
   // después de autorizada.
   { corto: 'Condiciones', largo: 'Condiciones comerciales' },
   { corto: 'Autorización', largo: 'Margen y autorización' },
+  // Después de autorizar precios, los esquemas de financiamiento por propuesta (2026-10-05).
+  { corto: 'Financiamiento', largo: 'Propuesta de financiamiento' },
   { corto: 'Vista previa', largo: 'Vista previa' },
   { corto: 'Emisión', largo: 'Emisión' },
 ] as const;

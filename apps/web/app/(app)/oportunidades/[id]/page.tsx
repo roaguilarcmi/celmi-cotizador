@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import {
   listarBorradores,
   listarCotizaciones,
-  listarEsquemas,
   listarEstados,
   listarMisTareas,
   listarSeguimiento,
@@ -21,9 +20,8 @@ export default async function PaginaOportunidad({ params }: { params: Promise<{ 
   // RLS: si la oportunidad no es suya (ni colabora, ni es admin), la base no la devuelve.
   const o = await obtenerOportunidad(id);
   if (!o) notFound();
-  const [estados, esquemas, seguimiento, cliente, tareas, borradores, cotizaciones] = await Promise.all([
+  const [estados, seguimiento, cliente, tareas, borradores, cotizaciones] = await Promise.all([
     listarEstados(false),
-    listarEsquemas(false),
     listarSeguimiento(id),
     o.cliente ? obtenerCliente(o.cliente.id) : Promise.resolve(null),
     listarMisTareas({ oportunidadId: id }),
@@ -35,7 +33,6 @@ export default async function PaginaOportunidad({ params }: { params: Promise<{ 
     <FichaOportunidad
       o={o}
       estados={estados.filter((e) => e.activo || e.id === o.estado_id)}
-      esquemas={esquemas}
       contactos={cliente?.contactos ?? []}
       seguimiento={seguimiento}
       tareas={tareas}

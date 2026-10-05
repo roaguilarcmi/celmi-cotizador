@@ -6,7 +6,14 @@ import { useEffect, useState, useTransition, type ClipboardEvent, type ReactNode
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
 import { Pill, Tarjeta } from '@/components/ui';
-import type { CotizacionFila, RevisionDetalle } from '@/lib/datos';
+import type {
+  CondicionCatalogo,
+  CondicionRevision,
+  CotizacionFila,
+  Esquema,
+  FinanciamientoFila,
+  RevisionDetalle,
+} from '@/lib/datos';
 import { guardarPartidas } from '../acciones';
 import { ESTADOS } from '../estados';
 import {
@@ -19,12 +26,16 @@ import {
 } from './modelo';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import { PasoCondiciones } from './PasoCondiciones';
+import { PasoFinanciamiento } from './PasoFinanciamiento';
 import { VentanaPartida } from './FormularioPartida';
 import { PegarExcel } from './PegarExcel';
 import { TablaPartidas } from './TablaPartidas';
 
-/** 2: Partidas y costos (un solo paso, decisión 2026-10-05) · 3: Condiciones · 4: Autorización. */
-export type Paso = 2 | 3 | 4;
+/**
+ * Pasos del wizard propios de la cotización (decisiones 2026-10-05): 1 Partidas y costos · 2 Condiciones ·
+ * 3 Autorización · 4 Financiamiento. (0 es la oportunidad; 5 y 6, vista previa y emisión, llegan en la Fase 4.)
+ */
+export type Paso = 1 | 2 | 3 | 4;
 
 export function EditorCotizacion({
   cotizacion,
@@ -32,12 +43,22 @@ export function EditorCotizacion({
   catalogos,
   puedeEditar,
   pasoInicial,
+  catalogoCondiciones,
+  condiciones,
+  esquemasFinanciamiento,
+  financiamiento,
+  tipoOportunidad,
 }: {
   cotizacion: CotizacionFila;
   revision: RevisionDetalle;
   catalogos: Catalogos;
   puedeEditar: boolean;
   pasoInicial: Paso;
+  catalogoCondiciones: CondicionCatalogo[];
+  condiciones: CondicionRevision[];
+  esquemasFinanciamiento: Esquema[];
+  financiamiento: FinanciamientoFila[];
+  tipoOportunidad: 'adquisicion' | 'arrendamiento';
 }) {
   const editable = puedeEditar && (revision.estado === 'borrador' || revision.estado === 'rechazada');
   const [propuestas, setPropuestas] = useState(() => desdeRevision(revision));
@@ -93,7 +114,7 @@ export function EditorCotizacion({
 
   const irA = (nuevo: Paso) => {
     // Al salir de Partidas con cambios, primero se guardan.
-    if (sucio && nuevo > 2) guardar(() => setPaso(nuevo));
+    if (sucio && nuevo > 1) guardar(() => setPaso(nuevo));
     else setPaso(nuevo);
   };
 
@@ -165,10 +186,10 @@ export function EditorCotizacion({
       </header>
 
       <div className="mb-5">
-        <PasosWizard actual={paso} disponibles={[2, 3, 4]} alElegir={(p) => irA(p as Paso)} />
+        <PasosWizard actual={paso} disponibles={[1, 2, 3, 4]} alElegir={(p) => irA(p as Paso)} />
       </div>
 
-      {!editable && paso === 2 && (
+      {!editable && paso === 1 && (
         <p className="mb-4 flex items-center gap-2 rounded-md border border-borde bg-superficie-2 px-4 py-3 text-[13px] text-texto-suave">
           <Icon name="candado" size={16} />
           {revision.estado === 'pendiente_autorizacion'
@@ -179,7 +200,7 @@ export function EditorCotizacion({
         </p>
       )}
 
-      {paso === 2 && propuesta && (
+      {paso === 1 && propuesta && (
         <Tarjeta className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-borde px-4 py-3">
             <div role="tablist" aria-label="Propuestas" className="mr-auto flex flex-wrap gap-1.5">
@@ -280,8 +301,26 @@ export function EditorCotizacion({
         </Tarjeta>
       )}
 
-      {paso === 3 && <PasoCondiciones revision={revision} cotizacionId={cotizacion.id} editable={editable} />}
+      {paso === 2 && (
+        <PasoCondiciones
+          revision={revision}
+          cotizacionId={cotizacion.id}
+          editable={editable}
+          catalogo={catalogoCondiciones}
+          elegidasIniciales={condiciones}
+        />
+      )}
       {paso === 4 && (
+        <PasoFinanciamiento
+          revision={revision}
+          cotizacionId={cotizacion.id}
+          puedeEditar={puedeEditar}
+          esquemas={esquemasFinanciamiento}
+          filasIniciales={financiamiento}
+          tipoOportunidad={tipoOportunidad}
+        />
+      )}
+      {paso === 3 && (
         <PasoAutorizacion
           revision={revision}
           cotizacionId={cotizacion.id}
@@ -291,11 +330,11 @@ export function EditorCotizacion({
         />
       )}
 
-      {paso === 2 && (
+      {paso === 1 && (
         <div className="mt-4 flex justify-end">
           <button
             type="button"
-            onClick={() => irA(3)}
+            onClick={() => irA(2)}
             className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-paso px-4 text-sm font-semibold text-white hover:brightness-110"
           >
             Siguiente: Condiciones

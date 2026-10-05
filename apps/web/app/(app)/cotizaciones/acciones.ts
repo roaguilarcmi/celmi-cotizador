@@ -1,6 +1,11 @@
 'use server';
 
-import { leerContenido, propuestasCotizacionSchema } from '@celmi/validation';
+import {
+  condicionesRevisionSchema,
+  financiamientoSchema,
+  normalizarContenido,
+  propuestasCotizacionSchema,
+} from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { obtenerSesion } from '@/lib/sesion';
@@ -73,33 +78,6 @@ export async function guardarPartidas(
   return { ok: 'Cambios guardados.' };
 }
 
-/** Vigencia y condiciones comerciales (sólo en borrador o rechazada). */
-export async function guardarCondiciones(
-  revisionId: string,
-  cotizacionId: string,
-  _previo: Resultado,
-  datos: FormData,
-): Promise<Resultado> {
-  await obtenerSesion();
-  const vigencia = String(datos.get('vigencia_hasta') ?? '');
-  if (vigencia && Number.isNaN(Date.parse(vigencia))) return { error: 'La vigencia no es válida.' };
-  const condiciones = leerContenido(datos.get('condiciones'));
-  if (!condiciones.ok) return { error: condiciones.error };
-  const supabase = await clienteServidor();
-  const { data, error } = await supabase
-    .from('revisiones')
-    .update({
-      vigencia_hasta: vigencia ? new Date(vigencia).toISOString() : null,
-      condiciones: condiciones.doc,
-    })
-    .eq('id', revisionId)
-    .select('id');
-  if (error) return { error: mensajeDe(error, 'No se pudieron guardar las condiciones.') };
-  if (!data?.length) return { error: 'Esta revisión ya no se puede modificar.' };
-  refrescar(cotizacionId);
-  return { ok: 'Condiciones guardadas.' };
-}
-
 /** Enviar a autorización o retirarla a borrador (la base valida la transición). */
 export async function cambiarEstadoRevision(
   revisionId: string,
@@ -117,4 +95,54 @@ export async function cambiarEstadoRevision(
   if (!data?.length) return { error: 'No tienes permiso para cambiar esta revisión.' };
   refrescar(cotizacionId);
   return { ok: estado === 'pendiente_autorizacion' ? 'Enviada a autorización.' : 'Regresó a borrador.' };
+}
+
+/** Vigencia y condiciones elegidas (del catálogo, ajustables para esta cotización). */
+export async function guardarCondicionesCotizacion(
+  revisionId: string,
+  cotizacionId: string,
+  vigencia: string,
+  condiciones: unknown,
+): Promise<Resultado> {
+  await obtenerSesion();
+  if (vigencia && Number.isNaN(Date.parse(vigencia))) return { error: 'La vigencia no es válida.' };
+  const lista = Array.isArray(condiciones)
+    ? condiciones.map((c: { contenido?: unknown }) => ({
+        ...c,
+        contenido: normalizarContenido(c?.contenido),
+      }))
+    : condiciones;
+  const leido = condicionesRevisionSchema.safeParse(lista);
+  if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa las condiciones.' };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('revisiones')
+    .update({ vigencia_hasta: vigencia ? new Date(vigencia).toISOString() : null })
+    .eq('id', revisionId)
+    .select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo guardar la vigencia.') };
+  if (!data?.length) return { error: 'Esta revisión ya no se puede modificar.' };
+  const r = await supabase.rpc('guardar_condiciones', { revision: revisionId, condiciones: leido.data });
+  if (r.error) return { error: mensajeDe(r.error, 'No se pudieron guardar las condiciones.') };
+  refrescar(cotizacionId);
+  return { ok: 'Condiciones guardadas.' };
+}
+
+/** Propuesta de financiamiento (después de autorizar precios; no requiere otra autorización). */
+export async function guardarFinanciamiento(
+  revisionId: string,
+  cotizacionId: string,
+  filas: unknown,
+): Promise<Resultado> {
+  await obtenerSesion();
+  const leido = financiamientoSchema.safeParse(filas);
+  if (!leido.success) {
+    const e = leido.error.issues[0];
+    return { error: e?.message ?? 'Revisa el financiamiento.' };
+  }
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('guardar_financiamiento', { revision: revisionId, filas: leido.data });
+  if (error) return { error: mensajeDe(error, 'No se pudo guardar el financiamiento.') };
+  refrescar(cotizacionId);
+  return { ok: 'Financiamiento guardado.' };
 }

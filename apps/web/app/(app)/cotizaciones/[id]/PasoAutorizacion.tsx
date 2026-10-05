@@ -28,7 +28,7 @@ export function PasoAutorizacion({
   cotizacionId: string;
   puedeEditar: boolean;
   propuestas: PropuestaEditable[];
-  onIrA: (paso: 2 | 3) => void;
+  onIrA: (paso: 1 | 2 | 4) => void;
 }) {
   const [pendiente, iniciar] = useTransition();
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
@@ -36,27 +36,27 @@ export function PasoAutorizacion({
   const partidas = propuestas.flatMap(todasLasFilas);
   const sinCosto = propuestas.reduce((s, p) => s + resumenPropuesta(p).sinCosto, 0);
   const conErrores = partidas.filter((f) => Object.keys(erroresDeFila(f)).length).length;
-  const checklist: { ok: boolean; texto: string; paso?: 2 | 3; aviso?: boolean }[] = [
+  const checklist: { ok: boolean; texto: string; paso?: 1 | 2; aviso?: boolean }[] = [
     {
       ok: partidas.length > 0,
       texto: `${partidas.length} partidas en ${propuestas.length} propuestas`,
-      paso: 2,
+      paso: 1,
     },
     {
       ok: conErrores === 0,
       texto: conErrores ? `${conErrores} partidas con datos por corregir` : 'Datos de las partidas completos',
-      paso: 2,
+      paso: 1,
     },
     {
       ok: sinCosto === 0,
       texto: sinCosto ? `${sinCosto} partidas sin costo` : 'Todas las partidas tienen costo',
-      paso: 2,
+      paso: 1,
     },
     {
       ok: Boolean(revision.vigencia_hasta),
       aviso: true,
       texto: revision.vigencia_hasta ? 'Vigencia definida' : 'Sin vigencia (recomendada)',
-      paso: 3,
+      paso: 2,
     },
   ];
   const lista = checklist.every((c) => c.ok || c.aviso);
