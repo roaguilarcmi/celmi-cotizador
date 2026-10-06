@@ -295,16 +295,16 @@ function BotonIcono({
 
   if (esperando) {
     return (
-      <button
-        type="button"
+      <Boton
+        variante="peligroFuerte"
+        tamano="chico"
         onClick={() => {
           setEsperando(false);
           onClick();
         }}
-        className="inline-flex h-10 cursor-pointer items-center rounded-md bg-peligro px-3 text-[13px] font-semibold text-white"
       >
         ¿Confirmar?
-      </button>
+      </Boton>
     );
   }
   return (

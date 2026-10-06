@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
-import { Titulo2 } from '@/components/ui';
+import { Boton, Titulo2 } from '@/components/ui';
 import { crearCliente, type EstadoFormulario } from './acciones';
 
 /** Alta de cliente con su primer contacto. `destino="oportunidad"` continúa con la oportunidad nueva. */
@@ -76,13 +76,9 @@ export function FormularioCliente({
           <BotonEnviar>{destino ? 'Guardar y continuar' : 'Guardar cliente'}</BotonEnviar>
         </div>
         {onCancelar && (
-          <button
-            type="button"
-            onClick={onCancelar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={onCancelar}>
             Cancelar
-          </button>
+          </Boton>
         )}
       </div>
     </form>

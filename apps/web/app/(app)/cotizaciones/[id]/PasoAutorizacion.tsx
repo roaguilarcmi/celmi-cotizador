@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from 'react';
 import { Icon } from '@/components/Icon';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { RevisionDetalle } from '@/lib/datos';
 import { cambiarEstadoRevision } from '../acciones';
 import { erroresDeFila, resumenPropuesta, todasLasFilas, type PropuestaEditable } from './modelo';
@@ -76,15 +76,15 @@ export function PasoAutorizacion({
           Enviada el {revision.enviada_en ? fechaHora.format(new Date(revision.enviada_en)) : '—'}. Quien
           autoriza define la utilidad y los precios.
           {puedeEditar && (
-            <button
-              type="button"
+            <Boton
+              tamano="chico"
+              icono="izquierda"
               disabled={pendiente}
               onClick={() => cambiar('borrador')}
-              className="mt-3 inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold text-texto hover:bg-superficie-2"
+              className="mt-3"
             >
-              <Icon name="izquierda" size={15} />
               Retirar para corregir
-            </button>
+            </Boton>
           )}
         </Estado>
       )}
@@ -137,15 +137,15 @@ export function PasoAutorizacion({
             ))}
           </ul>
           {puedeEditar && (
-            <button
-              type="button"
+            <Boton
+              variante="primario"
+              icono="autorizaciones"
               disabled={pendiente || !lista}
               onClick={() => cambiar('pendiente_autorizacion')}
-              className="mt-6 inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-md bg-acento px-5 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-6"
             >
-              <Icon name="autorizaciones" size={18} />
               {pendiente ? 'Enviando…' : 'Enviar a autorización'}
-            </button>
+            </Boton>
           )}
         </>
       )}

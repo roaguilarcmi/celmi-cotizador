@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Icon } from '@/components/Icon';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { CotizacionFila } from '@/lib/datos';
 import { crearCotizacion } from '../../cotizaciones/acciones';
 import { ListaCotizaciones } from '../../cotizaciones/ListaCotizaciones';
@@ -24,8 +23,10 @@ export function SeccionCotizaciones({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Titulo2>Cotizaciones</Titulo2>
         {puedeCrear && (
-          <button
-            type="button"
+          <Boton
+            variante="primario"
+            tamano="chico"
+            icono="mas"
             disabled={pendiente}
             onClick={() =>
               iniciar(async () => {
@@ -34,11 +35,9 @@ export function SeccionCotizaciones({
                 if (r?.error) setError(r.error);
               })
             }
-            className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
           >
-            <Icon name="mas" strokeWidth={2.2} />
             {pendiente ? 'Creando…' : 'Nueva cotización'}
-          </button>
+          </Boton>
         )}
       </div>
       {error && <p className="mt-2 text-xs text-peligro">{error}</p>}

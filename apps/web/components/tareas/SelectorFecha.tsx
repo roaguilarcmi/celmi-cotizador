@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { capaDe } from './clicLibre';
 
 const dos = (n: number) => String(n).padStart(2, '0');
@@ -220,19 +221,12 @@ export function SelectorFecha({
                   />
                 )}
                 <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="min-h-10 flex-1 cursor-pointer rounded-md bg-acento px-3 text-[13px] font-semibold text-sobre-acento hover:brightness-110"
-                  >
+                  <Boton type="submit" variante="primario" tamano="chico" className="flex-1">
                     Guardar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEligiendo(false)}
-                    className="min-h-10 cursor-pointer rounded-md px-3 text-[13px] font-semibold text-texto-suave hover:bg-superficie-2"
-                  >
+                  </Boton>
+                  <Boton variante="fantasma" tamano="chico" onClick={() => setEligiendo(false)}>
                     Atrás
-                  </button>
+                  </Boton>
                 </div>
               </form>
             )}

@@ -5,7 +5,7 @@ import { useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import type { CondicionCatalogo } from '@/lib/datos';
 import { mover } from '@/lib/reordenar';
@@ -56,14 +56,9 @@ export function EditorCondiciones({
           </p>
         </div>
         {puedeEditar && (
-          <button
-            type="button"
-            onClick={() => setAbierta('nueva')}
-            className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-[13px] font-semibold text-sobre-acento hover:brightness-110"
-          >
-            <Icon name="mas" size={16} strokeWidth={2.4} />
+          <Boton variante="primario" tamano="chico" icono="mas" onClick={() => setAbierta('nueva')}>
             Nueva condición
-          </button>
+          </Boton>
         )}
       </div>
 
@@ -126,13 +121,13 @@ export function EditorCondiciones({
               </div>
               {puedeEditar && (
                 <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
+                  <Boton
+                    variante="fantasma"
+                    tamano="chico"
                     onClick={() => iniciar(async () => avisar(await cambiarCondicionActiva(c.id, !c.activa)))}
-                    className="min-h-8 cursor-pointer rounded-md px-2.5 text-xs font-semibold text-texto-suave hover:bg-superficie-2 hover:text-texto"
                   >
                     {c.activa ? 'Desactivar' : 'Activar'}
-                  </button>
+                  </Boton>
                   <button
                     type="button"
                     onClick={() => setAbierta(c.id)}
@@ -214,22 +209,13 @@ function FormularioCondicion({
       </div>
       {error && <p className="text-xs text-peligro">{error}</p>}
       <div className="flex gap-2.5">
-        <button
-          type="submit"
-          disabled={pendiente}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
-        >
-          <Icon name="palomita" strokeWidth={2.2} />
+        <Boton type="submit" variante="primario" icono="palomita" disabled={pendiente}>
           {pendiente ? 'Guardando…' : 'Guardar'}
-        </button>
+        </Boton>
         {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
             Cancelar
-          </button>
+          </Boton>
         )}
       </div>
     </form>

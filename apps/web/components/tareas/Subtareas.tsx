@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import {
   cambiarEstadoTarea,
@@ -290,13 +291,9 @@ function AgregarSubtarea({ padreId }: { padreId: string }) {
           className="h-10 min-w-0 flex-1 rounded-md border-2 border-dashed border-texto/15 bg-transparent px-3 text-sm outline-none placeholder:text-texto-suave focus:border-solid focus:border-acento focus:bg-superficie focus:ring-4 focus:ring-acento-suave"
         />
         {titulo.trim() && (
-          <button
-            type="submit"
-            disabled={pendiente}
-            className="min-h-10 cursor-pointer rounded-md bg-acento px-3 text-[13px] font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
-          >
+          <Boton type="submit" variante="primario" tamano="chico" disabled={pendiente}>
             {pendiente ? 'Agregando…' : 'Agregar'}
-          </button>
+          </Boton>
         )}
       </div>
       {error && <p className="mt-1 pl-9 text-xs text-peligro">{error}</p>}
@@ -315,27 +312,24 @@ function EstadoSubtarea({ s, onCancelada }: { s: SubtareaFila; onCancelada: () =
     });
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-borde pt-4">
-      <button
-        type="button"
+      <Boton
+        variante={hecha ? 'secundario' : 'exito'}
+        tamano="chico"
+        icono="palomita"
         disabled={pendiente}
         onClick={() => cambiar(hecha ? 'pendiente' : 'completada')}
-        className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-60 ${
-          hecha
-            ? 'border-borde text-texto-suave hover:text-texto'
-            : 'border-exito/40 bg-exito-suave text-exito hover:border-exito'
-        }`}
       >
-        <Icon name="palomita" size={15} strokeWidth={2.4} />
         {hecha ? 'Reabrir subtarea' : 'Marcar como completada'}
-      </button>
-      <button
-        type="button"
+      </Boton>
+      <Boton
+        variante="peligro"
+        tamano="chico"
         disabled={pendiente}
         onClick={() => cambiar('cancelada')}
-        className="ml-auto min-h-10 cursor-pointer rounded-md px-3 text-[13px] font-semibold text-texto-suave hover:bg-peligro-suave hover:text-peligro disabled:opacity-60"
+        className="ml-auto"
       >
         Cancelar subtarea
-      </button>
+      </Boton>
     </div>
   );
 }

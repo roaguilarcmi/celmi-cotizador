@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
-import { Avatar, Pill, Tarjeta, Titulo2, type Tono } from '@/components/ui';
+import { Avatar, clasesBoton, Pill, Tarjeta, Titulo2, type Tono } from '@/components/ui';
 import { ListaTareas } from '@/components/tareas/ListaTareas';
 import { listarEstados, listarMisTareas, listarOportunidades, listarSeguimiento } from '@/lib/datos';
 import { colorAvatar, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
@@ -99,11 +99,8 @@ export default async function Inicio() {
           </h1>
         </div>
         {sesion.permisos.has('oportunidades.crear') && (
-          <Link
-            href="/oportunidades/nueva"
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-          >
-            <Icon name="mas" strokeWidth={2.2} /> Nueva oportunidad
+          <Link href="/oportunidades/nueva" className={clasesBoton('primario')}>
+            <Icon name="mas" size={18} strokeWidth={2.2} /> Nueva oportunidad
           </Link>
         )}
       </header>

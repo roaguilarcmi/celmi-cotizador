@@ -546,6 +546,8 @@ export interface RevisionBandeja {
     partidas: {
       id: string;
       cantidad: number;
+      partida_padre_id: string | null;
+      presentacion: 'linea' | 'incluida' | 'prorrateada';
       costo: { costo_unitario: number | string; tipo_cambio: number | string } | null;
     }[];
   }[];

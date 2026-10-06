@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
+import { clasesBoton } from '@/components/ui';
 
 export const metadata = { title: 'Página no encontrada' };
 
@@ -17,11 +18,8 @@ export default function NoEncontrada() {
         <p className="mt-2 text-sm text-texto-suave">
           Es posible que la dirección esté mal escrita o que la sección se haya movido.
         </p>
-        <Link
-          href="/"
-          className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-md bg-acento px-5 text-sm font-semibold text-sobre-acento hover:brightness-110"
-        >
-          <Icon name="inicio" /> Ir al inicio
+        <Link href="/" className={`mt-7 ${clasesBoton('primario')}`}>
+          <Icon name="inicio" size={18} strokeWidth={2.2} /> Ir al inicio
         </Link>
       </div>
     </main>

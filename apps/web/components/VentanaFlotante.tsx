@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
+import { Boton } from './ui';
 
 /** Permite que el botón «Cancelar» de un formulario pase por la misma confirmación que el clic fuera. */
 const Contexto = createContext<{ intentarCerrar: () => void } | null>(null);
@@ -150,40 +151,20 @@ export function VentanaFlotante({
                 </div>
                 {error && <p className="mt-3 text-xs text-peligro">{error}</p>}
                 <div className="mt-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    autoFocus
-                    onClick={() => setConfirmar(false)}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-paso px-4 text-sm font-semibold text-white hover:brightness-110"
-                  >
-                    <Icon name="izquierda" size={16} /> Seguir editando
-                  </button>
-                  <button
-                    type="button"
-                    onClick={guardar}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-                  >
-                    <Icon name="palomita" size={16} strokeWidth={2.4} />{' '}
+                  <Boton variante="paso" icono="izquierda" autoFocus onClick={() => setConfirmar(false)}>
+                    Seguir editando
+                  </Boton>
+                  <Boton variante="primario" icono="palomita" onClick={guardar}>
                     {esEdicion ? 'Guardar cambios' : 'Guardar'}
-                  </button>
+                  </Boton>
                   {onBorrador && (
-                    <button
-                      type="button"
-                      onClick={guardarBorrador}
-                      disabled={guardando}
-                      className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-borde bg-superficie px-4 text-sm font-semibold text-texto hover:bg-superficie-2 disabled:opacity-60"
-                    >
-                      <Icon name="guardado" size={16} />{' '}
+                    <Boton icono="guardado" onClick={guardarBorrador} disabled={guardando}>
                       {guardando ? 'Guardando borrador…' : 'Guardar como borrador'}
-                    </button>
+                    </Boton>
                   )}
-                  <button
-                    type="button"
-                    onClick={onCerrar}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold text-peligro hover:bg-peligro-suave"
-                  >
-                    <Icon name="cerrar" size={16} /> {esEdicion ? 'Descartar cambios' : 'Descartar'}
-                  </button>
+                  <Boton variante="peligro" icono="cerrar" onClick={onCerrar}>
+                    {esEdicion ? 'Descartar cambios' : 'Descartar'}
+                  </Boton>
                 </div>
               </div>
             </div>

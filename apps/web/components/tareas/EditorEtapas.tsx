@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition, type FormEvent, type KeyboardEvent } from 'react';
 import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { useVentana } from '@/components/VentanaFlotante';
 import { guardarEtapas } from '@/lib/acciones-etapas';
 import { COLORES_ETAPA, etapaFinal, MAX_ETAPAS, type ColorEtapa } from '@/lib/etapas-tareas';
@@ -136,8 +137,10 @@ export function EditorEtapas({ onListo }: { onListo: (ok: string) => void }) {
         ))}
       </ol>
 
-      <button
-        type="button"
+      <Boton
+        tamano="chico"
+        icono="mas"
+        className="w-fit"
         disabled={total >= MAX_ETAPAS}
         onClick={() => {
           const clave = `nueva-${Date.now()}`;
@@ -147,11 +150,9 @@ export function EditorEtapas({ onListo }: { onListo: (ok: string) => void }) {
           ]);
           setTimeout(() => document.getElementById(`${id}-${clave}`)?.focus(), 0);
         }}
-        className="inline-flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-md border-2 border-dashed border-texto/20 px-3.5 text-[13px] font-semibold text-acento-texto hover:border-acento disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Icon name="mas" size={16} strokeWidth={2.4} />
         {total >= MAX_ETAPAS ? `Máximo ${MAX_ETAPAS} etapas` : 'Agregar etapa'}
-      </button>
+      </Boton>
 
       <div className="rounded-md border border-exito/30 bg-exito-suave/40 p-2">
         <div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold text-exito">
@@ -183,22 +184,13 @@ export function EditorEtapas({ onListo }: { onListo: (ok: string) => void }) {
 
       {error && <p className="text-xs text-peligro">{error}</p>}
       <div className="flex flex-wrap items-center gap-2.5">
-        <button
-          type="submit"
-          disabled={pendiente}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
-        >
-          <Icon name="palomita" strokeWidth={2.2} />
+        <Boton type="submit" variante="primario" icono="palomita" disabled={pendiente}>
           {pendiente ? 'Guardando…' : 'Guardar etapas'}
-        </button>
+        </Boton>
         {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
             Cancelar
-          </button>
+          </Boton>
         )}
       </div>
     </form>

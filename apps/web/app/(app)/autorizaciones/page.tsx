@@ -2,7 +2,7 @@ import { costoPartida, etiquetaRevision, formatearMXN } from '@celmi/core';
 import Link from 'next/link';
 import { EnConstruccion } from '@/components/EnConstruccion';
 import { Icon } from '@/components/Icon';
-import { Pill, Tarjeta, Titulo2 } from '@/components/ui';
+import { clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { decimal } from '@/lib/corrida';
 import { listarBandeja, type RevisionBandeja } from '@/lib/datos';
 import { FOLIO_EPOXEMEX } from '@/lib/epoxemex';
@@ -112,6 +112,10 @@ function Fila({ r, pendiente }: { r: RevisionBandeja; pendiente?: boolean }) {
   const partidas = r.propuestas.reduce((s, p) => s + p.partidas.length, 0);
   const costo = pendiente ? costoDe(r) : null;
   const estado = ESTADOS[r.estado];
+  // Cargos prorrateados y adicionales: se avisan desde la bandeja para revisarlos a detalle (2026-10-06).
+  const todas = r.propuestas.flatMap((p) => p.partidas);
+  const cargos = todas.filter((pa) => pa.presentacion === 'prorrateada').length;
+  const adicionales = todas.filter((pa) => pa.partida_padre_id).length;
   return (
     <li className="border-b border-borde last:border-0">
       <Link
@@ -139,6 +143,20 @@ function Fila({ r, pendiente }: { r: RevisionBandeja; pendiente?: boolean }) {
               {r.propuestas.length === 1 ? 'propuesta' : 'propuestas'}
             </span>
           </span>
+          {(cargos > 0 || adicionales > 0) && (
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              {cargos > 0 && (
+                <Pill tono="aviso">
+                  {cargos} {cargos === 1 ? 'cargo prorrateado' : 'cargos prorrateados'}
+                </Pill>
+              )}
+              {adicionales > 0 && (
+                <Pill tono="info">
+                  {adicionales} {adicionales === 1 ? 'adicional' : 'adicionales'}
+                </Pill>
+              )}
+            </span>
+          )}
           {!pendiente && r.estado === 'rechazada' && r.comentario_autorizacion && (
             <span className="mt-1 block truncate text-[13px] text-peligro">
               «{r.comentario_autorizacion}»
@@ -167,8 +185,8 @@ function Fila({ r, pendiente }: { r: RevisionBandeja; pendiente?: boolean }) {
                 : ''}
         </span>
         {pendiente && (
-          <span className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento group-hover:brightness-110">
-            Revisar <Icon name="derecha" size={15} strokeWidth={2.2} />
+          <span className={`${clasesBoton('primario', 'chico')} group-hover:brightness-110`}>
+            Revisar <Icon name="derecha" size={16} strokeWidth={2.2} />
           </span>
         )}
       </Link>

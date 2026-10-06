@@ -222,8 +222,8 @@ export function AutorizacionDemo() {
               Corrida · {PROPUESTAS_EPOXEMEX.length} propuestas, {todas.length} partidas
             </Titulo2>
             <p className="mt-1 text-[13px] text-texto-suave">
-              Mismas columnas que el formato de Excel. Precio = costo × T.C. × (1 + utilidad), unitario
-              redondeado a 2 decimales.
+              Mismas columnas que el formato de Excel. Precio = costo × T.C. + utilidad (% sobre el costo),
+              unitario redondeado a 2 decimales.
             </p>
           </div>
           <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} />
@@ -461,14 +461,14 @@ export function AutorizacionDemo() {
             <Titulo2>Decisión</Titulo2>
             <div className="mt-4 flex flex-col gap-2.5">
               {bloqueado ? (
-                <Boton onClick={() => setBloqueado(false)} icono="candado" className="min-h-13 w-full">
+                <Boton onClick={() => setBloqueado(false)} icono="candado" className="w-full">
                   Desbloquear (sólo demostración)
                 </Boton>
               ) : (
                 <Boton
                   variante="primario"
                   icono="candado"
-                  className="min-h-13 w-full text-[15px]"
+                  className="w-full"
                   disabled={!validas}
                   onClick={() => {
                     setBloqueado(true);

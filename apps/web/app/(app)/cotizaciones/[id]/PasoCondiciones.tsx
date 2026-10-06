@@ -5,7 +5,7 @@ import { useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import type { CondicionCatalogo, CondicionRevision, RevisionDetalle } from '@/lib/datos';
 import { mover } from '@/lib/reordenar';
@@ -154,14 +154,9 @@ export function PasoCondiciones({
               En esta cotización ({elegidas.length})
             </h3>
             {editable && (
-              <button
-                type="button"
-                onClick={() => setAjustando('propia')}
-                className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-semibold text-acento-texto hover:bg-acento-suave"
-              >
-                <Icon name="mas" size={13} strokeWidth={2.6} />
+              <Boton variante="fantasma" tamano="chico" icono="mas" onClick={() => setAjustando('propia')}>
                 Condición propia
-              </button>
+              </Boton>
             )}
           </div>
           {elegidas.length === 0 ? (
@@ -247,15 +242,15 @@ export function PasoCondiciones({
 
       {editable && (
         <div className="flex flex-wrap items-center gap-3 border-t border-borde bg-superficie-2/60 px-6 py-3">
-          <button
-            type="button"
+          <Boton
+            variante="primario"
+            tamano="chico"
+            icono="guardado"
             disabled={pendiente || !sucio}
             onClick={guardar}
-            className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-[13px] font-semibold text-sobre-acento hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Icon name="guardado" size={16} />
             {pendiente ? 'Guardando…' : 'Guardar condiciones'}
-          </button>
+          </Boton>
           {sucio && <span className="text-xs font-semibold text-aviso">Cambios sin guardar</span>}
           {mensaje && (
             <span className={`text-xs font-semibold ${mensaje.error ? 'text-peligro' : 'text-exito'}`}>
@@ -317,21 +312,13 @@ function FormularioAjuste({
       />
       {error && <p className="text-xs text-peligro">{error}</p>}
       <div className="flex gap-2.5">
-        <button
-          type="submit"
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-        >
-          <Icon name="palomita" strokeWidth={2.2} />
+        <Boton type="submit" variante="primario" icono="palomita">
           Aplicar
-        </button>
+        </Boton>
         {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
             Cancelar
-          </button>
+          </Boton>
         )}
       </div>
     </form>

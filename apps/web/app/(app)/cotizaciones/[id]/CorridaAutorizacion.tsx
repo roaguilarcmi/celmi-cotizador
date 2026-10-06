@@ -12,15 +12,7 @@ import {
   type ResultadoPartida,
 } from '@celmi/core';
 import { porcentaje, tipoCambio as tipoCambioSchema } from '@celmi/validation';
-import {
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-  type ButtonHTMLAttributes,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   COLUMNAS,
@@ -30,9 +22,9 @@ import {
   type Columna,
   type Grupo,
 } from '@/components/corrida/Corrida';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
-import { Pill } from '@/components/ui';
+import { Boton, Pill } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import { decimal, entradaCorrida, monedasExtranjeras } from '@/lib/corrida';
 import type { PartidaFila, RevisionDetalle } from '@/lib/datos';
@@ -153,6 +145,8 @@ export function CorridaAutorizacion({
   const [completaGuardada, guardarCompleta] = usePreferencia('celmi-corrida-completa');
   const completa = completaGuardada === '1';
   const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | null>(null);
+  /** Fila resaltada un momento al saltar a ella desde el aviso de revisión. */
+  const [resaltada, setResaltada] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
   const area = useRef<HTMLDivElement>(null);
@@ -271,7 +265,7 @@ export function CorridaAutorizacion({
   const numAdicionales = revision.propuestas.filter((p) => p.es_adicional).length;
   const generalValida = general === '' || porcentaje.safeParse(general).success;
 
-  // Precio = costo × T.C. × (1 + utilidad): en pesos el T.C. es 1 y no se modifica (decisión 2026-10-06).
+  // Precio = costo × T.C. + utilidad (% sobre el costo en pesos); en pesos el T.C. es 1 y no se modifica (2026-10-06).
   const conCliente = todas.some((p) => p.presentacion !== 'linea');
   const disponibles = COLUMNAS.flatMap((c) => (c.id === 'pvUnit' && conCliente ? [c, COLUMNA_CLIENTE] : [c]));
   const columnas = disponibles.filter((c) => !ocultas.has(c.id));
@@ -286,6 +280,34 @@ export function CorridaAutorizacion({
     for (const f of filas) refDe.set(f.p.id, f.ref);
     return filas;
   });
+  // Cargos prorrateados y adicionales: llaman la atención de quien autoriza para revisarlos a detalle (2026-10-06).
+  const especiales = filasPorPropuesta.flat().filter((f) => f.tipo !== 'partida');
+  const cuenta = (t: FilaCorrida['tipo']) => especiales.filter((f) => f.tipo === t).length;
+  const resumenEspeciales = (() => {
+    const cargos = cuenta('cargo');
+    const incluidos = cuenta('incluida');
+    const visibles = cuenta('visible');
+    const adicionales = incluidos + visibles;
+    const partes: string[] = [];
+    if (cargos) partes.push(`${cargos} ${cargos === 1 ? 'cargo prorrateado' : 'cargos prorrateados'}`);
+    if (adicionales) {
+      const detalle = [
+        incluidos ? `${incluidos} ${incluidos === 1 ? 'incluido' : 'incluidos'} en su partida` : '',
+        visibles ? `${visibles} ${visibles === 1 ? 'visible' : 'visibles'}` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+      partes.push(`${adicionales} ${adicionales === 1 ? 'adicional' : 'adicionales'} (${detalle})`);
+    }
+    return partes.join(' y ');
+  })();
+  const irAFila = (id: string) => {
+    document
+      .getElementById(`fila-${id}`)
+      ?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    setResaltada(id);
+    window.setTimeout(() => setResaltada((r) => (r === id ? null : r)), 2200);
+  };
 
   /** Utilidad de lo que paga el cliente en cada propuesta: subtotal menos el costo de lo que incluye. */
   const utilidadPropuesta = (i: number) => {
@@ -441,8 +463,8 @@ export function CorridaAutorizacion({
     i > 0 && columnas[i - 1]?.grupo !== columnas[i]?.grupo ? 'border-l border-l-texto/25' : '';
   const alinear = (c: Columna) =>
     CENTRADAS.has(c.id) ? 'text-center' : c.numero ? 'tabular text-right' : 'text-left';
-  const fija1 = 'sticky left-0 z-10 w-14 min-w-14';
-  const fija2 = 'sticky left-14 z-10 w-64 min-w-64 max-w-64';
+  const fija1 = 'sticky left-0 z-10 w-16 min-w-16';
+  const fija2 = 'sticky left-16 z-10 w-72 min-w-72 max-w-72';
 
   const estadoPill =
     revision.estado === 'autorizada' || revision.estado === 'emitida' ? (
@@ -456,7 +478,7 @@ export function CorridaAutorizacion({
   const contenido = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-borde bg-superficie">
       {/* Barra 1: estado, cifras clave y decisión. */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-borde px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-borde px-4 py-2.5">
         <div className="mr-auto min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
@@ -517,20 +539,22 @@ export function CorridaAutorizacion({
         />
         {editable && (
           <div className="flex flex-wrap items-center gap-2">
-            <BotonBarra icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
+            <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
               Guardar avance
-            </BotonBarra>
-            <BotonBarra
+            </Boton>
+            <Boton
+              tamano="chico"
               icono="cerrar"
-              tono="peligro"
+              variante="peligro"
               disabled={pendiente}
               onClick={() => setDialogo('rechazar')}
             >
               Rechazar
-            </BotonBarra>
-            <BotonBarra
+            </Boton>
+            <Boton
+              tamano="chico"
               icono="candado"
-              tono="primario"
+              variante="primario"
               disabled={pendiente || !validas || !tcsValidos}
               onClick={() => setDialogo('autorizar')}
               title={
@@ -540,16 +564,16 @@ export function CorridaAutorizacion({
               }
             >
               Autorizar
-            </BotonBarra>
+            </Boton>
           </div>
         )}
       </div>
 
       {/* Barra 2: parámetros de la autorización. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde bg-superficie-2/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-borde bg-superficie-2/60 px-4 py-2.5">
         <span
           title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-borde bg-superficie px-2.5 text-xs font-semibold text-texto-suave"
+          className="inline-flex h-10 items-center gap-1.5 rounded-md border border-borde bg-superficie px-3 text-xs font-semibold text-texto-suave"
         >
           <Icon name="candado" size={12} />
           T.C. MXN <strong className="text-texto">1</strong>
@@ -572,7 +596,7 @@ export function CorridaAutorizacion({
                 placeholder="0.00000"
                 aria-invalid={!valido}
                 onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
-                className={`tabular h-8 w-28 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-aviso disabled:opacity-80 ${
+                className={`tabular h-9 w-28 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-aviso disabled:opacity-80 ${
                   valido ? 'border-aviso/40' : 'border-peligro'
                 }`}
               />
@@ -592,46 +616,35 @@ export function CorridaAutorizacion({
               inputMode="decimal"
               placeholder="13.5"
               aria-invalid={!generalValida}
-              className={`tabular h-8 w-20 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-exito ${
+              className={`tabular h-9 w-20 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-exito ${
                 generalValida ? 'border-exito/40' : 'border-peligro'
               }`}
             />
-            <button
-              type="button"
+            <Boton
+              tamano="chico"
+              variante="primario"
               onClick={() => setPorPartida({})}
               disabled={!general || !generalValida}
-              className="h-8 cursor-pointer rounded-sm bg-exito px-2.5 text-xs font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Aplicar a todas
-            </button>
+            </Boton>
           </div>
         )}
-        {editable && (
-          <p className="flex items-center gap-1.5 text-[11px] leading-tight text-exito">
-            <span className="inline-block size-0 border-t-[7px] border-l-[7px] border-t-acento border-l-transparent" />
-            <span>
-              Cada partida puede llevar su propia utilidad:
-              <br />
-              escríbela en su celda (▲ = personalizada).
-            </span>
-          </p>
-        )}
         <p className="text-[11px] leading-tight text-texto-suave">
-          Precio = costo × T.C. × (1 + utilidad %),
+          Precio = costo × T.C. + utilidad (% sobre el costo),
           <br />
           unitario redondeado a 2 decimales.
         </p>
         <div className="ml-auto flex items-center gap-2">
-          <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} compacto />
-          <button
-            type="button"
+          <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
+          <Boton
+            tamano="chico"
+            icono={completa ? 'compactar' : 'expandir'}
             onClick={() => guardarCompleta(completa ? null : '1')}
             title={completa ? 'Salir de pantalla completa (Esc)' : 'Usar toda la pantalla'}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3 text-[13px] font-semibold hover:bg-superficie-2"
           >
-            <Icon name={completa ? 'compactar' : 'expandir'} size={16} />
-            {completa ? 'Salir' : 'Pantalla completa'}
-          </button>
+            {completa ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          </Boton>
         </div>
       </div>
 
@@ -644,15 +657,41 @@ export function CorridaAutorizacion({
         </p>
       )}
 
+      {especiales.length > 0 && (
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-aviso/30 bg-aviso-suave px-4 py-2"
+        >
+          <Icon name="campana" size={18} className="shrink-0 text-aviso" />
+          <p className="text-[13px] text-aviso">
+            <strong>Revisa a detalle:</strong> esta cotización tiene {resumenEspeciales}.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {especiales.map((f) => (
+              <Boton
+                key={f.p.id}
+                tamano="chico"
+                onClick={() => irAFila(f.p.id)}
+                title={`Ir a ${f.ref}: ${f.p.descripcion}`}
+                className="max-w-60"
+              >
+                <span className="font-bold">{f.ref}</span>
+                <span className="truncate font-normal">{f.p.descripcion}</span>
+              </Boton>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* La hoja: único scroll vertical (y horizontal para las columnas). */}
       <div ref={hoja} className="min-h-0 flex-1 overflow-auto">
-        <table className="w-max min-w-full border-separate border-spacing-0 text-[12px] leading-tight">
+        <table className="w-max min-w-full border-separate border-spacing-0 text-[13px] leading-snug">
           <thead className="sticky top-0 z-20">
             <tr>
               <th
                 scope="colgroup"
                 colSpan={2}
-                className={`sticky left-0 z-10 ${borde} bg-superficie px-2 py-1 text-left text-[11px] font-bold text-texto-suave`}
+                className={`sticky left-0 z-10 ${borde} bg-superficie px-3 py-1.5 text-left text-xs font-bold text-texto-suave`}
               >
                 Partida y descripción
               </th>
@@ -661,17 +700,17 @@ export function CorridaAutorizacion({
                   key={g}
                   scope="colgroup"
                   colSpan={span}
-                  className={`${borde} border-l border-l-texto/25 px-2 py-1 text-left text-[11px] font-bold tracking-wide uppercase ${GRUPOS[g].banda} ${GRUPOS[g].texto}`}
+                  className={`${borde} border-l border-l-texto/25 px-3 py-1.5 text-left text-xs font-bold tracking-wide uppercase ${GRUPOS[g].banda} ${GRUPOS[g].texto}`}
                 >
                   {GRUPOS[g].titulo}
                 </th>
               ))}
             </tr>
-            <tr className="text-[11px] font-semibold text-texto-suave">
-              <th scope="col" className={`${fija1} ${borde} bg-superficie-2 px-2 py-1.5 text-center`}>
+            <tr className="text-xs font-semibold text-texto-suave">
+              <th scope="col" className={`${fija1} ${borde} bg-superficie-2 px-3 py-2 text-center`}>
                 Partida
               </th>
-              <th scope="col" className={`${fija2} ${borde} bg-superficie-2 px-2 py-1.5 text-left`}>
+              <th scope="col" className={`${fija2} ${borde} bg-superficie-2 px-3 py-2 text-left`}>
                 Descripción del equipo
               </th>
               {columnas.map((c, i) => (
@@ -680,9 +719,9 @@ export function CorridaAutorizacion({
                   scope="col"
                   className={`${borde} ${i === 0 ? 'border-l border-l-texto/25' : inicioGrupo(i)} ${
                     c.id === 'utilidadPct'
-                      ? 'w-14 max-w-14 min-w-14 bg-exito-suave px-1'
-                      : 'max-w-28 min-w-16 bg-superficie-2 px-2'
-                  } py-1.5 align-middle leading-tight ${
+                      ? 'w-20 max-w-20 min-w-20 bg-exito-suave px-2'
+                      : 'max-w-32 min-w-20 bg-superficie-2 px-3'
+                  } py-2 align-middle leading-tight ${
                     CENTRADAS.has(c.id) ? 'text-center' : c.numero ? 'text-right' : 'text-left'
                   }`}
                 >
@@ -716,12 +755,12 @@ export function CorridaAutorizacion({
               tono === 'aviso' ? 'text-aviso' : tono === 'acento' ? 'text-acento-texto' : 'text-info';
             return (
               <tbody key={prop.id}>
-                <tr className="h-7">
+                <tr className="h-9">
                   <td colSpan={2 + columnas.length} className={`${borde} p-0 ${fondo}`}>
                     <div
-                      className={`sticky left-0 flex w-fit items-center gap-x-2.5 py-1 pr-3 pl-3 whitespace-nowrap ${barra}`}
+                      className={`sticky left-0 flex w-fit items-center gap-x-3 py-1.5 pr-3 pl-4 whitespace-nowrap ${barra}`}
                     >
-                      <span className={`text-[12px] font-bold ${texto}`}>{prop.nombre}</span>
+                      <span className={`text-[13px] font-bold ${texto}`}>{prop.nombre}</span>
                       {prop.tipo && <span className="text-texto-suave">{prop.tipo}</span>}
                       {prop.es_adicional && <span className="font-semibold text-aviso">· Adicionales</span>}
                       <span className="text-texto-suave">
@@ -738,21 +777,38 @@ export function CorridaAutorizacion({
                   const valor = utilidadDe(f.p.id);
                   const valida = porcentaje.safeParse(valor).success;
                   const personalizada = editable && valor !== '' && valor !== utilidadBase;
+                  // Fondo opaco para las columnas fijas; tinte suave para el resto de la fila.
+                  const fijo =
+                    resaltada === f.p.id
+                      ? 'bg-acento-suave'
+                      : f.tipo === 'cargo'
+                        ? 'bg-aviso-suave'
+                        : f.tipo === 'partida'
+                          ? 'bg-superficie group-hover:bg-superficie-2'
+                          : 'bg-info-suave';
+                  const tinte =
+                    resaltada === f.p.id
+                      ? 'bg-acento-suave'
+                      : f.tipo === 'cargo'
+                        ? 'bg-aviso-suave/50'
+                        : f.tipo === 'partida'
+                          ? ''
+                          : 'bg-info-suave/40';
                   return (
-                    <tr key={f.p.id} className="group h-8">
+                    <tr key={f.p.id} id={`fila-${f.p.id}`} className="group h-10 transition-colors">
                       <td
-                        className={`${fija1} ${barra} ${borde} tabular bg-superficie px-2 text-center font-semibold text-texto-suave group-hover:bg-superficie-2`}
+                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold text-texto-suave`}
                       >
                         {f.ref}
                       </td>
-                      <td className={`${fija2} ${borde} bg-superficie px-2 group-hover:bg-superficie-2`}>
+                      <td className={`${fija2} ${borde} ${fijo} px-3`}>
                         <Descripcion
                           f={f}
                           extra={
                             f.tipo === 'cargo'
-                              ? `→ ${f.p.prorrateos.map((x) => refDe.get(x.destino_id) ?? '?').join(', ')}${
+                              ? `Se reparte entre ${f.p.prorrateos.map((x) => refDe.get(x.destino_id) ?? '?').join(', ')}${
                                   cargo && cargo.diferencia !== 0n
-                                    ? ` · ${cargo.diferencia > 0n ? '+' : '−'}${pesos(cargo.diferencia < 0n ? -cargo.diferencia : cargo.diferencia)}`
+                                    ? ` · redondeo ${cargo.diferencia > 0n ? '+' : '−'}${pesos(cargo.diferencia < 0n ? -cargo.diferencia : cargo.diferencia)}`
                                     : ''
                                 }`
                               : undefined
@@ -766,7 +822,7 @@ export function CorridaAutorizacion({
                             <td
                               key={c.id}
                               title={personalizada ? 'Utilidad personalizada de esta partida' : undefined}
-                              className={`${clases} relative w-14 max-w-14 min-w-14 px-1 text-center ${
+                              className={`${clases} relative w-20 max-w-20 min-w-20 px-2 text-center ${
                                 editable ? (valida ? 'bg-exito-suave/60' : 'bg-peligro-suave') : ''
                               }`}
                             >
@@ -786,7 +842,7 @@ export function CorridaAutorizacion({
                                   onChange={(e) =>
                                     setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
                                   }
-                                  className={`tabular mx-auto block h-6 w-12 rounded-sm border bg-superficie px-0.5 text-center text-[12px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
+                                  className={`tabular mx-auto block h-7 w-16 rounded-sm border bg-superficie px-1 text-center text-[13px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
                                     valida ? 'border-exito/50 text-texto' : 'border-peligro text-peligro'
                                   }`}
                                 />
@@ -798,9 +854,14 @@ export function CorridaAutorizacion({
                         return (
                           <td
                             key={c.id}
-                            className={`${clases} px-2 whitespace-nowrap group-hover:bg-superficie-2 ${alinear(c)} ${
-                              c.grupo === 'venta' ? 'bg-acento-suave/30' : ''
-                            } ${c.id === 'tc' && f.p.costo?.moneda !== 'MXN' ? 'bg-aviso-suave/60' : ''}`}
+                            className={`${clases} px-3 whitespace-nowrap group-hover:bg-superficie-2 ${alinear(c)} ${
+                              tinte ||
+                              (c.id === 'tc' && f.p.costo?.moneda !== 'MXN'
+                                ? 'bg-aviso-suave/60'
+                                : c.grupo === 'venta'
+                                  ? 'bg-acento-suave/30'
+                                  : '')
+                            }`}
                           >
                             {celda(c, f)}
                           </td>
@@ -814,10 +875,10 @@ export function CorridaAutorizacion({
           })}
 
           <tfoot className="sticky bottom-0 z-20">
-            <tr className="h-8 font-bold">
+            <tr className="h-10 font-bold">
               <td
                 colSpan={2}
-                className="sticky left-0 z-10 border-t-2 border-r border-t-texto/25 border-r-borde bg-superficie-2 px-2"
+                className="sticky left-0 z-10 border-t-2 border-r border-t-texto/25 border-r-borde bg-superficie-2 px-3"
               >
                 Totales de la corrida
               </td>
@@ -826,7 +887,7 @@ export function CorridaAutorizacion({
                 return (
                   <td
                     key={c.id}
-                    className={`tabular border-t-2 border-r border-t-texto/25 border-r-borde ${ci === 0 ? 'border-l border-l-texto/25' : inicioGrupo(ci)} bg-superficie-2 px-2 text-right whitespace-nowrap ${
+                    className={`tabular border-t-2 border-r border-t-texto/25 border-r-borde ${ci === 0 ? 'border-l border-l-texto/25' : inicioGrupo(ci)} bg-superficie-2 px-3 text-right whitespace-nowrap ${
                       c.grupo === 'utilidad' ? 'text-exito' : c.grupo === 'venta' ? 'text-acento-texto' : ''
                     }`}
                   >
@@ -951,21 +1012,12 @@ export function CorridaAutorizacion({
             </p>
             {mensaje?.error && <p className="text-[13px] font-semibold text-peligro">{mensaje.texto}</p>}
             <div className="flex flex-wrap gap-2.5">
-              <button
-                type="submit"
-                disabled={pendiente}
-                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
-              >
-                <Icon name="candado" size={16} />
+              <Boton type="submit" variante="primario" icono="candado" disabled={pendiente}>
                 {pendiente ? 'Autorizando…' : 'Autorizar y bloquear'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialogo(null)}
-                className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-              >
+              </Boton>
+              <Boton variante="fantasma" onClick={() => setDialogo(null)}>
                 Cancelar
-              </button>
+              </Boton>
             </div>
           </form>
         </VentanaFlotante>
@@ -991,21 +1043,12 @@ export function CorridaAutorizacion({
             </label>
             {mensaje?.error && <p className="text-[13px] font-semibold text-peligro">{mensaje.texto}</p>}
             <div className="flex flex-wrap gap-2.5">
-              <button
-                type="submit"
-                disabled={pendiente}
-                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-peligro px-4 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
-              >
-                <Icon name="cerrar" size={16} />
+              <Boton type="submit" variante="peligroFuerte" icono="cerrar" disabled={pendiente}>
                 {pendiente ? 'Rechazando…' : 'Rechazar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialogo(null)}
-                className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-              >
+              </Boton>
+              <Boton variante="fantasma" onClick={() => setDialogo(null)}>
                 Cancelar
-              </button>
+              </Boton>
             </div>
           </form>
         </VentanaFlotante>
@@ -1037,33 +1080,6 @@ function Dato({
   );
 }
 
-function BotonBarra({
-  icono,
-  tono = 'secundario',
-  children,
-  ...props
-}: {
-  icono: IconName;
-  tono?: 'primario' | 'secundario' | 'peligro';
-  children: ReactNode;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const clases = {
-    primario: 'bg-acento text-sobre-acento hover:brightness-110',
-    secundario: 'border border-borde bg-superficie text-texto hover:bg-superficie-2',
-    peligro: 'border border-peligro/40 bg-superficie text-peligro hover:bg-peligro-suave',
-  };
-  return (
-    <button
-      type="button"
-      {...props}
-      className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${clases[tono]}`}
-    >
-      <Icon name={icono} size={15} />
-      {children}
-    </button>
-  );
-}
-
 /** Descripción en una sola línea (fila baja, como en Excel); un clic la despliega completa. */
 function Descripcion({ f, extra }: { f: FilaCorrida; extra?: string }) {
   const [abierta, setAbierta] = useState(false);
@@ -1080,27 +1096,29 @@ function Descripcion({ f, extra }: { f: FilaCorrida; extra?: string }) {
       onClick={() => setAbierta((x) => !x)}
       aria-expanded={abierta}
       title={abierta ? 'Contraer' : f.p.descripcion}
-      className={`flex w-full cursor-pointer items-center gap-1 py-1 text-left ${sub ? 'pl-3' : ''}`}
+      className={`flex w-full cursor-pointer items-start gap-1.5 py-2 text-left ${sub ? 'pl-4' : ''}`}
     >
       {etiqueta && (
-        <span className={`shrink-0 rounded-sm px-1 text-[10px] font-bold ${etiqueta.clase}`}>
+        <span className={`mt-px shrink-0 rounded-sm px-1.5 text-[11px] font-bold ${etiqueta.clase}`}>
           {etiqueta.texto}
         </span>
       )}
       {f.p.se_suma && (
-        <span className="shrink-0 rounded-sm bg-info-suave px-1 text-[10px] font-bold text-info">
+        <span className="mt-px shrink-0 rounded-sm bg-info-suave px-1.5 text-[11px] font-bold text-info">
           Se suma
         </span>
       )}
-      {extra && <span className="shrink-0 text-[10px] font-semibold text-aviso">{extra}</span>}
-      <span
-        className={`min-w-0 flex-1 [&_.texto-enriquecido]:text-[12px] [&_.texto-enriquecido]:leading-tight ${abierta ? 'whitespace-normal' : 'line-clamp-1'}`}
-      >
-        {f.p.descripcion_contenido != null ? (
-          <TextoEnriquecido contenido={f.p.descripcion_contenido} respaldo={f.p.descripcion} />
-        ) : (
-          <span className="font-semibold">{f.p.descripcion}</span>
-        )}
+      <span className="min-w-0 flex-1">
+        <span
+          className={`[&_.texto-enriquecido]:text-[13px] [&_.texto-enriquecido]:leading-snug ${abierta ? 'block whitespace-normal' : 'line-clamp-1'}`}
+        >
+          {f.p.descripcion_contenido != null ? (
+            <TextoEnriquecido contenido={f.p.descripcion_contenido} respaldo={f.p.descripcion} />
+          ) : (
+            <span className="font-semibold">{f.p.descripcion}</span>
+          )}
+        </span>
+        {extra && <span className="mt-0.5 block text-[11px] font-semibold text-aviso">{extra}</span>}
       </span>
     </button>
   );

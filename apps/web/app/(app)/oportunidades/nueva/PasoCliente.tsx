@@ -6,7 +6,7 @@ import { Buscador, paraBuscar } from '@/components/Buscador';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { ClienteFila } from '@/lib/datos';
 import { colorAvatar, iniciales } from '@/lib/presentacion';
 import { TIPOS_OPORTUNIDAD, type TipoOportunidad } from '@/lib/tipos-oportunidad';
@@ -66,13 +66,9 @@ export function PasoCliente({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Titulo2>1 · ¿Para qué cliente?</Titulo2>
           {puedeCrearCliente && !nuevoCliente && !cliente && (
-            <button
-              type="button"
-              onClick={() => setNuevoCliente(true)}
-              className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold text-acento-texto hover:bg-acento-suave"
-            >
-              <Icon name="mas" size={16} /> Cliente nuevo
-            </button>
+            <Boton variante="fantasma" tamano="chico" icono="mas" onClick={() => setNuevoCliente(true)}>
+              Cliente nuevo
+            </Boton>
           )}
         </div>
 
@@ -93,13 +89,9 @@ export function PasoCliente({
                 {[cliente.ciudad, cliente.rfc].filter(Boolean).join(' · ') || 'Sin ciudad ni RFC'}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setClienteId(null)}
-              className="min-h-10 cursor-pointer rounded-md px-3 text-[13px] font-semibold text-acento-texto hover:bg-superficie"
-            >
+            <Boton variante="fantasma" tamano="chico" onClick={() => setClienteId(null)}>
               Cambiar
-            </button>
+            </Boton>
           </div>
         ) : (
           <>

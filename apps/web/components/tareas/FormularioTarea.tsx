@@ -4,6 +4,7 @@ import type { JSONContent } from '@tiptap/core';
 import { useId, useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { useVentana } from '@/components/VentanaFlotante';
 import { actualizarSubtarea, actualizarTarea, crearTarea } from '@/lib/acciones-tareas';
 import type { BorradorTarea } from '@/lib/datos';
@@ -296,22 +297,13 @@ export function FormularioTarea({
       {!tarea && <SubtareasNuevas inicial={borrador?.subtareas} />}
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <button
-          type="submit"
-          disabled={pendiente}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
-        >
-          <Icon name={tarea ? 'palomita' : 'mas'} strokeWidth={2.2} />
+        <Boton type="submit" variante="primario" icono={tarea ? 'palomita' : 'mas'} disabled={pendiente}>
           {pendiente ? 'Guardando…' : tarea ? 'Guardar cambios' : 'Programar tarea'}
-        </button>
+        </Boton>
         {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
             Cancelar
-          </button>
+          </Boton>
         )}
         {mensaje.error && <span className="text-xs text-peligro">{mensaje.error}</span>}
         {mensaje.ok && !tarea && (

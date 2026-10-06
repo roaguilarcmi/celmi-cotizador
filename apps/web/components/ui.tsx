@@ -22,16 +22,43 @@ export function Pill({ tono, children, punto = true }: { tono: Tono; children: R
   );
 }
 
-type Variante = 'primario' | 'secundario' | 'peligro';
+/**
+ * Botones de toda la interfaz (decisión 2026-10-06: homogéneos; no se estilizan botones a mano).
+ *   primario: acción principal · secundario: acción normal (con borde) · peligro: acción destructiva con borde ·
+ *   peligroFuerte: confirmación final de algo destructivo · exito: completar · fantasma: «Cancelar» y acciones discretas ·
+ *   paso: avanzar en el wizard.
+ */
+export type Variante =
+  'primario' | 'secundario' | 'peligro' | 'peligroFuerte' | 'exito' | 'fantasma' | 'paso';
 
 const VARIANTES: Record<Variante, string> = {
   primario: 'bg-acento text-sobre-acento hover:brightness-110 active:brightness-95',
   secundario: 'border border-borde bg-superficie text-texto hover:bg-superficie-2',
   peligro: 'border border-borde bg-superficie text-peligro hover:bg-peligro-suave',
+  peligroFuerte: 'bg-peligro text-white hover:brightness-110 active:brightness-95',
+  exito: 'bg-exito text-white hover:brightness-110 active:brightness-95',
+  fantasma: 'text-texto-suave hover:bg-superficie-2 hover:text-texto',
+  paso: 'bg-paso text-white hover:brightness-110 active:brightness-95',
 };
+
+/** normal: 44 px (formularios y ventanas) · chico: 40 px (barras de herramientas y filas). */
+export type TamanoBoton = 'normal' | 'chico';
+
+const TAMANOS: Record<TamanoBoton, string> = {
+  normal: 'min-h-11 px-4 text-sm',
+  chico: 'min-h-10 px-3.5 text-[13px]',
+};
+
+const RELLENOS = new Set<Variante>(['primario', 'peligroFuerte', 'exito', 'paso']);
+
+/** Clases de `Boton`, para enlaces (`Link`, `a`) que deben verse como botón. */
+export function clasesBoton(variante: Variante = 'secundario', tamano: TamanoBoton = 'normal') {
+  return `inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md font-semibold transition-[filter,background-color,transform] duration-150 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50 ${TAMANOS[tamano]} ${VARIANTES[variante]}`;
+}
 
 export function Boton({
   variante = 'secundario',
+  tamano = 'normal',
   icono,
   iconoFinal,
   className,
@@ -39,18 +66,16 @@ export function Boton({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variante?: Variante;
+  tamano?: TamanoBoton;
   icono?: IconName;
   iconoFinal?: IconName;
 }) {
+  const icon = tamano === 'chico' ? 16 : 18;
   return (
-    <button
-      type="button"
-      {...props}
-      className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-semibold transition-[filter,background-color,transform] duration-150 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTES[variante]} ${className ?? ''}`}
-    >
-      {icono && <Icon name={icono} strokeWidth={variante === 'primario' ? 2.2 : undefined} />}
+    <button type="button" {...props} className={`${clasesBoton(variante, tamano)} ${className ?? ''}`}>
+      {icono && <Icon name={icono} size={icon} strokeWidth={RELLENOS.has(variante) ? 2.2 : undefined} />}
       {children}
-      {iconoFinal && <Icon name={iconoFinal} strokeWidth={2.2} />}
+      {iconoFinal && <Icon name={iconoFinal} size={icon} strokeWidth={2.2} />}
     </button>
   );
 }

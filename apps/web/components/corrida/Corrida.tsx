@@ -3,7 +3,7 @@
 import { aEscalado, formatearMXN, mejoraDePrecio } from '@celmi/core';
 import { useMemo, useRef } from 'react';
 import { Icon } from '@/components/Icon';
-import { Boton, Tarjeta } from '@/components/ui';
+import { Boton, clasesBoton, Tarjeta, type TamanoBoton } from '@/components/ui';
 import { usePreferencia } from '@/lib/preferencias';
 
 /**
@@ -79,14 +79,14 @@ export function MenuColumnas({
   ocultas,
   onCambio,
   columnas = COLUMNAS,
-  compacto,
+  tamano = 'normal',
 }: {
   ocultas: Set<string>;
   onCambio: (s: Set<string>) => void;
   /** Columnas que ofrece la pantalla (por omisión, las de la corrida de Excel). */
   columnas?: Columna[];
-  /** Botón más bajo, para barras de herramientas. */
-  compacto?: boolean;
+  /** Tamaño del botón (el mismo que los demás botones de la interfaz). */
+  tamano?: TamanoBoton;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const alternar = (id: string) => {
@@ -98,9 +98,9 @@ export function MenuColumnas({
   return (
     <details ref={ref} className="relative">
       <summary
-        className={`inline-flex ${compacto ? 'min-h-9 px-3 text-[13px]' : 'min-h-11 px-4 text-sm'} cursor-pointer list-none items-center gap-2 rounded-md border border-borde bg-superficie font-semibold text-texto hover:bg-superficie-2 [&::-webkit-details-marker]:hidden`}
+        className={`${clasesBoton('secundario', tamano)} list-none [&::-webkit-details-marker]:hidden`}
       >
-        <Icon name="columnas" />
+        <Icon name="columnas" size={tamano === 'chico' ? 16 : 18} />
         Columnas
         <span className="tabular rounded-pill bg-neutro-suave px-2 py-0.5 text-xs text-neutro">
           {columnas.filter((c) => !ocultas.has(c.id)).length}/{columnas.length}

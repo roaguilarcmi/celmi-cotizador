@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import { eliminarCotizacion } from '../acciones';
 
@@ -21,14 +21,9 @@ export function EliminarCotizacion({
   const [pendiente, iniciar] = useTransition();
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAbierta(true)}
-        className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-texto-suave hover:bg-peligro-suave hover:text-peligro"
-      >
-        <Icon name="cerrar" size={15} />
+      <Boton variante="peligro" tamano="chico" icono="cerrar" onClick={() => setAbierta(true)}>
         Eliminar cotización
-      </button>
+      </Boton>
       {abierta && (
         <VentanaFlotante titulo="¿Eliminar esta cotización?" onCerrar={() => setAbierta(false)}>
           <div className="flex flex-col gap-4">
@@ -38,8 +33,9 @@ export function EliminarCotizacion({
             </p>
             {error && <p className="text-[13px] font-semibold text-peligro">{error}</p>}
             <div className="flex flex-wrap gap-2.5">
-              <button
-                type="button"
+              <Boton
+                variante="peligroFuerte"
+                icono="cerrar"
                 disabled={pendiente}
                 onClick={() =>
                   iniciar(async () => {
@@ -48,18 +44,12 @@ export function EliminarCotizacion({
                     if (r?.error) setError(r.error);
                   })
                 }
-                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-peligro px-4 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
               >
-                <Icon name="cerrar" size={16} />
                 {pendiente ? 'Eliminando…' : 'Sí, eliminar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAbierta(false)}
-                className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-              >
+              </Boton>
+              <Boton variante="fantasma" onClick={() => setAbierta(false)}>
                 Cancelar
-              </button>
+              </Boton>
             </div>
           </div>
         </VentanaFlotante>

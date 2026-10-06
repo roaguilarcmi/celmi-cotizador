@@ -7,6 +7,7 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
+import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { costoDeFila, erroresDeFila, filaVacia, type Catalogos, type FilaEditable } from './modelo';
 
@@ -562,45 +563,27 @@ function Formulario({
             </ul>
           )}
           {!soloLectura && (
-            <button
-              type="button"
-              onClick={() => setAdicional('nuevo')}
-              className="inline-flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-md border-2 border-dashed border-texto/20 px-3.5 text-[13px] font-semibold text-acento-texto hover:border-acento"
-            >
-              <Icon name="mas" size={16} strokeWidth={2.4} />
+            <Boton tamano="chico" icono="mas" onClick={() => setAdicional('nuevo')} className="w-fit">
               Agregar adicional (memoria, instalación…)
-            </button>
+            </Boton>
           )}
         </Seccion>
       )}
 
       {!soloLectura && (
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="submit"
-            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-          >
-            <Icon name="palomita" strokeWidth={2.2} />
+          <Boton type="submit" variante="primario" icono="palomita">
             {nueva ? 'Agregar' : 'Aplicar cambios'}
-          </button>
+          </Boton>
           {nueva && modo !== 'cargo' && (
-            <button
-              type="button"
-              onClick={(e) => enviar(e, true)}
-              className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-4 text-sm font-semibold hover:bg-superficie-2"
-            >
-              <Icon name="mas" strokeWidth={2.2} />
+            <Boton icono="mas" onClick={(e) => enviar(e, true)}>
               Agregar y capturar otro
-            </button>
+            </Boton>
           )}
           {ventana && (
-            <button
-              type="button"
-              onClick={ventana.intentarCerrar}
-              className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-            >
+            <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
               Cancelar
-            </button>
+            </Boton>
           )}
           <span className="text-xs text-texto-suave">Se guardan en la cotización con «Guardar».</span>
         </div>

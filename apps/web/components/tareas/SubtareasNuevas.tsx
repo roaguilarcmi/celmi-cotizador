@@ -2,6 +2,7 @@
 
 import { useState, type KeyboardEvent } from 'react';
 import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 
 /** Captura de subtareas al crear la tarea principal (se guardan junto con ella). */
 export function SubtareasNuevas({ inicial = [] }: { inicial?: string[] }) {
@@ -63,13 +64,9 @@ export function SubtareasNuevas({ inicial = [] }: { inicial?: string[] }) {
           className="h-10 min-w-0 flex-1 rounded-md border-2 border-dashed border-texto/15 bg-transparent px-3 text-sm outline-none placeholder:text-texto-suave focus:border-solid focus:border-acento focus:bg-superficie focus:ring-4 focus:ring-acento-suave"
         />
         {titulo.trim().length >= 2 && (
-          <button
-            type="button"
-            onClick={agregar}
-            className="min-h-10 cursor-pointer rounded-md border border-borde px-3 text-[13px] font-semibold hover:bg-superficie-2"
-          >
+          <Boton tamano="chico" onClick={agregar}>
             Agregar
-          </button>
+          </Boton>
         )}
       </div>
     </fieldset>

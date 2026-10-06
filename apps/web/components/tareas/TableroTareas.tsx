@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type DragEvent } from 'react';
 import { Icon } from '@/components/Icon';
-import { Tarjeta } from '@/components/ui';
+import { Boton, Tarjeta } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
 import { descartarBorrador, guardarBorrador } from '@/lib/acciones-borradores';
 import { cambiarEstadoTarea, moverTareaAEtapa, reprogramarTarea } from '@/lib/acciones-tareas';
@@ -133,15 +133,9 @@ export function TableroTareas({
           </p>
         </div>
         <BotonActivarAvisos />
-        <button
-          type="button"
-          onClick={() => setEditandoEtapas(true)}
-          aria-haspopup="dialog"
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2"
-        >
-          <Icon name="herramienta" size={16} />
+        <Boton icono="herramienta" onClick={() => setEditandoEtapas(true)} aria-haspopup="dialog">
           Etapas
-        </button>
+        </Boton>
         <div
           role="group"
           aria-label="Vista"
@@ -359,16 +353,16 @@ function NuevaTarea({
 
   return (
     <>
-      <button
-        type="button"
+      <Boton
+        variante="primario"
+        icono={borrador ? 'guardado' : 'mas'}
         onClick={() => {
           setUsarBorrador(true);
           setAbierta(true);
         }}
         aria-haspopup="dialog"
-        className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
+        className="relative"
       >
-        <Icon name={borrador ? 'guardado' : 'mas'} size={17} strokeWidth={2.2} />
         {borrador ? 'Continuar borrador' : 'Nueva tarea'}
         {borrador && (
           <span
@@ -376,7 +370,7 @@ function NuevaTarea({
             className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-superficie bg-aviso"
           />
         )}
-      </button>
+      </Boton>
       {abierta && (
         <VentanaFlotante
           titulo="Nueva tarea"

@@ -3,6 +3,7 @@
 import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Icon } from './Icon';
+import { Boton } from './ui';
 
 export function Encabezado({ titulo, children }: { titulo: string; children?: ReactNode }) {
   return (
@@ -143,12 +144,8 @@ export function BotonEnviar({ children, ocupado }: { children: ReactNode; ocupad
   const { pending } = useFormStatus();
   const enProceso = pending || ocupado;
   return (
-    <button
-      type="submit"
-      disabled={enProceso}
-      className="inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-acento text-[15px] font-semibold text-sobre-acento transition-[filter,transform] hover:brightness-110 active:scale-[.99] disabled:cursor-wait disabled:opacity-70"
-    >
+    <Boton type="submit" variante="primario" disabled={enProceso} className="w-full">
       {enProceso ? 'Un momento…' : children}
-    </button>
+    </Boton>
   );
 }

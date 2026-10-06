@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, useTransition, type ClipboardEvent, type ReactNode } from 'react';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
-import { Pill, Tarjeta } from '@/components/ui';
+import { Boton, Pill, Tarjeta } from '@/components/ui';
 import type {
   CondicionCatalogo,
   CondicionRevision,
@@ -261,16 +261,12 @@ export function EditorCotizacion({
             </div>
             {editable && (
               <>
-                <button
-                  type="button"
-                  onClick={() => setPegado({ texto: '', html: '' })}
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2"
-                >
-                  <Icon name="copiar" size={16} />
+                <Boton tamano="chico" icono="copiar" onClick={() => setPegado({ texto: '', html: '' })}>
                   Pegar desde Excel
-                </button>
-                <button
-                  type="button"
+                </Boton>
+                <Boton
+                  tamano="chico"
+                  icono="columnas"
                   onClick={() => setAbierta({ tipo: 'cargo', clave: null })}
                   disabled={lineas.length === 0}
                   title={
@@ -278,19 +274,17 @@ export function EditorCotizacion({
                       ? 'Envío especial u otro cargo que se reparte entre partidas'
                       : 'Primero agrega partidas'
                   }
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Icon name="columnas" size={16} />
                   Cargo a prorratear
-                </button>
-                <button
-                  type="button"
+                </Boton>
+                <Boton
+                  variante="primario"
+                  tamano="chico"
+                  icono="mas"
                   onClick={() => setAbierta({ tipo: 'partida', clave: null })}
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento hover:brightness-110"
                 >
-                  <Icon name="mas" size={16} strokeWidth={2.4} />
                   Agregar partida
-                </button>
+                </Boton>
               </>
             )}
           </div>
@@ -368,14 +362,9 @@ export function EditorCotizacion({
 
       {paso === 1 && (
         <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={() => irA(2)}
-            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-paso px-4 text-sm font-semibold text-white hover:brightness-110"
-          >
+          <Boton variante="paso" iconoFinal="derecha" onClick={() => irA(2)}>
             Siguiente: Condiciones
-            <Icon name="derecha" size={16} />
-          </button>
+          </Boton>
         </div>
       )}
 
@@ -389,29 +378,29 @@ export function EditorCotizacion({
             <>
               <span className="size-2.5 rounded-full bg-aviso" aria-hidden="true" />
               <span className="mr-auto text-sm font-semibold">Tienes cambios sin guardar</span>
-              <button
-                type="button"
+              <Boton
+                variante="fantasma"
+                tamano="chico"
                 disabled={guardando}
                 onClick={() => {
                   setPropuestas(desdeRevision(revision));
                   setMensaje(null);
                 }}
-                className="min-h-10 cursor-pointer rounded-md px-3 text-[13px] font-semibold text-texto-suave hover:bg-superficie-2"
               >
                 Descartar
-              </button>
-              <button
-                type="button"
+              </Boton>
+              <Boton
+                variante="primario"
+                tamano="chico"
+                icono="guardado"
                 disabled={guardando}
                 onClick={() => guardar()}
-                className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-[13px] font-semibold text-sobre-acento hover:brightness-110 disabled:opacity-60"
               >
-                <Icon name="guardado" size={16} />
                 {guardando ? 'Guardando…' : 'Guardar'}
                 <kbd className="ml-1 hidden rounded-[4px] bg-white/20 px-1 text-[11px] font-medium sm:inline">
                   Ctrl S
                 </kbd>
-              </button>
+              </Boton>
             </>
           ) : (
             <span
@@ -639,14 +628,9 @@ function Vacio({ editable, onPegar }: { editable: boolean; onPegar: () => void }
         </p>
       </div>
       {editable && (
-        <button
-          type="button"
-          onClick={onPegar}
-          className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3.5 text-[13px] font-semibold hover:bg-superficie-2"
-        >
-          <Icon name="copiar" size={16} />
+        <Boton tamano="chico" icono="copiar" onClick={onPegar}>
           Pegar desde Excel
-        </button>
+        </Boton>
       )}
     </div>
   );

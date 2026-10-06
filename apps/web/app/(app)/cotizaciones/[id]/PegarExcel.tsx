@@ -4,6 +4,7 @@ import { aEscalado, costoPartida, ESCALA_DINERO, formatearMXN } from '@celmi/cor
 import { empatarCatalogo, leerPegado, normalizar, type FilaPegada } from '@celmi/validation';
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { leerTablaHtml } from '@/lib/pegado-html';
 import { claveNueva, type Catalogos, type FilaEditable } from './modelo';
@@ -301,22 +302,13 @@ function Contenido({
       )}
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <button
-          type="submit"
-          disabled={!lectura.revisadas.length}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Icon name="mas" strokeWidth={2.2} />
+        <Boton type="submit" variante="primario" icono="mas" disabled={!lectura.revisadas.length}>
           {lectura.revisadas.length ? `Agregar ${lectura.revisadas.length} partidas` : 'Agregar partidas'}
-        </button>
+        </Boton>
         {ventana && (
-          <button
-            type="button"
-            onClick={ventana.intentarCerrar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
             Cancelar
-          </button>
+          </Boton>
         )}
         {conAvisos > 0 && (
           <span className="text-xs text-texto-suave">

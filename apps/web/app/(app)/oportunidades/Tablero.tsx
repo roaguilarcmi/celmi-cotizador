@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition, type DragEvent } from 'react';
 import { AtajoBuscar } from '@/components/AtajoBuscar';
 import { Buscador, paraBuscar } from '@/components/Buscador';
 import { Icon } from '@/components/Icon';
-import { Avatar, Pill, Tarjeta } from '@/components/ui';
+import { Avatar, clasesBoton, Pill, Tarjeta } from '@/components/ui';
 import type { Estado, OportunidadFila } from '@/lib/datos';
 import { usePreferencia } from '@/lib/preferencias';
 import { colorAvatar, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
@@ -98,11 +98,8 @@ export function Tablero({
           </p>
         </div>
         {puedeCrear && (
-          <Link
-            href="/oportunidades/nueva"
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-          >
-            <Icon name="mas" strokeWidth={2.2} /> Nueva oportunidad
+          <Link href="/oportunidades/nueva" className={clasesBoton('primario')}>
+            <Icon name="mas" size={18} strokeWidth={2.2} /> Nueva oportunidad
           </Link>
         )}
       </header>
@@ -169,11 +166,8 @@ export function Tablero({
             Una oportunidad es un proyecto o necesidad de un cliente; de ella salen sus cotizaciones.
           </p>
           {puedeCrear && (
-            <Link
-              href="/oportunidades/nueva"
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento"
-            >
-              <Icon name="mas" strokeWidth={2.2} /> Crear la primera
+            <Link href="/oportunidades/nueva" className={`mt-6 ${clasesBoton('primario')}`}>
+              <Icon name="mas" size={18} strokeWidth={2.2} /> Crear la primera
             </Link>
           )}
         </Tarjeta>

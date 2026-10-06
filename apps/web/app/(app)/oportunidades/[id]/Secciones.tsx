@@ -10,7 +10,7 @@ import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { BotonActivarAvisos } from '@/components/tareas/BotonActivarAvisos';
 import { FormularioTarea } from '@/components/tareas/FormularioTarea';
 import { ListaTareas } from '@/components/tareas/ListaTareas';
-import { Avatar, Pill, Tarjeta, Titulo2 } from '@/components/ui';
+import { Avatar, Boton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { descartarBorrador, guardarBorrador, type TipoBorrador } from '@/lib/acciones-borradores';
 import { estaAbierta } from '@/lib/etapas-tareas';
@@ -74,14 +74,15 @@ function EncabezadoSeccion({
       </div>
       {extra}
       {accion && (
-        <button
-          type="button"
+        <Boton
+          variante="primario"
+          tamano="chico"
+          icono={accion.conBorrador ? 'guardado' : 'mas'}
           onClick={accion.abrir}
           aria-haspopup="dialog"
           title={accion.conBorrador ? 'Tienes un borrador guardado' : undefined}
-          className="relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md bg-acento px-3.5 text-[13px] font-semibold text-sobre-acento transition-[filter] hover:brightness-110"
+          className="relative"
         >
-          <Icon name={accion.conBorrador ? 'guardado' : 'mas'} size={16} strokeWidth={2.2} />
           {accion.conBorrador ? 'Continuar borrador' : accion.nombre}
           {accion.conBorrador && (
             <span
@@ -89,7 +90,7 @@ function EncabezadoSeccion({
               className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-superficie bg-aviso"
             />
           )}
-        </button>
+        </Boton>
       )}
     </div>
   );
@@ -486,13 +487,9 @@ function FormularioNota({
       {estado.error && <p className="text-xs text-peligro">{estado.error}</p>}
       <div className="flex items-center justify-end gap-2">
         {cancelar && (
-          <button
-            type="button"
-            onClick={cancelar}
-            className="min-h-11 cursor-pointer rounded-md px-4 text-sm font-semibold text-texto-suave hover:bg-superficie-2"
-          >
+          <Boton variante="fantasma" onClick={cancelar}>
             Cancelar
-          </button>
+          </Boton>
         )}
         <div className="w-44">
           <BotonEnviar>{registro ? 'Guardar cambios' : 'Registrar'}</BotonEnviar>

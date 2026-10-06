@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { Icon } from '@/components/Icon';
+import { Boton } from '@/components/ui';
 
 type Permiso = NotificationPermission | 'no-soportado';
 
@@ -35,17 +35,16 @@ export function BotonActivarAvisos({ compacto }: { compacto?: boolean }) {
     );
   }
   return (
-    <button
-      type="button"
+    <Boton
+      variante={compacto ? 'fantasma' : 'secundario'}
+      tamano="chico"
+      icono="campana"
       onClick={async () => {
         await Notification.requestPermission();
         window.dispatchEvent(new Event(EVENTO));
       }}
-      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md font-semibold text-acento-texto hover:bg-acento-suave ${
-        compacto ? 'min-h-8 px-2 text-xs' : 'min-h-10 border border-acento/40 px-3 text-[13px]'
-      }`}
     >
-      <Icon name="campana" size={compacto ? 14 : 16} /> Activar notificaciones del navegador
-    </button>
+      Activar notificaciones del navegador
+    </Boton>
   );
 }

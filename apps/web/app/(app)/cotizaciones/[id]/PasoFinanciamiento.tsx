@@ -3,7 +3,7 @@
 import { aEscalado, calcularTotales, ESCALA_DINERO, formatearMXN } from '@celmi/core';
 import { useState, useTransition } from 'react';
 import { Icon } from '@/components/Icon';
-import { Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { Esquema, FinanciamientoFila, RevisionDetalle } from '@/lib/datos';
 import { guardarFinanciamiento } from '../acciones';
 
@@ -264,8 +264,11 @@ export function PasoFinanciamiento({
                       </table>
                     </div>
                     {editable && (
-                      <button
-                        type="button"
+                      <Boton
+                        variante="fantasma"
+                        tamano="chico"
+                        icono="mas"
+                        className="mt-1"
                         onClick={() =>
                           setFilas((xs) => [
                             ...xs,
@@ -282,11 +285,9 @@ export function PasoFinanciamiento({
                             },
                           ])
                         }
-                        className="mt-1 inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-acento-texto hover:bg-acento-suave"
                       >
-                        <Icon name="mas" size={13} strokeWidth={2.6} />
                         Agregar plazo
-                      </button>
+                      </Boton>
                     )}
                   </section>
                 );
@@ -299,15 +300,9 @@ export function PasoFinanciamiento({
 
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={pendiente || !sucio}
-            onClick={guardar}
-            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Icon name="guardado" size={16} />
+          <Boton variante="primario" icono="guardado" disabled={pendiente || !sucio} onClick={guardar}>
             {pendiente ? 'Guardando…' : 'Guardar financiamiento'}
-          </button>
+          </Boton>
           {sucio && <span className="text-xs font-semibold text-aviso">Cambios sin guardar</span>}
           {mensaje && (
             <span className={`text-xs font-semibold ${mensaje.error ? 'text-peligro' : 'text-exito'}`}>

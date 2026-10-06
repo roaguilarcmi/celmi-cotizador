@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon } from '@/components/Icon';
-import { Boton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
+import { Boton, clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import type { ClienteFila, ContactoFila, Estado, OportunidadFila } from '@/lib/datos';
 import { colorAvatar, haceCuanto, iniciales, tonoEstado } from '@/lib/presentacion';
 import { actualizarCliente, guardarContacto, type EstadoFormulario } from '../acciones';
@@ -58,11 +58,8 @@ export function FichaCliente({
           </Boton>
         )}
         {puedeCrearOportunidad && (
-          <Link
-            href={`/oportunidades/nueva?cliente=${cliente.id}`}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento hover:brightness-110"
-          >
-            <Icon name="mas" strokeWidth={2.2} /> Nueva oportunidad
+          <Link href={`/oportunidades/nueva?cliente=${cliente.id}`} className={clasesBoton('primario')}>
+            <Icon name="mas" size={18} strokeWidth={2.2} /> Nueva oportunidad
           </Link>
         )}
       </header>
@@ -113,13 +110,14 @@ export function FichaCliente({
               Contactos
             </h2>
             {puedeEditar && contactoEnEdicion !== 'nuevo' && (
-              <button
-                type="button"
+              <Boton
+                variante="fantasma"
+                tamano="chico"
+                icono="mas"
                 onClick={() => setContactoEnEdicion('nuevo')}
-                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-semibold text-acento-texto hover:bg-acento-suave"
               >
-                <Icon name="mas" size={16} /> Agregar
-              </button>
+                Agregar
+              </Boton>
             )}
           </div>
           <div className="flex flex-col gap-3">
