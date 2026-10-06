@@ -46,6 +46,7 @@ for (const fn of ['guardar_utilidades', 'autorizar_revision']) {
   const { error } = await supabase.rpc(fn, {
     revision: '00000000-0000-0000-0000-000000000000',
     partidas: [],
+    tipos_cambio: {},
   });
   const bien = error?.code === '42501';
   console.log(

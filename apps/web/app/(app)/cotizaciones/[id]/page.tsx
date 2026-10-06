@@ -6,6 +6,7 @@ import {
   listarCondicionesDeRevision,
   listarEsquemas,
   listarFinanciamiento,
+  listarTiposCambio,
   listarUtilidades,
   obtenerCotizacion,
 } from '@/lib/datos';
@@ -54,13 +55,15 @@ export default async function PaginaCotizacion({
   const { cotizacion, revision } = datos;
   // La utilidad sólo la ve quien autoriza (RLS también lo exige).
   const veUtilidad = sesion.permisos.has('utilidad.ver') || sesion.permisos.has('utilidad.autorizar');
-  const [catalogoCondiciones, condiciones, esquemas, financiamiento, utilidades] = await Promise.all([
-    listarCondicionesCatalogo(),
-    listarCondicionesDeRevision(revision.id),
-    listarEsquemas(),
-    listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
-    veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
-  ]);
+  const [catalogoCondiciones, condiciones, esquemas, financiamiento, utilidades, tiposCambio] =
+    await Promise.all([
+      listarCondicionesCatalogo(),
+      listarCondicionesDeRevision(revision.id),
+      listarEsquemas(),
+      listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
+      veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
+      veUtilidad ? listarTiposCambio(revision.id) : null,
+    ]);
 
   // Edita quien participa en la oportunidad (ejecutivo o colaborador) o quien puede editar todas; la base lo
   // vuelve a exigir al guardar.
@@ -96,7 +99,13 @@ export default async function PaginaCotizacion({
       esquemasFinanciamiento={esquemas.filter((e) => e.id !== 'adquisicion')}
       financiamiento={financiamiento}
       autorizacion={
-        utilidades ? { utilidades, puedeAutorizar: sesion.permisos.has('utilidad.autorizar') } : null
+        utilidades
+          ? {
+              utilidades,
+              tiposCambio: tiposCambio ?? {},
+              puedeAutorizar: sesion.permisos.has('utilidad.autorizar'),
+            }
+          : null
       }
       tipoOportunidad={cotizacion.oportunidad?.tipo ?? 'arrendamiento'}
       pasoInicial={PASOS[paso ?? ''] ?? PASO_POR_ESTADO[revision.estado] ?? 1}

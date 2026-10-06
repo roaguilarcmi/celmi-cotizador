@@ -24,7 +24,7 @@ describe('autorización de precios (0019)', () => {
   it('quien autoriza registra utilidad y precio y autoriza en un solo paso', async () => {
     const op = await pendiente();
     await como(db, 'alejandro', async () => {
-      await db.query('select public.autorizar_revision($1, $2, $3)', [
+      await db.query('select public.autorizar_revision($1, $2, comentario => $3)', [
         op.revision,
         lista(op.partida),
         'Listo',
@@ -147,5 +147,83 @@ describe('autorización de precios (0019)', () => {
       );
       expect(r.affectedRows).toBe(1);
     });
+  });
+});
+
+describe('tipo de cambio en la autorización (0020)', () => {
+  /** Revisión pendiente con una partida en dólares (costo 100.00 USD, T.C. capturado 17.5). */
+  async function enDolares() {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query(
+      `update public.partida_costos set moneda = 'USD', costo_unitario = 100, tipo_cambio = 17.5 where partida_id = $1`,
+      [op.partida],
+    );
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      op.revision,
+    ]);
+    return op;
+  }
+
+  it('exige el T.C. de cada moneda extranjera y calcula con el autorizado', async () => {
+    const op = await enDolares();
+    await expect(
+      como(db, 'alejandro', () =>
+        db.query('select public.autorizar_revision($1, $2)', [
+          op.revision,
+          lista(op.partida, '10', '1925.00'),
+        ]),
+      ),
+    ).rejects.toThrow(/tipo de cambio de USD/);
+    // 100 × 18.12345 × 1.10 = 1993.5795 → 1993.58 (con el T.C. capturado sería 1925.00 y no coincide).
+    await expect(
+      como(db, 'alejandro', () =>
+        db.query('select public.autorizar_revision($1, $2, $3)', [
+          op.revision,
+          lista(op.partida, '10', '1925.00'),
+          '{"USD": "18.12345"}',
+        ]),
+      ),
+    ).rejects.toThrow(/no coinciden/);
+    await como(db, 'alejandro', async () => {
+      await db.query('select public.autorizar_revision($1, $2, $3)', [
+        op.revision,
+        lista(op.partida, '10', '1993.58'),
+        '{"USD": "18.12345"}',
+      ]);
+      const [t] = await filas<{ tipo_cambio: string }>(
+        db,
+        'select tipo_cambio from public.revision_tipos_cambio where revision_id = $1',
+        [op.revision],
+      );
+      expect(Number(t!.tipo_cambio)).toBe(18.12345);
+    });
+  });
+
+  it('rechaza T.C. no válidos y el ejecutivo no puede fijarlo', async () => {
+    const op = await enDolares();
+    for (const tc of ['{"USD": "0"}', '{"USD": "18.123456"}', '{"MXN": "1"}', '{"USD": "abc"}']) {
+      await expect(
+        como(db, 'alejandro', () =>
+          db.query('select public.guardar_utilidades($1, $2, $3)', [op.revision, '[]', tc]),
+        ),
+      ).rejects.toThrow();
+    }
+    await expect(
+      como(db, 'jorge', () =>
+        db.query(
+          `insert into public.revision_tipos_cambio (revision_id, moneda, tipo_cambio) values ($1, 'USD', 18)`,
+          [op.revision],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it('el T.C. sólo se fija mientras espera autorización', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await expect(
+      como(db, 'alejandro', () =>
+        db.query('select public.guardar_utilidades($1, $2, $3)', [op.revision, '[]', '{"USD": "18"}']),
+      ),
+    ).rejects.toThrow(/espera autorización/);
   });
 });

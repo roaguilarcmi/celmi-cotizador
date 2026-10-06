@@ -66,7 +66,11 @@ export function EditorCotizacion({
   financiamiento: FinanciamientoFila[];
   tipoOportunidad: 'adquisicion' | 'arrendamiento';
   /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
-  autorizacion: { utilidades: Record<string, string>; puedeAutorizar: boolean } | null;
+  autorizacion: {
+    utilidades: Record<string, string>;
+    tiposCambio: Record<string, string>;
+    puedeAutorizar: boolean;
+  } | null;
 }) {
   const editable = puedeEditar && (revision.estado === 'borrador' || revision.estado === 'rechazada');
   const [propuestas, setPropuestas] = useState(() => desdeRevision(revision));
@@ -166,8 +170,11 @@ export function EditorCotizacion({
       ? padreAbierto?.componentes.find((c) => c.clave === abierta.clave)
       : propuesta?.partidas.find((f) => f.clave === abierta?.clave);
 
+  // La corrida ocupa el alto disponible (un solo scroll): sin margen inferior extra.
   return (
-    <div className="animar-entrada mx-auto max-w-[1440px] pb-24">
+    <div
+      className={`animar-entrada mx-auto ${paso === 3 && verCorrida ? 'max-w-none' : 'max-w-[1440px] pb-24'}`}
+    >
       <nav aria-label="Ruta" className="mb-2.5 flex flex-wrap gap-2 text-[13px] text-texto-suave">
         <Link href="/cotizaciones" className="hover:text-texto">
           Cotizaciones
@@ -338,27 +345,16 @@ export function EditorCotizacion({
         />
       )}
       {paso === 3 && verCorrida && (
-        <>
-          {puedeEditar && revision.estado === 'pendiente_autorizacion' && (
-            <div className="mb-5">
-              <PasoAutorizacion
-                revision={revision}
-                cotizacionId={cotizacion.id}
-                puedeEditar={puedeEditar}
-                propuestas={propuestas}
-                onIrA={setPaso}
-              />
-            </div>
-          )}
-          <CorridaAutorizacion
-            revision={revision}
-            cotizacionId={cotizacion.id}
-            catalogos={catalogos}
-            utilidadesIniciales={autorizacion.utilidades}
-            puedeAutorizar={autorizacion.puedeAutorizar}
-            solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
-          />
-        </>
+        <CorridaAutorizacion
+          revision={revision}
+          cotizacionId={cotizacion.id}
+          catalogos={catalogos}
+          utilidadesIniciales={autorizacion.utilidades}
+          tiposCambioIniciales={autorizacion.tiposCambio}
+          puedeAutorizar={autorizacion.puedeAutorizar}
+          puedeRetirar={puedeEditar}
+          solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
+        />
       )}
       {paso === 3 && !verCorrida && (
         <PasoAutorizacion

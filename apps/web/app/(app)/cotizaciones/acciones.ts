@@ -5,12 +5,13 @@ import {
   financiamientoSchema,
   normalizarContenido,
   propuestasCotizacionSchema,
+  tiposCambioAutorizacionSchema,
   utilidadesAutorizacionSchema,
 } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { centavosADecimal } from '@celmi/core';
-import { corridaDe } from '@/lib/corrida';
+import { corridaDe, monedasExtranjeras } from '@/lib/corrida';
 import { obtenerRevision } from '@/lib/datos';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
@@ -179,21 +180,31 @@ const refrescarBandeja = (cotizacionId: string) => {
   revalidatePath('/autorizaciones');
 };
 
-/** Guarda el avance de la utilidad sin autorizar (sólo mientras espera autorización). */
+const ERROR_UTILIDAD = 'Revisa la utilidad: porcentajes de 0 o más, hasta 4 decimales.';
+const ERROR_TC = 'Revisa el tipo de cambio: mayor que cero, hasta 5 decimales.';
+
+/** Guarda el avance (utilidad y T.C.) sin autorizar; sólo mientras espera autorización. */
 export async function guardarUtilidades(
   revisionId: string,
   cotizacionId: string,
   utilidades: unknown,
+  tiposCambio: unknown,
 ): Promise<Resultado> {
   await exigirPermiso('utilidad.autorizar');
   const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
-  if (!leido.success) return { error: 'Revisa la utilidad: porcentajes de 0 o más, hasta 4 decimales.' };
+  if (!leido.success) return { error: ERROR_UTILIDAD };
+  const tc = tiposCambioAutorizacionSchema.safeParse(tiposCambio);
+  if (!tc.success) return { error: ERROR_TC };
   const partidas = Object.entries(leido.data).map(([partida_id, utilidad_pct]) => ({
     partida_id,
     utilidad_pct,
   }));
   const supabase = await clienteServidor();
-  const { error } = await supabase.rpc('guardar_utilidades', { revision: revisionId, partidas });
+  const { error } = await supabase.rpc('guardar_utilidades', {
+    revision: revisionId,
+    partidas,
+    tipos_cambio: tc.data,
+  });
   if (error) return { error: mensajeDe(error, 'No se pudo guardar la utilidad.') };
   refrescarBandeja(cotizacionId);
   return { ok: 'Avance guardado.' };
@@ -207,19 +218,25 @@ export async function autorizarRevision(
   revisionId: string,
   cotizacionId: string,
   utilidades: unknown,
+  tiposCambio: unknown,
   comentario: string,
 ): Promise<Resultado> {
   await exigirPermiso('utilidad.autorizar');
   const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
-  if (!leido.success) return { error: 'Revisa la utilidad: porcentajes de 0 o más, hasta 4 decimales.' };
+  if (!leido.success) return { error: ERROR_UTILIDAD };
+  const tc = tiposCambioAutorizacionSchema.safeParse(tiposCambio);
+  if (!tc.success) return { error: ERROR_TC };
   if (typeof comentario !== 'string' || comentario.length > 2000)
     return { error: 'La nota es demasiado larga.' };
   const revision = await obtenerRevision(revisionId);
   if (!revision || revision.cotizacion_id !== cotizacionId) return { error: 'La revisión no existe.' };
   if (revision.estado !== 'pendiente_autorizacion')
     return { error: 'Esta revisión ya no espera autorización.' };
+  // Cada moneda extranjera de la revisión necesita su T.C. (sólo esas: en pesos no se pide).
+  const faltan = monedasExtranjeras(revision).filter((m) => !tc.data[m]);
+  if (faltan.length) return { error: `Indica el tipo de cambio de ${faltan.join(', ')}.` };
   const utilidad = leido.data;
-  const corrida = corridaDe(revision, (id) => utilidad[id] ?? '');
+  const corrida = corridaDe(revision, (id) => utilidad[id] ?? '', tc.data);
   if (!corrida) return { error: 'Falta la utilidad de alguna partida o hay un dato no válido.' };
   const partidas = [...corrida.partidas].map(([partida_id, r]) => ({
     partida_id,
@@ -230,6 +247,7 @@ export async function autorizarRevision(
   const { error } = await supabase.rpc('autorizar_revision', {
     revision: revisionId,
     partidas,
+    tipos_cambio: tc.data,
     comentario: comentario.trim(),
   });
   if (error) return { error: mensajeDe(error, 'No se pudo autorizar.') };

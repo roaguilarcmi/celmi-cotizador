@@ -124,3 +124,12 @@ export const utilidadesAutorizacionSchema = z.record(
   z.string().regex(/^[0-9a-f-]{36}$/i, 'Partida no válida'),
   porcentaje.refine((v) => Number(v) <= 99999, 'Utilidad demasiado alta'),
 );
+
+/** T.C. por moneda extranjera que fija quien autoriza (0020): { USD: "18.12345" }. */
+export const tiposCambioAutorizacionSchema = z.record(
+  z
+    .string()
+    .regex(/^[A-Z]{3}$/, 'Moneda no válida')
+    .refine((m) => m !== 'MXN', 'El peso no lleva tipo de cambio'),
+  tipoCambio,
+);

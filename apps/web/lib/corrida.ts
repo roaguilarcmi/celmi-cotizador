@@ -21,9 +21,14 @@ export const decimal = (v: number | string, escala: number) => {
   return t.includes('.') ? t.replace(/0+$/, '').replace(/\.$/, '') : t;
 };
 
+/**
+ * T.C. de cada partida: 1 en pesos; el que fija quien autoriza (si la moneda viene en `tiposCambio`, aunque esté vacío
+ * y por tanto no sea válido) o, si no, el que capturó el ejecutivo.
+ */
 export function entradaCorrida(
   revision: RevisionDetalle,
   utilidadDe: (partidaId: string) => string,
+  tiposCambio: Record<string, string> = {},
 ): PropuestaPresentable<PartidaCorrida>[] {
   return revision.propuestas.map((p) => ({
     id: p.id,
@@ -38,7 +43,12 @@ export function entradaCorrida(
         seSuma: pa.se_suma,
         prorratearEntre: pa.prorrateos.map((x) => x.destino_id),
         costoUnitario: decimal(pa.costo.costo_unitario, 2),
-        tipoCambio: decimal(pa.costo.tipo_cambio, 5),
+        tipoCambio:
+          pa.costo.moneda === 'MXN'
+            ? '1'
+            : pa.costo.moneda in tiposCambio
+              ? (tiposCambio[pa.costo.moneda] ?? '')
+              : decimal(pa.costo.tipo_cambio, 5),
         utilidadPct: utilidadDe(pa.id),
       };
     }),
@@ -46,9 +56,13 @@ export function entradaCorrida(
 }
 
 /** Corrida con la utilidad indicada; null si algún valor no es válido (la pantalla lo señala en su celda). */
-export function corridaDe(revision: RevisionDetalle, utilidadDe: (id: string) => string): Corrida | null {
+export function corridaDe(
+  revision: RevisionDetalle,
+  utilidadDe: (id: string) => string,
+  tiposCambio: Record<string, string> = {},
+): Corrida | null {
   try {
-    return calcularCorrida(entradaCorrida(revision, utilidadDe));
+    return calcularCorrida(entradaCorrida(revision, utilidadDe, tiposCambio));
   } catch {
     return null;
   }
@@ -79,3 +93,12 @@ export function presentacionAutorizada(revision: RevisionDetalle): PropuestaPres
     return null;
   }
 }
+
+/** Monedas extranjeras de la revisión (cada una lleva su T.C. al autorizar). */
+export const monedasExtranjeras = (revision: RevisionDetalle) => [
+  ...new Set(
+    revision.propuestas.flatMap((p) =>
+      p.partidas.map((pa) => pa.costo?.moneda).filter((m): m is string => Boolean(m) && m !== 'MXN'),
+    ),
+  ),
+];

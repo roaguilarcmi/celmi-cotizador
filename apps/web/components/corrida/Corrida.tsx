@@ -78,9 +78,15 @@ const mismaSeleccion = (a: Set<string>, b: string[]) => a.size === b.length && b
 export function MenuColumnas({
   ocultas,
   onCambio,
+  columnas = COLUMNAS,
+  compacto,
 }: {
   ocultas: Set<string>;
   onCambio: (s: Set<string>) => void;
+  /** Columnas que ofrece la pantalla (por omisión, las de la corrida de Excel). */
+  columnas?: Columna[];
+  /** Botón más bajo, para barras de herramientas. */
+  compacto?: boolean;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const alternar = (id: string) => {
@@ -91,11 +97,13 @@ export function MenuColumnas({
   };
   return (
     <details ref={ref} className="relative">
-      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md border border-borde bg-superficie px-4 text-sm font-semibold text-texto hover:bg-superficie-2 [&::-webkit-details-marker]:hidden">
+      <summary
+        className={`inline-flex ${compacto ? 'min-h-9 px-3 text-[13px]' : 'min-h-11 px-4 text-sm'} cursor-pointer list-none items-center gap-2 rounded-md border border-borde bg-superficie font-semibold text-texto hover:bg-superficie-2 [&::-webkit-details-marker]:hidden`}
+      >
         <Icon name="columnas" />
         Columnas
         <span className="tabular rounded-pill bg-neutro-suave px-2 py-0.5 text-xs text-neutro">
-          {COLUMNAS.length - ocultas.size}/{COLUMNAS.length}
+          {columnas.filter((c) => !ocultas.has(c.id)).length}/{columnas.length}
         </span>
       </summary>
       <div className="absolute right-0 z-40 mt-2 w-[min(600px,calc(100vw-2rem))] rounded-lg border border-borde bg-superficie p-5 sombra">
@@ -128,24 +136,26 @@ export function MenuColumnas({
               >
                 {GRUPOS[g].titulo}
               </legend>
-              {COLUMNAS.filter((c) => c.grupo === g).map((c) => (
-                <label
-                  key={c.id}
-                  className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-[13px] hover:bg-superficie-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!ocultas.has(c.id)}
-                    disabled={FIJAS.has(c.id)}
-                    onChange={() => alternar(c.id)}
-                    className="size-4 accent-[var(--c-acento)]"
-                  />
-                  <span className={FIJAS.has(c.id) ? 'text-texto-suave' : ''}>
-                    {c.titulo}
-                    {FIJAS.has(c.id) && ' · siempre visible'}
-                  </span>
-                </label>
-              ))}
+              {columnas
+                .filter((c) => c.grupo === g)
+                .map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-[13px] hover:bg-superficie-2"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!ocultas.has(c.id)}
+                      disabled={FIJAS.has(c.id)}
+                      onChange={() => alternar(c.id)}
+                      className="size-4 accent-[var(--c-acento)]"
+                    />
+                    <span className={FIJAS.has(c.id) ? 'text-texto-suave' : ''}>
+                      {c.titulo}
+                      {FIJAS.has(c.id) && ' · siempre visible'}
+                    </span>
+                  </label>
+                ))}
             </fieldset>
           ))}
         </div>

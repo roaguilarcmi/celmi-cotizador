@@ -514,6 +514,16 @@ export async function listarUtilidades(partidas: string[]): Promise<Record<strin
   return Object.fromEntries(filas.map((f) => [f.partida_id, String(Number(f.utilidad_pct))]));
 }
 
+/** T.C. que fijó quien autoriza en la revisión, por moneda (0020). */
+export async function listarTiposCambio(revisionId: string): Promise<Record<string, string>> {
+  const supabase = await clienteServidor();
+  const filas = (exigir(
+    await supabase.from('revision_tipos_cambio').select(CONSULTAS.tiposCambio).eq('revision_id', revisionId),
+    'el tipo de cambio',
+  ) ?? []) as unknown as { moneda: string; tipo_cambio: number | string }[];
+  return Object.fromEntries(filas.map((f) => [f.moneda, String(Number(f.tipo_cambio))]));
+}
+
 export interface RevisionBandeja {
   id: string;
   numero: number;
