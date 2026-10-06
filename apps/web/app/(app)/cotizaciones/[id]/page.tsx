@@ -6,6 +6,7 @@ import {
   listarCondicionesDeRevision,
   listarEsquemas,
   listarFinanciamiento,
+  listarUtilidades,
   obtenerCotizacion,
 } from '@/lib/datos';
 import { obtenerSesion } from '@/lib/sesion';
@@ -51,11 +52,14 @@ export default async function PaginaCotizacion({
   ]);
   if (!datos) notFound();
   const { cotizacion, revision } = datos;
-  const [catalogoCondiciones, condiciones, esquemas, financiamiento] = await Promise.all([
+  // La utilidad sólo la ve quien autoriza (RLS también lo exige).
+  const veUtilidad = sesion.permisos.has('utilidad.ver') || sesion.permisos.has('utilidad.autorizar');
+  const [catalogoCondiciones, condiciones, esquemas, financiamiento, utilidades] = await Promise.all([
     listarCondicionesCatalogo(),
     listarCondicionesDeRevision(revision.id),
     listarEsquemas(),
     listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
+    veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
   ]);
 
   // Edita quien participa en la oportunidad (ejecutivo o colaborador) o quien puede editar todas; la base lo
@@ -91,6 +95,9 @@ export default async function PaginaCotizacion({
       condiciones={condiciones}
       esquemasFinanciamiento={esquemas.filter((e) => e.id !== 'adquisicion')}
       financiamiento={financiamiento}
+      autorizacion={
+        utilidades ? { utilidades, puedeAutorizar: sesion.permisos.has('utilidad.autorizar') } : null
+      }
       tipoOportunidad={cotizacion.oportunidad?.tipo ?? 'arrendamiento'}
       pasoInicial={PASOS[paso ?? ''] ?? PASO_POR_ESTADO[revision.estado] ?? 1}
     />

@@ -41,5 +41,17 @@ for (const [nombre, columnas] of Object.entries(CONSULTAS)) {
   console.log(`${bien ? '✔' : '✘'} mis_etapas_tarea()${bien ? '' : ` · ${error?.code} ${error?.message}`}`);
   if (!bien) fallas++;
 }
+// Autorización (0019): sin sesión no hay permiso (42501) y no se escribe nada; se usa una revisión inexistente.
+for (const fn of ['guardar_utilidades', 'autorizar_revision']) {
+  const { error } = await supabase.rpc(fn, {
+    revision: '00000000-0000-0000-0000-000000000000',
+    partidas: [],
+  });
+  const bien = error?.code === '42501';
+  console.log(
+    `${bien ? '✔' : '✘'} ${fn}()${bien ? '' : ` · ${error?.code ?? 'sin error'} ${error?.message ?? ''}`}`,
+  );
+  if (!bien) fallas++;
+}
 console.log(fallas ? `\n${fallas} consulta(s) con error.` : '\nTodas las consultas responden.');
 process.exit(fallas ? 1 : 0);

@@ -25,6 +25,7 @@ import {
   type PropuestaEditable,
 } from './modelo';
 import { EliminarCotizacion } from './EliminarCotizacion';
+import { CorridaAutorizacion } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import { PasoCondiciones } from './PasoCondiciones';
 import { PasoFinanciamiento } from './PasoFinanciamiento';
@@ -50,6 +51,7 @@ export function EditorCotizacion({
   esquemasFinanciamiento,
   financiamiento,
   tipoOportunidad,
+  autorizacion,
 }: {
   cotizacion: CotizacionFila;
   revision: RevisionDetalle;
@@ -63,6 +65,8 @@ export function EditorCotizacion({
   esquemasFinanciamiento: Esquema[];
   financiamiento: FinanciamientoFila[];
   tipoOportunidad: 'adquisicion' | 'arrendamiento';
+  /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
+  autorizacion: { utilidades: Record<string, string>; puedeAutorizar: boolean } | null;
 }) {
   const editable = puedeEditar && (revision.estado === 'borrador' || revision.estado === 'rechazada');
   const [propuestas, setPropuestas] = useState(() => desdeRevision(revision));
@@ -87,6 +91,9 @@ export function EditorCotizacion({
   >(null);
   const [guardando, iniciar] = useTransition();
 
+  // Quien autoriza ve la corrida en cuanto la revisión se envía (y después, en sólo lectura).
+  const verCorrida =
+    autorizacion !== null && ['pendiente_autorizacion', 'autorizada', 'emitida'].includes(revision.estado);
   const sucio = editable && JSON.stringify(aPayload(propuestas)) !== base;
   const propuesta = propuestas.find((p) => p.clave === activa) ?? propuestas[0];
 
@@ -330,7 +337,30 @@ export function EditorCotizacion({
           tipoOportunidad={tipoOportunidad}
         />
       )}
-      {paso === 3 && (
+      {paso === 3 && verCorrida && (
+        <>
+          {puedeEditar && revision.estado === 'pendiente_autorizacion' && (
+            <div className="mb-5">
+              <PasoAutorizacion
+                revision={revision}
+                cotizacionId={cotizacion.id}
+                puedeEditar={puedeEditar}
+                propuestas={propuestas}
+                onIrA={setPaso}
+              />
+            </div>
+          )}
+          <CorridaAutorizacion
+            revision={revision}
+            cotizacionId={cotizacion.id}
+            catalogos={catalogos}
+            utilidadesIniciales={autorizacion.utilidades}
+            puedeAutorizar={autorizacion.puedeAutorizar}
+            solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
+          />
+        </>
+      )}
+      {paso === 3 && !verCorrida && (
         <PasoAutorizacion
           revision={revision}
           cotizacionId={cotizacion.id}

@@ -97,11 +97,12 @@ export async function crearOportunidad(db: PGlite, ejecutivo: Usuario) {
   await db.query(`insert into public.partida_costos (partida_id, costo_unitario) values ($1, 14533.46)`, [
     partida!.id,
   ]);
+  // Flujo real (0014): los precios sólo se registran mientras la revisión espera autorización.
+  await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [rev!.id]);
+  // 0019: la utilidad también se define sólo mientras espera autorización.
   await db.query(`insert into public.partida_utilidad (partida_id, utilidad_pct) values ($1, 13.5)`, [
     partida!.id,
   ]);
-  // Flujo real (0014): los precios sólo se registran mientras la revisión espera autorización.
-  await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [rev!.id]);
   await db.query(`insert into public.partida_precios (partida_id, precio_unitario) values ($1, 16495.48)`, [
     partida!.id,
   ]);

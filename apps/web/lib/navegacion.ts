@@ -38,7 +38,8 @@ export const SECCIONES: Seccion[] = [
     slug: 'autorizaciones',
     titulo: 'Autorizaciones',
     icono: 'autorizaciones',
-    fase: 4,
+    fase: 3,
+    permiso: 'utilidad.autorizar',
     descripcion: 'Bandeja del autorizador: utilidad, precios y bloqueo de partidas.',
   },
   {

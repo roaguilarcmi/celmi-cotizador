@@ -21,7 +21,7 @@ const SESION_DEMO: Sesion = {
   nombre: 'Rodrigo Rivera',
   puesto: 'Preventa',
   rol: 'Modo demostración',
-  permisos: new Set(['usuarios.administrar']),
+  permisos: new Set(['usuarios.administrar', 'utilidad.autorizar']),
   demo: true,
 };
 

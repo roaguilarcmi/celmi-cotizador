@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { contenidoEnriquecidoSchema } from './enriquecido';
-import { dinero, tipoCambio } from './numeros';
+import { dinero, porcentaje, tipoCambio } from './numeros';
 
 const uuid = z.uuid();
 const opcionalUuid = z
@@ -118,3 +118,9 @@ export const financiamientoSchema = z
   .max(500);
 
 export type FinanciamientoCaptura = z.infer<typeof financiamientoSchema>[number];
+
+/** Utilidad por partida que envía quien autoriza (Fase 3C): { [partida_id]: "13.5" }. Nunca negativa. */
+export const utilidadesAutorizacionSchema = z.record(
+  z.string().regex(/^[0-9a-f-]{36}$/i, 'Partida no válida'),
+  porcentaje.refine((v) => Number(v) <= 99999, 'Utilidad demasiado alta'),
+);

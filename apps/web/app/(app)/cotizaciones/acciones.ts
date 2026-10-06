@@ -5,10 +5,14 @@ import {
   financiamientoSchema,
   normalizarContenido,
   propuestasCotizacionSchema,
+  utilidadesAutorizacionSchema,
 } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { obtenerSesion } from '@/lib/sesion';
+import { centavosADecimal } from '@celmi/core';
+import { corridaDe } from '@/lib/corrida';
+import { obtenerRevision } from '@/lib/datos';
+import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 
 export interface Resultado {
@@ -166,4 +170,92 @@ export async function eliminarCotizacion(
     redirect(`/oportunidades/${oportunidadId}`);
   }
   redirect('/cotizaciones');
+}
+
+// ───────────── Autorización (Fase 3C) ─────────────
+
+const refrescarBandeja = (cotizacionId: string) => {
+  refrescar(cotizacionId);
+  revalidatePath('/autorizaciones');
+};
+
+/** Guarda el avance de la utilidad sin autorizar (sólo mientras espera autorización). */
+export async function guardarUtilidades(
+  revisionId: string,
+  cotizacionId: string,
+  utilidades: unknown,
+): Promise<Resultado> {
+  await exigirPermiso('utilidad.autorizar');
+  const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
+  if (!leido.success) return { error: 'Revisa la utilidad: porcentajes de 0 o más, hasta 4 decimales.' };
+  const partidas = Object.entries(leido.data).map(([partida_id, utilidad_pct]) => ({
+    partida_id,
+    utilidad_pct,
+  }));
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('guardar_utilidades', { revision: revisionId, partidas });
+  if (error) return { error: mensajeDe(error, 'No se pudo guardar la utilidad.') };
+  refrescarBandeja(cotizacionId);
+  return { ok: 'Avance guardado.' };
+}
+
+/**
+ * Autoriza: el servidor vuelve a leer la revisión y calcula los precios con @celmi/core a partir de la utilidad
+ * recibida (nunca acepta precios del navegador); la base los verifica, los registra y autoriza en una transacción.
+ */
+export async function autorizarRevision(
+  revisionId: string,
+  cotizacionId: string,
+  utilidades: unknown,
+  comentario: string,
+): Promise<Resultado> {
+  await exigirPermiso('utilidad.autorizar');
+  const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
+  if (!leido.success) return { error: 'Revisa la utilidad: porcentajes de 0 o más, hasta 4 decimales.' };
+  if (typeof comentario !== 'string' || comentario.length > 2000)
+    return { error: 'La nota es demasiado larga.' };
+  const revision = await obtenerRevision(revisionId);
+  if (!revision || revision.cotizacion_id !== cotizacionId) return { error: 'La revisión no existe.' };
+  if (revision.estado !== 'pendiente_autorizacion')
+    return { error: 'Esta revisión ya no espera autorización.' };
+  const utilidad = leido.data;
+  const corrida = corridaDe(revision, (id) => utilidad[id] ?? '');
+  if (!corrida) return { error: 'Falta la utilidad de alguna partida o hay un dato no válido.' };
+  const partidas = [...corrida.partidas].map(([partida_id, r]) => ({
+    partida_id,
+    utilidad_pct: utilidad[partida_id],
+    precio_unitario: centavosADecimal(r.precioUnitario),
+  }));
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('autorizar_revision', {
+    revision: revisionId,
+    partidas,
+    comentario: comentario.trim(),
+  });
+  if (error) return { error: mensajeDe(error, 'No se pudo autorizar.') };
+  refrescarBandeja(cotizacionId);
+  return { ok: 'Precios autorizados y bloqueados.' };
+}
+
+/** Rechaza con el motivo (obligatorio): la revisión regresa al ejecutivo para corregirla y reenviarla. */
+export async function rechazarRevision(
+  revisionId: string,
+  cotizacionId: string,
+  motivo: string,
+): Promise<Resultado> {
+  await exigirPermiso('utilidad.autorizar');
+  const texto = typeof motivo === 'string' ? motivo.trim() : '';
+  if (!texto) return { error: 'Indica el motivo del rechazo.' };
+  if (texto.length > 2000) return { error: 'El motivo es demasiado largo.' };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('revisiones')
+    .update({ estado: 'rechazada', comentario_autorizacion: texto })
+    .eq('id', revisionId)
+    .eq('estado', 'pendiente_autorizacion')
+    .select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo rechazar.') };
+  if (!data?.length) return { error: 'Esta revisión ya no espera autorización.' };
+  refrescarBandeja(cotizacionId);
+  return { ok: 'Rechazada. El ejecutivo verá el motivo.' };
 }

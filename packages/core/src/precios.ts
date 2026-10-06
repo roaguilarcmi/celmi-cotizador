@@ -120,7 +120,9 @@ export interface LineaCliente {
  * (p. ej. SSD + servicio de instalación). El precio unitario visible es la suma de los
  * precios unitarios ya redondeados. Exige la misma cantidad en todas las partidas.
  */
-export function consolidarLinea(partidas: readonly ResultadoPartida[]): LineaCliente {
+export function consolidarLinea(
+  partidas: readonly Pick<ResultadoPartida, 'precioUnitario' | 'cantidad'>[],
+): LineaCliente {
   const [primera] = partidas;
   if (!primera) throw new Error('Se requiere al menos una partida para consolidar');
   if (partidas.some((p) => p.cantidad !== primera.cantidad)) {

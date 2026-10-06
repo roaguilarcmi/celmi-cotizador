@@ -3,7 +3,7 @@ import { CierrePorInactividad } from '@/components/CierrePorInactividad';
 import { MenuLateral } from '@/components/MenuLateral';
 import { AvisosTareas } from '@/components/tareas/AvisosTareas';
 import { EtapasTareas } from '@/components/tareas/EtapasContexto';
-import { listarMisEtapas } from '@/lib/datos';
+import { contarPorAutorizar, listarMisEtapas } from '@/lib/datos';
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { ESTADOS_ABIERTOS } from '@/lib/etapas-tareas';
@@ -27,9 +27,13 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
-  const [porVencer, etapas] = sesion.demo
-    ? [0, []]
-    : await Promise.all([tareasPorVencer(), listarMisEtapas()]);
+  const [porVencer, etapas, porAutorizar] = sesion.demo
+    ? [0, [], 0]
+    : await Promise.all([
+        tareasPorVencer(),
+        listarMisEtapas(),
+        sesion.permisos.has('utilidad.autorizar') ? contarPorAutorizar() : 0,
+      ]);
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
@@ -37,7 +41,7 @@ export default async function LayoutApp({ children }: { children: ReactNode }) {
         usuario={{ nombre: sesion.nombre, rol: sesion.rol, iniciales }}
         permisos={[...sesion.permisos]}
         demo={sesion.demo}
-        contadores={{ tareas: porVencer }}
+        contadores={{ tareas: porVencer, autorizaciones: porAutorizar }}
       />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-9 lg:py-7">
         {sesion.demo && (

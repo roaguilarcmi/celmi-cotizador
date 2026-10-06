@@ -286,6 +286,7 @@ export interface CotizacionFila {
     ejecutivo_id: string;
     tipo: 'adquisicion' | 'arrendamiento';
     cliente: { razon_social: string } | null;
+    ejecutivo: { nombre: string } | null;
   } | null;
   revisiones: {
     id: string;
@@ -390,11 +391,19 @@ export async function obtenerCotizacion(
   if (!c) return null;
   const elegida = c.revisiones.find((r) => r.numero === numero) ?? c.revisiones[0];
   if (!elegida) return null;
+  const r = await obtenerRevision(elegida.id);
+  if (!r) return null;
+  return { cotizacion: c, revision: r };
+}
+
+/** Una revisión completa: propuestas, partidas, costos y precios (RLS decide qué ve cada quien). */
+export async function obtenerRevision(id: string): Promise<RevisionDetalle | null> {
+  const supabase = await clienteServidor();
   const r = exigir(
     await supabase
       .from('revisiones')
       .select(CONSULTAS.revision)
-      .eq('id', elegida.id)
+      .eq('id', id)
       .order('orden', { referencedTable: 'propuestas' })
       .order('orden', { referencedTable: 'propuestas.partidas' })
       .maybeSingle(),
@@ -410,7 +419,7 @@ export async function obtenerCotizacion(
       const precio = pa.precio as PartidaFila['precio'] | PartidaFila['precio'][];
       pa.precio = Array.isArray(precio) ? (precio[0] ?? null) : precio;
     }
-  return { cotizacion: c, revision: r };
+  return r;
 }
 
 export async function listarCatalogosCotizacion(): Promise<CatalogosCotizacion> {
@@ -489,4 +498,95 @@ export async function listarFinanciamiento(propuestaIds: string[]): Promise<Fina
       .order('orden'),
     'el financiamiento',
   ) ?? []) as unknown as FinanciamientoFila[];
+}
+
+// ───────────── Autorización (Fase 3C) ─────────────
+
+/** Utilidad guardada de cada partida (sólo la recibe quien tiene «utilidad.ver»; a los demás RLS no les da filas). */
+export async function listarUtilidades(partidas: string[]): Promise<Record<string, string>> {
+  if (!partidas.length) return {};
+  const supabase = await clienteServidor();
+  const filas = (exigir(
+    await supabase.from('partida_utilidad').select(CONSULTAS.utilidades).in('partida_id', partidas),
+    'la utilidad',
+  ) ?? []) as unknown as { partida_id: string; utilidad_pct: number | string }[];
+  // La base la entrega como número («13.5»): se pasa a texto sin ceros de más.
+  return Object.fromEntries(filas.map((f) => [f.partida_id, String(Number(f.utilidad_pct))]));
+}
+
+export interface RevisionBandeja {
+  id: string;
+  numero: number;
+  estado: EstadoRevision;
+  enviada_en: string | null;
+  autorizada_en: string | null;
+  comentario_autorizacion: string;
+  cotizacion: {
+    id: string;
+    folio: string | null;
+    oportunidad: {
+      id: string;
+      nombre: string;
+      cliente: { razon_social: string } | null;
+      ejecutivo: { nombre: string } | null;
+    } | null;
+  } | null;
+  propuestas: {
+    id: string;
+    partidas: {
+      id: string;
+      cantidad: number;
+      costo: { costo_unitario: number | string; tipo_cambio: number | string } | null;
+    }[];
+  }[];
+}
+
+/** Bandeja de quien autoriza: lo que espera autorización (lo más antiguo primero) y lo resuelto recientemente. */
+export async function listarBandeja(): Promise<{
+  pendientes: RevisionBandeja[];
+  recientes: RevisionBandeja[];
+}> {
+  const supabase = await clienteServidor();
+  const [pendientes, recientes] = await Promise.all([
+    supabase
+      .from('revisiones')
+      .select(CONSULTAS.bandeja)
+      .eq('estado', 'pendiente_autorizacion')
+      .order('enviada_en', { ascending: true }),
+    supabase
+      .from('revisiones')
+      .select(CONSULTAS.bandeja)
+      .in('estado', ['autorizada', 'rechazada', 'emitida'])
+      .not('enviada_en', 'is', null)
+      .order('enviada_en', { ascending: false })
+      .limit(12),
+  ]);
+  const normalizar = (lista: RevisionBandeja[]) => {
+    for (const r of lista)
+      for (const p of r.propuestas)
+        for (const pa of p.partidas) {
+          const costo = pa.costo as
+            RevisionBandeja['propuestas'][number]['partidas'][number]['costo'] | unknown[];
+          pa.costo = Array.isArray(costo) ? ((costo[0] as typeof pa.costo) ?? null) : costo;
+        }
+    return lista;
+  };
+  return {
+    pendientes: normalizar(
+      (exigir(pendientes, 'la bandeja de autorización') ?? []) as unknown as RevisionBandeja[],
+    ),
+    recientes: normalizar(
+      (exigir(recientes, 'las autorizaciones recientes') ?? []) as unknown as RevisionBandeja[],
+    ),
+  };
+}
+
+/** Revisiones que esperan autorización (contador del menú). */
+export async function contarPorAutorizar(): Promise<number> {
+  const supabase = await clienteServidor();
+  const { count } = await supabase
+    .from('revisiones')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado', 'pendiente_autorizacion');
+  return count ?? 0;
 }
