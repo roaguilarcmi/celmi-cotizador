@@ -414,7 +414,18 @@ function Formulario({
             />
             {f.costo_anterior && <PrecioAnterior anterior={f.costo_anterior} actual={f.costo_unitario} />}
           </Campo>
-          {f.moneda !== 'MXN' && (
+          {f.moneda === 'MXN' ? (
+            // Pesos: el T.C. es 1 y no se modifica (decisión 2026-10-06).
+            <Campo etiqueta="Tipo de cambio" id={`${id}-tc`}>
+              <span
+                id={`${id}-tc`}
+                title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
+                className={`${control} flex items-center justify-between bg-superficie-2 text-texto-suave tabular`}
+              >
+                <Icon name="candado" size={14} />1
+              </span>
+            </Campo>
+          ) : (
             <Campo
               etiqueta="Tipo de cambio (5 decimales)"
               id={`${id}-tc`}

@@ -318,7 +318,7 @@ function Fila({
         <div className="truncate">{mayorista || <span className="text-texto-suave">—</span>}</div>
         <div className="text-[11px] text-texto-suave">
           {f.moneda}
-          {f.moneda !== 'MXN' && f.tipo_cambio && ` · T.C. ${f.tipo_cambio}`}
+          {` · T.C. ${f.moneda === 'MXN' ? '1' : f.tipo_cambio || '?'}`}
           {f.vigencia && ` · al ${fechaCorta.format(new Date(f.vigencia))}`}
         </div>
       </div>

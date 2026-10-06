@@ -161,6 +161,12 @@ export function CorridaAutorizacion({
   const todas = revision.propuestas.flatMap((p) => p.partidas);
   const utilidadDe = (id: string) => porPartida[id] ?? general;
   const efectivas = Object.fromEntries(todas.map((p) => [p.id, utilidadDe(p.id)]));
+  const utilidadBase = (() => {
+    if (general) return general;
+    const cuenta = new Map<string, number>();
+    for (const v of Object.values(efectivas)) if (v) cuenta.set(v, (cuenta.get(v) ?? 0) + 1);
+    return [...cuenta].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+  })();
   const tcsValidos = monedas.every((m) => tipoCambioSchema.safeParse(tcs[m] ?? '').success);
   const sucio = editable && (JSON.stringify([porPartida, tcs]) !== base || general !== '');
 
@@ -265,11 +271,9 @@ export function CorridaAutorizacion({
   const numAdicionales = revision.propuestas.filter((p) => p.es_adicional).length;
   const generalValida = general === '' || porcentaje.safeParse(general).success;
 
-  // El T.C. sólo existe si hay partidas en moneda extranjera (decisión 2026-10-06).
+  // Precio = costo × T.C. × (1 + utilidad): en pesos el T.C. es 1 y no se modifica (decisión 2026-10-06).
   const conCliente = todas.some((p) => p.presentacion !== 'linea');
-  const disponibles = COLUMNAS.filter((c) => c.id !== 'tc' || monedas.length > 0).flatMap((c) =>
-    c.id === 'pvUnit' && conCliente ? [c, COLUMNA_CLIENTE] : [c],
-  );
+  const disponibles = COLUMNAS.flatMap((c) => (c.id === 'pvUnit' && conCliente ? [c, COLUMNA_CLIENTE] : [c]));
   const columnas = disponibles.filter((c) => !ocultas.has(c.id));
   const gruposVisibles = (Object.keys(GRUPOS) as Grupo[])
     .map((g) => ({ g, span: columnas.filter((c) => c.grupo === g).length }))
@@ -382,7 +386,12 @@ export function CorridaAutorizacion({
       case 'moneda':
         return p.costo?.moneda ?? '—';
       case 'tc':
-        if (!p.costo || p.costo.moneda === 'MXN') return <span className="text-texto-suave">1</span>;
+        if (!p.costo || p.costo.moneda === 'MXN')
+          return (
+            <span className="text-texto-suave" title="Pesos mexicanos: T.C. fijo en 1">
+              1
+            </span>
+          );
         return (
           <span className="font-semibold text-aviso" title="T.C. que fija quien autoriza">
             {tcs[p.costo.moneda] || '?'}
@@ -538,6 +547,13 @@ export function CorridaAutorizacion({
 
       {/* Barra 2: parámetros de la autorización. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde bg-superficie-2/60 px-3 py-2">
+        <span
+          title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-borde bg-superficie px-2.5 text-xs font-semibold text-texto-suave"
+        >
+          <Icon name="candado" size={12} />
+          T.C. MXN <strong className="text-texto">1</strong>
+        </span>
         {monedas.map((m) => {
           const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
           return (
@@ -590,8 +606,18 @@ export function CorridaAutorizacion({
             </button>
           </div>
         )}
+        {editable && (
+          <p className="flex items-center gap-1.5 text-[11px] leading-tight text-exito">
+            <span className="inline-block size-0 border-t-[7px] border-l-[7px] border-t-acento border-l-transparent" />
+            <span>
+              Cada partida puede llevar su propia utilidad:
+              <br />
+              escríbela en su celda (▲ = personalizada).
+            </span>
+          </p>
+        )}
         <p className="text-[11px] leading-tight text-texto-suave">
-          Precio = costo{monedas.length ? ' × T.C.' : ''} × (1 + utilidad),
+          Precio = costo × T.C. × (1 + utilidad %),
           <br />
           unitario redondeado a 2 decimales.
         </p>
@@ -652,11 +678,26 @@ export function CorridaAutorizacion({
                 <th
                   key={c.id}
                   scope="col"
-                  className={`${borde} ${i === 0 ? 'border-l border-l-texto/25' : inicioGrupo(i)} max-w-28 min-w-16 bg-superficie-2 px-2 py-1.5 align-middle leading-tight ${
+                  className={`${borde} ${i === 0 ? 'border-l border-l-texto/25' : inicioGrupo(i)} ${
+                    c.id === 'utilidadPct'
+                      ? 'w-14 max-w-14 min-w-14 bg-exito-suave px-1'
+                      : 'max-w-28 min-w-16 bg-superficie-2 px-2'
+                  } py-1.5 align-middle leading-tight ${
                     CENTRADAS.has(c.id) ? 'text-center' : c.numero ? 'text-right' : 'text-left'
                   }`}
                 >
-                  {c.titulo}
+                  {c.id === 'utilidadPct' ? (
+                    <>
+                      <span className="text-exito">Utilidad %</span>
+                      {editable && (
+                        <span className="mt-0.5 block text-[9px] font-bold tracking-wide text-exito uppercase">
+                          Editable
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    c.titulo
+                  )}
                 </th>
               ))}
             </tr>
@@ -696,6 +737,7 @@ export function CorridaAutorizacion({
                   const cargo = f.tipo === 'cargo' ? cargoDe.get(f.p.id) : undefined;
                   const valor = utilidadDe(f.p.id);
                   const valida = porcentaje.safeParse(valor).success;
+                  const personalizada = editable && valor !== '' && valor !== utilidadBase;
                   return (
                     <tr key={f.p.id} className="group h-8">
                       <td
@@ -723,10 +765,17 @@ export function CorridaAutorizacion({
                           return (
                             <td
                               key={c.id}
-                              className={`${clases} p-0 text-center ${
+                              title={personalizada ? 'Utilidad personalizada de esta partida' : undefined}
+                              className={`${clases} relative w-14 max-w-14 min-w-14 px-1 text-center ${
                                 editable ? (valida ? 'bg-exito-suave/60' : 'bg-peligro-suave') : ''
                               }`}
                             >
+                              {personalizada && (
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute top-0 right-0 size-0 border-t-[7px] border-l-[7px] border-t-acento border-l-transparent"
+                                />
+                              )}
                               {editable ? (
                                 <input
                                   value={valor}
@@ -737,8 +786,8 @@ export function CorridaAutorizacion({
                                   onChange={(e) =>
                                     setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
                                   }
-                                  className={`tabular block h-8 w-full min-w-16 bg-transparent px-1 text-center text-[12px] font-bold outline-none focus:bg-superficie focus:ring-2 focus:ring-acento focus:ring-inset ${
-                                    valida ? 'text-texto' : 'text-peligro'
+                                  className={`tabular mx-auto block h-6 w-12 rounded-sm border bg-superficie px-0.5 text-center text-[12px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
+                                    valida ? 'border-exito/50 text-texto' : 'border-peligro text-peligro'
                                   }`}
                                 />
                               ) : (
