@@ -277,3 +277,34 @@ export async function rechazarRevision(
   refrescarBandeja(cotizacionId);
   return { ok: 'Rechazada. El ejecutivo verá el motivo.' };
 }
+
+// ───────────── Revisiones (Fase 3D) ─────────────
+
+/**
+ * Nueva Rev a partir de la autorizada: la base copia propuestas, partidas, costos, adicionales y repartos (con su
+ * origen); en una mejora de precio el costo actual pasa a «Precio anterior». Vuelve a pasar por autorización.
+ */
+export async function crearNuevaRevision(cotizacionId: string, motivo: string): Promise<Resultado> {
+  await obtenerSesion();
+  if (motivo !== 'solicitud_cliente' && motivo !== 'mejora_precio') return { error: 'Elige el motivo.' };
+  const supabase = await clienteServidor();
+  const { data: id, error } = await supabase.rpc('crear_revision', { cotizacion: cotizacionId, motivo });
+  if (error || typeof id !== 'string')
+    return {
+      error: error ? mensajeDe(error, 'No se pudo crear la revisión.') : 'No se pudo crear la revisión.',
+    };
+  const { data: rev } = await supabase.from('revisiones').select('numero').eq('id', id).maybeSingle();
+  refrescar(cotizacionId);
+  redirect(`/cotizaciones/${cotizacionId}?rev=${rev?.numero ?? ''}&paso=partidas`);
+}
+
+/** Descarta una Rev que nunca se autorizó (la más reciente; la original no). La auditoría conserva lo descartado. */
+export async function descartarRevision(revisionId: string, cotizacionId: string): Promise<Resultado> {
+  await obtenerSesion();
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase.from('revisiones').delete().eq('id', revisionId).select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo descartar la revisión.') };
+  if (!data?.length) return { error: 'Esta revisión ya no se puede descartar.' };
+  refrescar(cotizacionId);
+  redirect(`/cotizaciones/${cotizacionId}`);
+}

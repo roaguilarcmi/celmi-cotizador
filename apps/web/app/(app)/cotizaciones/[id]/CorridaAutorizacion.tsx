@@ -3,12 +3,14 @@
 import {
   aEscalado,
   calcularPartida,
+  centavosADecimal,
   conIva,
   ESCALA_DINERO,
   formatearMXN,
   importeConLetra,
   mejoraDePrecio,
   presentarPropuestas,
+  variacion,
   type ResultadoPartida,
 } from '@celmi/core';
 import { porcentaje, tipoCambio as tipoCambioSchema } from '@celmi/validation';
@@ -48,6 +50,13 @@ const COLUMNA_CLIENTE: Columna = {
   grupo: 'venta',
   numero: true,
 };
+/** Utilidad y precio de la Rev anterior de cada partida (sólo como referencia; 2026-10-06). */
+export interface ReferenciaCorrida {
+  /** «Original», «Rev A»… */
+  etiqueta: string;
+  porPartida: Record<string, { utilidad?: string; precio?: string }>;
+}
+
 /** Columnas centradas (como en Excel, los importes van a la derecha y el texto a la izquierda). */
 const CENTRADAS = new Set(['cantidad', 'unidad', 'moneda', 'tc', 'utilidadPct', 'entrega']);
 
@@ -110,6 +119,7 @@ export function CorridaAutorizacion({
   catalogos,
   utilidadesIniciales,
   tiposCambioIniciales: tcGuardados,
+  referencia,
   puedeAutorizar,
   puedeRetirar,
   solicitante,
@@ -119,6 +129,7 @@ export function CorridaAutorizacion({
   catalogos: Catalogos;
   utilidadesIniciales: Record<string, string>;
   tiposCambioIniciales: Record<string, string>;
+  referencia?: ReferenciaCorrida | null;
   puedeAutorizar: boolean;
   /** Quien preparó la cotización puede retirarla mientras espera. */
   puedeRetirar: boolean;
@@ -267,7 +278,34 @@ export function CorridaAutorizacion({
 
   // Precio = costo × T.C. + utilidad (% sobre el costo en pesos); en pesos el T.C. es 1 y no se modifica (2026-10-06).
   const conCliente = todas.some((p) => p.presentacion !== 'linea');
-  const disponibles = COLUMNAS.flatMap((c) => (c.id === 'pvUnit' && conCliente ? [c, COLUMNA_CLIENTE] : [c]));
+  const disponibles = COLUMNAS.flatMap((c) =>
+    c.id === 'pvUnit'
+      ? [
+          c,
+          ...(conCliente ? [COLUMNA_CLIENTE] : []),
+          ...(referencia
+            ? [
+                {
+                  id: 'pvAnt',
+                  titulo: `P.U. ${referencia.etiqueta} sin IVA`,
+                  grupo: 'venta',
+                  numero: true,
+                } as Columna,
+              ]
+            : []),
+        ]
+      : c.id === 'utilidadPct' && referencia
+        ? [
+            c,
+            {
+              id: 'utilidadAnt',
+              titulo: `Utilidad ${referencia.etiqueta}`,
+              grupo: 'utilidad',
+              numero: true,
+            } as Columna,
+          ]
+        : [c],
+  );
   const columnas = disponibles.filter((c) => !ocultas.has(c.id));
   const gruposVisibles = (Object.keys(GRUPOS) as Grupo[])
     .map((g) => ({ g, span: columnas.filter((c) => c.grupo === g).length }))
@@ -436,6 +474,32 @@ export function CorridaAutorizacion({
       case 'pvCliente': {
         const l = f.tipo === 'partida' || f.tipo === 'visible' ? lineaDe.get(p.id) : undefined;
         return l ? <span className="font-bold text-acento-texto">{pesos(l.precioUnitario)}</span> : null;
+      }
+      case 'utilidadAnt': {
+        const u = referencia?.porPartida[p.id]?.utilidad;
+        return u ? (
+          <span className="text-texto-suave">{u} %</span>
+        ) : (
+          <span className="text-texto-suave">—</span>
+        );
+      }
+      case 'pvAnt': {
+        const antes = referencia?.porPartida[p.id]?.precio;
+        if (!antes)
+          return <span className="text-texto-suave">{referencia?.porPartida[p.id] ? '—' : 'Nueva'}</span>;
+        const cambio = r ? variacion(antes, centavosADecimal(r.precioUnitario)) : null;
+        return (
+          <>
+            {cambio && cambio !== '0.0' && (
+              <span
+                className={`mr-1.5 rounded-sm px-1 text-[11px] font-bold ${cambio.startsWith('-') ? 'bg-exito-suave text-exito' : 'bg-aviso-suave text-aviso'}`}
+              >
+                {cambio.startsWith('-') ? '▼' : '▲'} {cambio.replace('-', '')} %
+              </span>
+            )}
+            <span className="text-texto-suave">{pesos(aEscalado(antes, ESCALA_DINERO))}</span>
+          </>
+        );
       }
       case 'pvUnitIva':
         return v(r ? conIva(r.precioUnitario) : undefined);
@@ -639,6 +703,7 @@ export function CorridaAutorizacion({
           <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
           <Boton
             tamano="chico"
+            variante="paso"
             icono={completa ? 'compactar' : 'expandir'}
             onClick={() => guardarCompleta(completa ? null : '1')}
             title={completa ? 'Salir de pantalla completa (Esc)' : 'Usar toda la pantalla'}

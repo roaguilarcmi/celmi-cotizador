@@ -296,6 +296,9 @@ export interface CotizacionFila {
     creado_en: string;
     enviada_en: string | null;
     autorizada_en: string | null;
+    comentario_autorizacion: string;
+    autor: { nombre: string } | null;
+    autorizador: { nombre: string } | null;
   }[];
 }
 
@@ -322,6 +325,8 @@ export interface PartidaFila {
   oculta_al_cliente: boolean;
   /** Adicional de otra partida (un nivel). */
   partida_padre_id: string | null;
+  /** Partida de la Rev anterior de la que se copió (0021). */
+  partida_origen_id: string | null;
   /** linea: visible · incluida: dentro del precio de su partida · prorrateada: cargo repartido. */
   presentacion: 'linea' | 'incluida' | 'prorrateada';
   /** Partidas entre las que se reparte (sólo cargos prorrateados). */
@@ -337,6 +342,8 @@ export interface PropuestaFila {
   nombre: string;
   tipo: string;
   es_adicional: boolean;
+  /** Propuesta de la Rev anterior de la que se copió (0021). */
+  propuesta_origen_id: string | null;
   partidas: PartidaFila[];
 }
 

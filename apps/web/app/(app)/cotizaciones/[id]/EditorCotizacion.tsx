@@ -25,7 +25,8 @@ import {
   type PropuestaEditable,
 } from './modelo';
 import { EliminarCotizacion } from './EliminarCotizacion';
-import { CorridaAutorizacion } from './CorridaAutorizacion';
+import { MenuRevisiones } from './MenuRevisiones';
+import { CorridaAutorizacion, type ReferenciaCorrida } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import { PasoCondiciones } from './PasoCondiciones';
 import { PasoFinanciamiento } from './PasoFinanciamiento';
@@ -69,6 +70,7 @@ export function EditorCotizacion({
   autorizacion: {
     utilidades: Record<string, string>;
     tiposCambio: Record<string, string>;
+    referencia: ReferenciaCorrida | null;
     puedeAutorizar: boolean;
   } | null;
 }) {
@@ -201,6 +203,12 @@ export function EditorCotizacion({
             <span>{cotizacion.folio ?? 'Sin folio (se asigna al emitir)'}</span>
           </p>
         </div>
+        <MenuRevisiones
+          cotizacionId={cotizacion.id}
+          revisiones={cotizacion.revisiones}
+          actual={revision.numero}
+          puedeEditar={puedeEditar}
+        />
         {puedeEliminar && (
           <EliminarCotizacion
             cotizacionId={cotizacion.id}
@@ -208,6 +216,17 @@ export function EditorCotizacion({
           />
         )}
       </header>
+
+      {cotizacion.revisiones[0] && cotizacion.revisiones[0].numero !== revision.numero && (
+        <p className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-info/30 bg-info-suave px-4 py-2.5 text-[13px] text-info">
+          <Icon name="reloj" size={16} />
+          Estás viendo {etiquetaRevision(revision.numero)}, una revisión anterior (sólo lectura). La vigente
+          es {etiquetaRevision(cotizacion.revisiones[0].numero)}.
+          <Link href={`/cotizaciones/${cotizacion.id}`} className="font-semibold underline">
+            Ir a la vigente
+          </Link>
+        </p>
+      )}
 
       <div className="mb-5">
         <PasosWizard actual={paso} disponibles={[1, 2, 3, 4]} alElegir={(p) => irA(p as Paso)} />
@@ -345,6 +364,7 @@ export function EditorCotizacion({
           catalogos={catalogos}
           utilidadesIniciales={autorizacion.utilidades}
           tiposCambioIniciales={autorizacion.tiposCambio}
+          referencia={autorizacion.referencia}
           puedeAutorizar={autorizacion.puedeAutorizar}
           puedeRetirar={puedeEditar}
           solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
