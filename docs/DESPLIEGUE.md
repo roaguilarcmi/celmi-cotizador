@@ -35,22 +35,29 @@ El repositorio ya está preparado:
 
 4. **Antes de desplegar**, en la misma pantalla, agrega las variables del paso 3 (o despliega y agrégalas después; sin
    ellas la web abre en «modo demostración»).
-5. Nombre del sitio: **Project configuration → General → Change project name**, p. ej. `cotizador-celmi`. La dirección
-   será `https://cotizador-celmi.netlify.app`.
+5. Nombre del sitio: **Project configuration → General → Change project name**, p. ej. `celmi-solutions`. La dirección
+   será `https://celmi-solutions.netlify.app`.
 
 ## 3. Variables de entorno
 
 **Project configuration → Environment variables → Add a variable.** Copia los valores de `apps/web/.env.local`.
 
-| Variable                               | Valor                                           | Scopes             | ¿Secreta?                        |
-| -------------------------------------- | ----------------------------------------------- | ------------------ | -------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`             | la de `.env.local`                              | Builds, Functions  | No (es pública)                  |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | la de `.env.local`                              | Builds, Functions  | No (es pública)                  |
-| `SUPABASE_SECRET_KEY`                  | la de `.env.local`                              | **Sólo Functions** | **Sí: «Contains secret values»** |
-| `SITIO_URL`                            | `https://cotizador-celmi.netlify.app` (la tuya) | Functions          | No                               |
+En todas: **Scopes = «All scopes»** (el plan gratuito no permite elegir) y **Values = «Same value for all deploy
+contexts»**.
 
-- `SUPABASE_SECRET_KEY` da acceso de administrador: márcala como secreta y que **no** esté en «Builds» (así nunca llega
-  al código que ve el navegador).
+| Variable                               | Valor                                 | «Contains secret values» |
+| -------------------------------------- | ------------------------------------- | ------------------------ |
+| `NEXT_PUBLIC_SUPABASE_URL`             | la de `.env.local`                    | **No** (es pública)      |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | la de `.env.local`                    | **No** (es pública)      |
+| `SUPABASE_SECRET_KEY`                  | la de `.env.local`                    | **Sí**                   |
+| `SITIO_URL`                            | `https://celmi-solutions.netlify.app` | No                       |
+
+- Las `NEXT_PUBLIC_…` van dentro del código del navegador: si se marcan como secretas, el escaneo de secretos de
+  Netlify las encuentra en lo publicado y detiene el despliegue.
+- `SUPABASE_SECRET_KEY` da acceso de administrador. Aunque en el plan gratuito también está disponible durante la
+  compilación, no se expone: Next.js sólo incrusta en el navegador las variables `NEXT_PUBLIC_…`, el escaneo de
+  secretos detiene la publicación si apareciera en lo publicado y `ignore-scripts` impide que una dependencia ejecute
+  código al instalarse.
 - Después de capturar o cambiar variables: **Deploys → Trigger deploy → Deploy project**.
 
 ## 4. Sólo se publica `main`
@@ -68,8 +75,8 @@ Cada `git push` a `main` publica la versión nueva en uno o dos minutos. Antes d
 
 En Supabase: **Authentication → URL Configuration**.
 
-- **Site URL**: `https://cotizador-celmi.netlify.app` (la tuya).
-- **Redirect URLs**: agrega `https://cotizador-celmi.netlify.app/**`. Deja también `http://127.0.0.1:3000/**` para
+- **Site URL**: `https://celmi-solutions.netlify.app` (la tuya).
+- **Redirect URLs**: agrega `https://celmi-solutions.netlify.app/**`. Deja también `http://127.0.0.1:3000/**` para
   trabajar en el equipo.
 
 ## 6. (Opcional) Que Supabase no se pause
