@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useId, useMemo, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 import { Buscador, paraBuscar } from '@/components/Buscador';
+import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
@@ -12,6 +13,7 @@ import { colorAvatar, iniciales } from '@/lib/presentacion';
 import { TIPOS_OPORTUNIDAD, type TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { FormularioCliente } from '../../clientes/FormularioCliente';
 import { crearOportunidad, type EstadoFormulario } from '../acciones';
+import { SeleccionContacto } from './SeleccionContacto';
 
 export function PasoCliente({
   clientes,
@@ -29,21 +31,30 @@ export function PasoCliente({
 }) {
   const [estado, accion] = useActionState<EstadoFormulario, FormData>(crearOportunidad, {});
   const [clienteId, setClienteId] = useState<string | null>(clienteInicial);
+  // Contacto que solicita ('' = sin contacto). Al elegir cliente se propone su primer contacto.
+  const [contactoId, setContactoId] = useState<string>(
+    () => clientes.find((c) => c.id === clienteInicial)?.contactos[0]?.id ?? '',
+  );
+  const elegir = (id: string, contacto?: string) => {
+    setClienteId(id);
+    setContactoId(contacto ?? clientes.find((c) => c.id === id)?.contactos[0]?.id ?? '');
+  };
   const [busqueda, setBusqueda] = useState('');
   const [nuevoCliente, setNuevoCliente] = useState(false);
   const [tipo, setTipo] = useState<TipoOportunidad>('arrendamiento');
-  const idObs = useId();
 
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const sugeridos = useMemo(() => {
     const q = paraBuscar(busqueda.trim());
-    const lista = q
-      ? clientes.filter((c) =>
-          paraBuscar(
-            `${c.razon_social} ${c.rfc} ${c.contactos.map((k) => `${k.nombre} ${k.correo}`).join(' ')}`,
-          ).includes(q),
-        )
-      : clientes;
+    const datosDe = (k: ClienteFila['contactos'][number]) =>
+      paraBuscar(`${k.tratamiento} ${k.nombre} ${k.puesto} ${k.correo} ${k.telefono}`);
+    const lista = clientes
+      .map((c) => ({
+        c,
+        contactos: q ? c.contactos.filter((k) => datosDe(k).includes(q)) : [],
+        empresa: !q || paraBuscar(`${c.razon_social} ${c.rfc}`).includes(q),
+      }))
+      .filter((x) => x.empresa || x.contactos.length > 0);
     return lista.slice(0, 8);
   }, [busqueda, clientes]);
 
@@ -64,9 +75,9 @@ export function PasoCliente({
       {/* 1 · Cliente */}
       <Tarjeta className="mb-5 p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <Titulo2>1 · ¿Para qué cliente?</Titulo2>
+          <Titulo2>1 · Cliente y contacto</Titulo2>
           {puedeCrearCliente && !nuevoCliente && !cliente && (
-            <Boton variante="fantasma" tamano="chico" icono="mas" onClick={() => setNuevoCliente(true)}>
+            <Boton tamano="chico" icono="mas" onClick={() => setNuevoCliente(true)}>
               Cliente nuevo
             </Boton>
           )}
@@ -75,30 +86,39 @@ export function PasoCliente({
         {nuevoCliente ? (
           <FormularioCliente destino="oportunidad" onCancelar={() => setNuevoCliente(false)} />
         ) : cliente ? (
-          <div className="flex flex-wrap items-center gap-4 rounded-md border-2 border-acento/40 bg-acento-suave/40 p-4">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-11 items-center justify-center rounded-md text-sm font-bold text-white"
-              style={{ background: colorAvatar(cliente.razon_social) }}
-            >
-              {iniciales(cliente.razon_social)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold">{cliente.razon_social}</div>
-              <div className="text-[13px] text-texto-suave">
-                {[cliente.ciudad, cliente.rfc].filter(Boolean).join(' · ') || 'Sin ciudad ni RFC'}
+          <>
+            <div className="flex flex-wrap items-center gap-4 rounded-md border-2 border-acento/40 bg-acento-suave/40 p-4">
+              <span
+                aria-hidden="true"
+                className="inline-flex size-11 items-center justify-center rounded-md text-sm font-bold text-white"
+                style={{ background: colorAvatar(cliente.razon_social) }}
+              >
+                {iniciales(cliente.razon_social)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold">{cliente.razon_social}</div>
+                <div className="text-[13px] text-texto-suave">
+                  {[cliente.ciudad, cliente.rfc].filter(Boolean).join(' · ') || 'Sin ciudad ni RFC'}
+                </div>
               </div>
+              <Boton tamano="chico" onClick={() => setClienteId(null)}>
+                Cambiar cliente
+              </Boton>
             </div>
-            <Boton variante="fantasma" tamano="chico" onClick={() => setClienteId(null)}>
-              Cambiar
-            </Boton>
-          </div>
+            <SeleccionContacto
+              key={cliente.id}
+              cliente={cliente}
+              contactoId={contactoId}
+              onElegir={setContactoId}
+              puedeCrear={puedeCrearCliente}
+            />
+          </>
         ) : (
           <>
             <Buscador
               valor={busqueda}
               onCambio={setBusqueda}
-              placeholder="Busca por empresa, RFC o contacto…"
+              placeholder="Busca por empresa, RFC, contacto, correo o teléfono…"
               etiqueta="Buscar cliente"
             />
             {clientes.length === 0 ? (
@@ -107,11 +127,11 @@ export function PasoCliente({
               </p>
             ) : (
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                {sugeridos.map((c) => (
-                  <li key={c.id}>
+                {sugeridos.map(({ c, contactos }) => (
+                  <li key={c.id} className="flex flex-col gap-1">
                     <button
                       type="button"
-                      onClick={() => setClienteId(c.id)}
+                      onClick={() => elegir(c.id)}
                       className="flex w-full cursor-pointer items-center gap-3 rounded-md border border-borde bg-superficie p-3 text-left transition-colors hover:border-acento/50 hover:bg-superficie-2"
                     >
                       <span
@@ -124,11 +144,29 @@ export function PasoCliente({
                       <span className="min-w-0">
                         <span className="block truncate font-semibold">{c.razon_social}</span>
                         <span className="block truncate text-xs text-texto-suave">
-                          {c.contactos[0]?.nombre ?? 'Sin contactos'}
+                          {c.contactos.length === 0
+                            ? 'Sin contactos'
+                            : c.contactos.length === 1
+                              ? c.contactos[0]?.nombre
+                              : `${c.contactos.length} contactos`}
                           {c.ciudad && ` · ${c.ciudad}`}
                         </span>
                       </span>
                     </button>
+                    {contactos.map((k) => (
+                      <button
+                        key={k.id}
+                        type="button"
+                        onClick={() => elegir(c.id, k.id)}
+                        className="ml-6 flex cursor-pointer items-center gap-2 rounded-md border border-borde bg-superficie px-3 py-2 text-left text-[13px] hover:border-acento/50 hover:bg-superficie-2"
+                      >
+                        <Icon name="clientes" size={14} className="shrink-0 text-texto-suave" />
+                        <span className="min-w-0 truncate">
+                          <strong>{[k.tratamiento, k.nombre].filter(Boolean).join(' ')}</strong>
+                          {k.puesto && <span className="text-texto-suave"> · {k.puesto}</span>}
+                        </span>
+                      </button>
+                    ))}
                   </li>
                 ))}
                 {sugeridos.length === 0 && (
@@ -148,6 +186,7 @@ export function PasoCliente({
         <form action={accion} className="animar-entrada">
           <input type="hidden" name="cliente_id" value={cliente.id} />
           <input type="hidden" name="tipo" value={tipo} />
+          <input type="hidden" name="contacto_id" value={contactoId} />
           <Tarjeta className="mb-5 p-6">
             <Titulo2>2 · La oportunidad</Titulo2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -165,25 +204,6 @@ export function PasoCliente({
                   autoComplete="off"
                   placeholder="Ej. Renovación de 2 laptops"
                 />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="contacto" className="text-[13px] font-semibold">
-                  Contacto
-                </label>
-                <select
-                  id="contacto"
-                  name="contacto_id"
-                  defaultValue={cliente.contactos[0]?.id ?? ''}
-                  className="h-12 rounded-md border border-borde bg-superficie px-3 text-[15px] text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave"
-                >
-                  <option value="">Sin contacto</option>
-                  {cliente.contactos.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {[k.tratamiento, k.nombre].filter(Boolean).join(' ')}
-                      {k.puesto && ` · ${k.puesto}`}
-                    </option>
-                  ))}
-                </select>
               </div>
               <Campo
                 etiqueta="Ciudad de entrega"
@@ -223,7 +243,7 @@ export function PasoCliente({
             <div
               role="radiogroup"
               aria-label="Tipo de oportunidad"
-              className="mt-4 grid gap-3 sm:grid-cols-2"
+              className="mt-4 grid gap-3 sm:grid-cols-3"
             >
               {(Object.keys(TIPOS_OPORTUNIDAD) as TipoOportunidad[]).map((t) => {
                 const activo = tipo === t;
@@ -259,17 +279,14 @@ export function PasoCliente({
           </Tarjeta>
 
           <Tarjeta className="mb-5 p-6">
-            <label htmlFor={idObs} className="text-[17px] font-bold tracking-tight">
-              4 · Observaciones internas
-            </label>
-            <p className="mt-1 text-[13px] text-texto-suave">
+            <Titulo2>4 · Observaciones internas</Titulo2>
+            <p className="mt-1 mb-3 text-[13px] text-texto-suave">
               Sólo las ve el equipo; nunca aparecen en la cotización.
             </p>
-            <textarea
-              id={idObs}
-              name="observaciones_internas"
-              rows={3}
-              className="mt-3 w-full rounded-md border border-borde bg-superficie px-3.5 py-3 text-[15px] text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave"
+            <EditorEnriquecido
+              nombre="observaciones_contenido"
+              etiqueta="Observaciones internas"
+              placeholder="Ej. El cliente pide entrega antes de fin de mes."
             />
           </Tarjeta>
 

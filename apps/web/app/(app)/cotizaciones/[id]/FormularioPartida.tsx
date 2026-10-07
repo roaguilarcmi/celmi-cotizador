@@ -9,15 +9,8 @@ import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
+import { textoComoDocumento } from '@/lib/documento';
 import { costoDeFila, erroresDeFila, filaVacia, type Catalogos, type FilaEditable } from './modelo';
-
-/** Texto simple como documento para abrirlo en el editor. */
-export const textoComoDocumento = (texto: string): JSONContent => ({
-  type: 'doc',
-  content: texto
-    .split('\n')
-    .map((l) => (l ? { type: 'paragraph', content: [{ type: 'text', text: l }] } : { type: 'paragraph' })),
-});
 
 /** partida: de primer nivel · adicional: de una partida · cargo: se prorratea entre partidas (reglas 2026-10-05). */
 export type ModoPartida = 'partida' | 'adicional' | 'cargo';

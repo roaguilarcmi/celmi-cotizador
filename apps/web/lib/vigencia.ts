@@ -7,6 +7,8 @@ const fecha = new Intl.DateTimeFormat('es-MX', {
   year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  // 24 horas: sin esto sale «02:00» para las 14:00 (se quitaba el «p. m.»).
+  hourCycle: 'h23',
   timeZone: 'America/Mexico_City',
 });
 

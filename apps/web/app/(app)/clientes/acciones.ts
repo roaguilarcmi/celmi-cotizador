@@ -102,3 +102,26 @@ export async function guardarContacto(
   revalidatePath(`/clientes/${clienteId}`);
   return { ok: contactoId ? 'Contacto actualizado.' : 'Contacto agregado.' };
 }
+
+/**
+ * Contacto nuevo de un cliente existente desde «Nueva oportunidad» (2026-10-07): la misma empresa puede tener
+ * solicitantes de distintas áreas. Devuelve el id para dejarlo elegido.
+ */
+export async function crearContacto(
+  clienteId: string,
+  datos: FormData,
+): Promise<EstadoFormulario & { id?: string }> {
+  await exigirPermiso('clientes.crear');
+  const contacto = contactoSchema.safeParse(leerFormulario(datos));
+  if (!contacto.success) return { error: contacto.error.issues[0]?.message };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('contactos')
+    .insert({ ...contacto.data, cliente_id: clienteId })
+    .select('id')
+    .single();
+  if (error || !data) return { error: 'No se pudo agregar el contacto.' };
+  revalidatePath(`/clientes/${clienteId}`);
+  revalidatePath('/oportunidades/nueva');
+  return { ok: 'Contacto agregado.', id: data.id as string };
+}

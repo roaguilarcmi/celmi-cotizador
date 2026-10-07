@@ -68,7 +68,7 @@ export const oportunidadSchema = z.object({
   contacto_id: z.uuid().nullable().default(null),
   nombre: z.string().trim().min(3, 'Escribe el nombre o descripción del proyecto').max(200),
   /** Tipo general (2026-10-05); los esquemas específicos se eligen por propuesta. */
-  tipo: z.enum(['adquisicion', 'arrendamiento']).default('arrendamiento'),
+  tipo: z.enum(['adquisicion', 'arrendamiento', 'credito_simple']).default('arrendamiento'),
   ciudad_entrega: textoOpcional(160),
   observaciones_internas: textoOpcional(2000),
 });

@@ -63,7 +63,7 @@ export function FormularioCliente({
         </p>
         <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-3 sm:col-span-2">
           <Campo etiqueta="Tratamiento" name="contacto_tratamiento" placeholder="Ing." autoComplete="off" />
-          <Campo etiqueta="Nombre" name="contacto_nombre" autoComplete="off" />
+          <Campo etiqueta="Nombre completo" name="contacto_nombre" autoComplete="off" />
         </div>
         <Campo etiqueta="Puesto" name="contacto_puesto" autoComplete="off" />
         <Campo etiqueta="Teléfono" name="contacto_telefono" type="tel" autoComplete="off" />

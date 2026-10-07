@@ -259,7 +259,13 @@ function EditarContacto({
             defaultValue={contacto?.tratamiento}
             placeholder="Ing."
           />
-          <Campo etiqueta="Nombre" name="nombre" defaultValue={contacto?.nombre} required autoFocus />
+          <Campo
+            etiqueta="Nombre completo"
+            name="nombre"
+            defaultValue={contacto?.nombre}
+            required
+            autoFocus
+          />
         </div>
         <Campo etiqueta="Puesto" name="puesto" defaultValue={contacto?.puesto} />
         <Campo etiqueta="Correo" name="correo" type="email" defaultValue={contacto?.correo} />

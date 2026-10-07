@@ -13,6 +13,16 @@ export interface EstadoFormulario {
   ok?: string;
 }
 
+/**
+ * Observaciones internas con formato (2026-10-07): el editor envía el JSON en «observaciones_contenido»; se valida contra la
+ * lista blanca y el texto plano se guarda en observaciones_internas (búsqueda y respaldo).
+ */
+function leerObservaciones(datos: FormData) {
+  const obs = leerContenido(datos.get('observaciones_contenido'));
+  if (!obs.ok) return obs;
+  return { ok: true as const, doc: obs.doc, texto: obs.doc ? textoPlano(obs.doc).slice(0, 2000) : '' };
+}
+
 /** Paso 1 del wizard: crea la oportunidad a nombre de quien la captura (o del ejecutivo que elija un admin). */
 export async function crearOportunidad(
   _previo: EstadoFormulario,
@@ -20,7 +30,9 @@ export async function crearOportunidad(
 ): Promise<EstadoFormulario> {
   const sesion = await exigirPermiso('oportunidades.crear');
   const campos = leerFormulario(datos);
-  const leido = oportunidadSchema.safeParse(campos);
+  const obs = leerObservaciones(datos);
+  if (!obs.ok) return { error: obs.error };
+  const leido = oportunidadSchema.safeParse({ ...campos, observaciones_internas: obs.texto });
   if (!leido.success) return { error: leido.error.issues[0]?.message };
 
   const ejecutivo =
@@ -30,7 +42,7 @@ export async function crearOportunidad(
   const supabase = await clienteServidor();
   const { data, error } = await supabase
     .from('oportunidades')
-    .insert({ ...leido.data, ejecutivo_id: ejecutivo })
+    .insert({ ...leido.data, observaciones_contenido: obs.doc, ejecutivo_id: ejecutivo })
     .select('id')
     .single();
   if (error || !data) return { error: 'No se pudo crear la oportunidad.' };
@@ -45,12 +57,14 @@ export async function actualizarOportunidad(
   datos: FormData,
 ): Promise<EstadoFormulario> {
   await obtenerSesion();
-  const leido = oportunidadSchema.safeParse(leerFormulario(datos));
+  const obs = leerObservaciones(datos);
+  if (!obs.ok) return { error: obs.error };
+  const leido = oportunidadSchema.safeParse({ ...leerFormulario(datos), observaciones_internas: obs.texto });
   if (!leido.success) return { error: leido.error.issues[0]?.message };
   const supabase = await clienteServidor();
   const { error, count } = await supabase
     .from('oportunidades')
-    .update(leido.data, { count: 'exact' })
+    .update({ ...leido.data, observaciones_contenido: obs.doc }, { count: 'exact' })
     .eq('id', id);
   if (error || !count) return { error: 'No tienes permiso para modificar esta oportunidad.' };
   revalidatePath(`/oportunidades/${id}`);

@@ -1,6 +1,7 @@
 import { CONSULTAS } from './consultas';
 import { clienteServidor } from './supabase/servidor';
 import { ESTADOS_ABIERTOS, type EstadoTarea, type EtapaTarea } from './etapas-tareas';
+import type { TipoOportunidad } from './tipos-oportunidad';
 
 /*
  * Consultas de la Fase 2. Todas usan la sesión del usuario: las reglas RLS de la base deciden qué filas ve
@@ -48,10 +49,12 @@ export interface OportunidadFila {
   nombre: string;
   estado_id: string;
   esquema_id: string | null;
-  /** Tipo general: adquisición o arrendamiento (2026-10-05). */
-  tipo: 'adquisicion' | 'arrendamiento';
+  /** Tipo general: adquisición, arrendamiento o crédito simple (2026-10-05, 2026-10-07). */
+  tipo: TipoOportunidad;
   ciudad_entrega: string;
   observaciones_internas: string;
+  /** Observaciones con formato (0022); null en las capturadas antes como texto plano. */
+  observaciones_contenido: unknown;
   creado_en: string;
   actualizado_en: string;
   ejecutivo_id: string;
@@ -284,7 +287,7 @@ export interface CotizacionFila {
     id: string;
     nombre: string;
     ejecutivo_id: string;
-    tipo: 'adquisicion' | 'arrendamiento';
+    tipo: TipoOportunidad;
     cliente: { razon_social: string } | null;
     ejecutivo: { nombre: string } | null;
   } | null;

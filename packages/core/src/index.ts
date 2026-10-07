@@ -5,3 +5,4 @@ export * from './folio';
 export * from './revisiones';
 export * from './corrida';
 export * from './comparacion';
+export * from './vigencia';

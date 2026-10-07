@@ -1,9 +1,9 @@
 'use client';
 
+import { ATAJOS_VIGENCIA, esFinDeSemana, HORA_VIGENCIA, vigenciaSugerida } from '@celmi/core';
 import type { JSONContent } from '@tiptap/core';
 import { useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
-import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
@@ -26,6 +26,13 @@ const aLocal = (iso: string | null) => {
   const d = new Date(iso);
   return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}T${dos(d.getHours())}:${dos(d.getMinutes())}`;
 };
+
+/** Hoy en el calendario del navegador («AAAA-MM-DD»). */
+const hoy = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+};
+const fechaLarga = new Intl.DateTimeFormat('es-MX', { dateStyle: 'full', timeStyle: 'short', hour12: false });
 
 /**
  * Paso «Condiciones comerciales» (decisión 2026-10-05): vigencia y condiciones elegidas del catálogo, ajustables sólo
@@ -60,6 +67,17 @@ export function PasoCondiciones({
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
 
+  // Vigencia en dos partes (2026-10-07): fecha y hora; la hora siempre se propone a las 14:00, nunca la actual.
+  const fecha = vigencia.slice(0, 10);
+  const hora = vigencia.slice(11, 16) || HORA_VIGENCIA;
+  const cambiarFecha = (v: string) => setVigencia(v ? `${v}T${hora}` : '');
+  const cambiarHora = (v: string) => setVigencia(fecha ? `${fecha}T${v || HORA_VIGENCIA}` : '');
+  let finDeSemana = false;
+  try {
+    finDeSemana = Boolean(fecha) && esFinDeSemana(fecha);
+  } catch {
+    finDeSemana = false;
+  }
   const sucio = editable && JSON.stringify([vigencia, elegidas]) !== base;
   const vigenciaIso = vigencia ? new Date(vigencia).toISOString() : null;
   const delCatalogo = (id: string) => catalogo.find((c) => c.id === id);
@@ -95,16 +113,62 @@ export function PasoCondiciones({
             Elige del catálogo las que aplican; puedes ajustarlas sólo para esta cotización.
           </p>
         </div>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Vigencia de la cotización
+      </div>
+
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 border-b border-borde bg-superficie-2/50 px-6 py-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-texto-suave">Vigencia de la cotización</span>
+          {editable && (
+            <div className="flex flex-wrap gap-2">
+              {ATAJOS_VIGENCIA.map((a) => {
+                const propuesta = vigenciaSugerida(hoy(), a.dias);
+                return (
+                  <Boton
+                    key={a.dias}
+                    tamano="chico"
+                    variante={fecha === propuesta && hora === HORA_VIGENCIA ? 'primario' : 'secundario'}
+                    onClick={() => setVigencia(`${propuesta}T${HORA_VIGENCIA}`)}
+                    title={`Vence el ${fechaLarga.format(new Date(`${propuesta}T${HORA_VIGENCIA}`))} h`}
+                  >
+                    {a.etiqueta}
+                  </Boton>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
+          Fecha
           <input
-            type="datetime-local"
-            value={vigencia}
+            type="date"
+            value={fecha}
             disabled={!editable}
-            onChange={(e) => setVigencia(e.target.value)}
-            className="h-10 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2"
+            onChange={(e) => cambiarFecha(e.target.value)}
+            aria-invalid={finDeSemana}
+            className={`h-10 rounded-md border-2 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2 ${
+              finDeSemana ? 'border-peligro' : 'border-texto/20'
+            }`}
           />
         </label>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
+          Hora
+          <input
+            type="time"
+            value={hora}
+            disabled={!editable || !fecha}
+            onChange={(e) => cambiarHora(e.target.value)}
+            className="h-10 w-32 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2"
+          />
+        </label>
+        <p
+          className={`pb-2.5 text-[13px] ${finDeSemana ? 'font-semibold text-peligro' : 'text-texto-suave'}`}
+        >
+          {finDeSemana
+            ? 'La vigencia no puede caer en sábado ni domingo.'
+            : vigencia
+              ? `Vence el ${fechaLarga.format(new Date(vigencia))} h`
+              : 'Sin vigencia definida.'}
+        </p>
       </div>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -154,7 +218,7 @@ export function PasoCondiciones({
               En esta cotización ({elegidas.length})
             </h3>
             {editable && (
-              <Boton variante="fantasma" tamano="chico" icono="mas" onClick={() => setAjustando('propia')}>
+              <Boton tamano="chico" icono="mas" onClick={() => setAjustando('propia')}>
                 Condición propia
               </Boton>
             )}
@@ -170,68 +234,70 @@ export function PasoCondiciones({
                 const ajustada =
                   !original || JSON.stringify(original.contenido) !== JSON.stringify(e.contenido);
                 return (
-                  <li
-                    key={e.clave}
-                    className="group flex gap-2 rounded-md border border-borde bg-superficie px-3 py-2.5"
-                  >
-                    <span className="w-5 shrink-0 pt-0.5 text-xs font-semibold text-texto-suave tabular">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                        <span className="text-texto-suave">{original?.nombre ?? 'Condición propia'}</span>
-                        {original && ajustada && (
-                          <span className="rounded-pill bg-aviso-suave px-2 text-aviso">
-                            Ajustada para esta cotización
-                          </span>
-                        )}
-                      </div>
-                      <div className="[&_.texto-enriquecido]:text-[13px]">
-                        <TextoEnriquecido contenido={conVigencia(e.contenido, vigenciaIso)} respaldo="" />
-                      </div>
-                    </div>
-                    {editable && (
-                      <div className="flex shrink-0 flex-col items-center gap-0.5 opacity-60 group-hover:opacity-100 focus-within:opacity-100">
-                        <Mini
-                          etiqueta="Subir"
-                          disabled={i === 0}
-                          onClick={() => setElegidas((xs) => mover(xs, i, i - 1))}
-                        >
-                          <Icon name="derecha" size={13} className="-rotate-90" />
-                        </Mini>
-                        <Mini
-                          etiqueta="Bajar"
-                          disabled={i === elegidas.length - 1}
-                          onClick={() => setElegidas((xs) => mover(xs, i, i + 1))}
-                        >
-                          <Icon name="derecha" size={13} className="rotate-90" />
-                        </Mini>
-                        <Mini etiqueta="Ajustar texto" onClick={() => setAjustando(e.clave)}>
-                          <Icon name="herramienta" size={13} />
-                        </Mini>
-                        {original && ajustada && (
-                          <Mini
-                            etiqueta="Restablecer el texto del catálogo"
-                            onClick={() =>
-                              setElegidas((xs) =>
-                                xs.map((x) =>
-                                  x.clave === e.clave ? { ...x, contenido: original.contenido } : x,
-                                ),
-                              )
-                            }
+                  <li key={e.clave} className="rounded-md border border-borde bg-superficie">
+                    <div className="flex flex-wrap items-center gap-2 border-b border-borde/70 bg-superficie-2/50 py-1.5 pr-1.5 pl-3">
+                      <span className="text-[13px] font-bold tabular">{i + 1}.</span>
+                      <span className="min-w-0 truncate text-[13px] font-semibold">
+                        {original?.nombre ?? 'Condición propia'}
+                      </span>
+                      {original && ajustada && (
+                        <span className="rounded-pill bg-aviso-suave px-2 text-[11px] font-semibold text-aviso">
+                          Ajustada
+                        </span>
+                      )}
+                      {editable && (
+                        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                          <Boton
+                            tamano="chico"
+                            variante="fantasma"
+                            icono="arriba"
+                            aria-label={`Subir la condición ${i + 1}`}
+                            title="Subir"
+                            disabled={i === 0}
+                            onClick={() => setElegidas((xs) => mover(xs, i, i - 1))}
+                          />
+                          <Boton
+                            tamano="chico"
+                            variante="fantasma"
+                            icono="abajo"
+                            aria-label={`Bajar la condición ${i + 1}`}
+                            title="Bajar"
+                            disabled={i === elegidas.length - 1}
+                            onClick={() => setElegidas((xs) => mover(xs, i, i + 1))}
+                          />
+                          <Boton tamano="chico" icono="herramienta" onClick={() => setAjustando(e.clave)}>
+                            Ajustar
+                          </Boton>
+                          {original && ajustada && (
+                            <Boton
+                              tamano="chico"
+                              icono="restablecer"
+                              title="Volver al texto del catálogo"
+                              onClick={() =>
+                                setElegidas((xs) =>
+                                  xs.map((x) =>
+                                    x.clave === e.clave ? { ...x, contenido: original.contenido } : x,
+                                  ),
+                                )
+                              }
+                            >
+                              Restablecer
+                            </Boton>
+                          )}
+                          <Boton
+                            tamano="chico"
+                            variante="peligro"
+                            icono="cerrar"
+                            onClick={() => setElegidas((xs) => xs.filter((x) => x.clave !== e.clave))}
                           >
-                            <Icon name="izquierda" size={13} />
-                          </Mini>
-                        )}
-                        <Mini
-                          etiqueta="Quitar"
-                          peligro
-                          onClick={() => setElegidas((xs) => xs.filter((x) => x.clave !== e.clave))}
-                        >
-                          <Icon name="cerrar" size={13} />
-                        </Mini>
-                      </div>
-                    )}
+                            Quitar
+                          </Boton>
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-3 py-2 text-[13px] leading-snug [&_.texto-enriquecido]:text-[13px] [&_.texto-enriquecido]:leading-snug">
+                      <TextoEnriquecido contenido={conVigencia(e.contenido, vigenciaIso)} respaldo="" />
+                    </div>
                   </li>
                 );
               })}
@@ -246,7 +312,7 @@ export function PasoCondiciones({
             variante="primario"
             tamano="chico"
             icono="guardado"
-            disabled={pendiente || !sucio}
+            disabled={pendiente || !sucio || finDeSemana}
             onClick={guardar}
           >
             {pendiente ? 'Guardando…' : 'Guardar condiciones'}
@@ -322,34 +388,5 @@ function FormularioAjuste({
         )}
       </div>
     </form>
-  );
-}
-
-function Mini({
-  etiqueta,
-  disabled,
-  peligro,
-  onClick,
-  children,
-}: {
-  etiqueta: string;
-  disabled?: boolean;
-  peligro?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      aria-label={etiqueta}
-      title={etiqueta}
-      className={`inline-flex size-7 cursor-pointer items-center justify-center rounded-sm text-texto-suave hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-30 ${
-        peligro ? 'hover:text-peligro' : 'hover:text-texto'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

@@ -453,3 +453,27 @@ describe('eliminar cotizaciones (0018)', () => {
     await como(db, 'jorge', async () => expect((await eliminar(otra.cotizacion)).affectedRows).toBe(0));
   });
 });
+
+describe('oportunidad: crédito simple y observaciones con formato (0022)', () => {
+  it('acepta el tipo «crédito simple» y rechaza otros', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query(`update public.oportunidades set tipo = 'credito_simple' where id = $1`, [op.oportunidad]);
+    await expect(
+      db.query(`update public.oportunidades set tipo = 'leasing' where id = $1`, [op.oportunidad]),
+    ).rejects.toThrow();
+  });
+
+  it('guarda observaciones con formato como objeto JSON', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    const doc = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
+    await db.query(`update public.oportunidades set observaciones_contenido = $2 where id = $1`, [
+      op.oportunidad,
+      doc,
+    ]);
+    await expect(
+      db.query(`update public.oportunidades set observaciones_contenido = '[1]' where id = $1`, [
+        op.oportunidad,
+      ]),
+    ).rejects.toThrow();
+  });
+});

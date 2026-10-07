@@ -1,9 +1,12 @@
 'use client';
 
+import type { JSONContent } from '@tiptap/core';
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
+import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
+import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Avatar, Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type {
   Borradores,
@@ -14,6 +17,7 @@ import type {
   SeguimientoFila,
   TareaFila,
 } from '@/lib/datos';
+import { textoComoDocumento } from '@/lib/documento';
 import { colorAvatar, fechaCorta, haceCuanto, iniciales } from '@/lib/presentacion';
 import { actualizarOportunidad, type EstadoFormulario } from '../acciones';
 import { SelectorEstado } from '../SelectorEstado';
@@ -156,9 +160,20 @@ export function FichaOportunidad({
               <Icon name="candado" size={16} className="text-texto-suave" />
               <Titulo2>Observaciones internas</Titulo2>
             </div>
-            <p className="mt-3 text-sm leading-relaxed whitespace-pre-line text-texto-suave">
-              {o.observaciones_internas || 'Sin observaciones.'}
-            </p>
+            {o.observaciones_contenido != null || o.observaciones_internas ? (
+              <div className="mt-3 text-sm leading-relaxed [&_.texto-enriquecido]:text-sm">
+                {o.observaciones_contenido != null ? (
+                  <TextoEnriquecido
+                    contenido={o.observaciones_contenido}
+                    respaldo={o.observaciones_internas}
+                  />
+                ) : (
+                  <p className="whitespace-pre-line">{o.observaciones_internas}</p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-texto-suave">Sin observaciones.</p>
+            )}
           </Tarjeta>
         </aside>
       </div>
@@ -239,15 +254,15 @@ function EditarOportunidad({
         </div>
         <Campo etiqueta="Ciudad de entrega" name="ciudad_entrega" defaultValue={o.ciudad_entrega} />
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <label htmlFor="ed-obs" className="text-[13px] font-semibold">
-            Observaciones internas
-          </label>
-          <textarea
-            id="ed-obs"
-            name="observaciones_internas"
-            rows={3}
-            defaultValue={o.observaciones_internas}
-            className="rounded-md border border-borde bg-superficie px-3.5 py-3 text-[15px] text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave"
+          <span className="text-[13px] font-semibold">Observaciones internas</span>
+          <EditorEnriquecido
+            nombre="observaciones_contenido"
+            inicial={
+              (o.observaciones_contenido as JSONContent | null) ??
+              (o.observaciones_internas ? textoComoDocumento(o.observaciones_internas) : null)
+            }
+            etiqueta="Observaciones internas"
+            placeholder="Sólo las ve el equipo; nunca aparecen en la cotización."
           />
         </div>
         <div className="flex gap-3 sm:col-span-2">

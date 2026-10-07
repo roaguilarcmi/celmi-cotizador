@@ -10,7 +10,7 @@ export const CONSULTAS = {
   esquemas: 'id, nombre, plazos_meses, activo',
   clientes:
     'id, razon_social, rfc, direccion, ciudad, creado_en, contactos(id, cliente_id, tratamiento, nombre, puesto, correo, telefono), oportunidades(id)',
-  oportunidades: `id, nombre, estado_id, esquema_id, tipo, ciudad_entrega, observaciones_internas, creado_en, actualizado_en,
+  oportunidades: `id, nombre, estado_id, esquema_id, tipo, ciudad_entrega, observaciones_internas, observaciones_contenido, creado_en, actualizado_en,
     ejecutivo_id, cliente:clientes(id, razon_social), contacto:contactos(id, tratamiento, nombre, puesto, correo, telefono),
     ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(id, nombre)`,
   seguimiento:

@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import type { Esquema, FinanciamientoFila, RevisionDetalle } from '@/lib/datos';
+import type { TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { guardarFinanciamiento } from '../acciones';
 
 interface Fila {
@@ -49,7 +50,7 @@ export function PasoFinanciamiento({
   /** Esquemas de financiamiento activos (sin «Adquisición»). */
   esquemas: Esquema[];
   filasIniciales: FinanciamientoFila[];
-  tipoOportunidad: 'adquisicion' | 'arrendamiento';
+  tipoOportunidad: TipoOportunidad;
 }) {
   const autorizada = revision.estado === 'autorizada';
   const editable = puedeEditar && autorizada;

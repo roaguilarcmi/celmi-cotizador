@@ -14,6 +14,7 @@ import type {
   FinanciamientoFila,
   RevisionDetalle,
 } from '@/lib/datos';
+import type { TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { guardarPartidas } from '../acciones';
 import { ESTADOS } from '../estados';
 import {
@@ -65,7 +66,7 @@ export function EditorCotizacion({
   condiciones: CondicionRevision[];
   esquemasFinanciamiento: Esquema[];
   financiamiento: FinanciamientoFila[];
-  tipoOportunidad: 'adquisicion' | 'arrendamiento';
+  tipoOportunidad: TipoOportunidad;
   /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
   autorizacion: {
     utilidades: Record<string, string>;
