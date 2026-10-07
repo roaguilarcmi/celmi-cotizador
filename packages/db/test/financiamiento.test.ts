@@ -95,16 +95,20 @@ describe('condiciones comerciales (0017)', () => {
   });
 });
 
-describe('propuesta de financiamiento (0017)', () => {
+describe('opciones de financiamiento (0017, 0023)', () => {
   const fila = (propuesta: string, extra: Record<string, unknown> = {}) => ({
     propuesta_id: propuesta,
-    esquema_id: 'arrendamiento_fpo',
+    folio_financiera: 'COT-123',
+    tipo_arrendamiento: 'vjm',
     plazo_meses: 36,
-    mensualidad: '1234.56',
-    valor_residual: '',
+    frecuencia: 'mensual',
+    valor_equipos: '32990.96',
+    gastos_iniciales: '1500',
+    pago: '1234.56',
+    pago_seguro: '120.50',
     factor: '0.034567',
     tasa_interes: '18.5',
-    gastos_apertura: '1500',
+    vigencia_financiera: '2026-10-30',
     ...extra,
   });
 
@@ -120,39 +124,68 @@ describe('propuesta de financiamiento (0017)', () => {
     ).rejects.toThrow(/precios ya están autorizados/);
   });
 
-  it('el ejecutivo captura uno o varios esquemas y plazos por propuesta', async () => {
+  it('el ejecutivo captura varias opciones por propuesta, con financiera, aseguradora y residual en Full PayOut', async () => {
     const op = await autorizada();
+    const [fin] = await filas<{ id: string }>(
+      db,
+      `insert into public.financieras (nombre, razon_social, aseguradoras)
+       values ('Arrendadora X', 'Arrendadora X S.A.', '{Seguros A,Seguros B}') returning id`,
+    );
     await como(db, 'jorge', async () => {
       await db.query('select public.guardar_financiamiento($1, $2)', [
         op.revision,
         JSON.stringify([
-          fila(op.propuesta),
-          fila(op.propuesta, { plazo_meses: 48 }),
-          fila(op.propuesta, { esquema_id: 'arrendamiento_vjm' }),
+          fila(op.propuesta, { financiera_id: fin!.id, aseguradora: 'Seguros A' }),
+          fila(op.propuesta, {
+            tipo_arrendamiento: 'fpo',
+            plazo_meses: 48,
+            frecuencia: 'trimestral',
+            residual_capturado: 'pct',
+            residual_pct: '10',
+            valor_residual: '3299.10',
+          }),
         ]),
       ]);
-      const r = await filas<{ esquema_id: string; plazo_meses: number; factor: string }>(
+      const r = await filas<{
+        tipo_arrendamiento: string;
+        frecuencia: string;
+        residual_pct: string | null;
+        aseguradora: string;
+      }>(
         db,
-        'select esquema_id, plazo_meses, factor::text from public.propuesta_financiamientos order by orden',
+        'select tipo_arrendamiento, frecuencia, residual_pct::text, aseguradora from public.propuesta_financiamientos order by orden',
       );
       expect(r).toEqual([
-        { esquema_id: 'arrendamiento_fpo', plazo_meses: 36, factor: '0.034567' },
-        { esquema_id: 'arrendamiento_fpo', plazo_meses: 48, factor: '0.034567' },
-        { esquema_id: 'arrendamiento_vjm', plazo_meses: 36, factor: '0.034567' },
+        { tipo_arrendamiento: 'vjm', frecuencia: 'mensual', residual_pct: null, aseguradora: 'Seguros A' },
+        { tipo_arrendamiento: 'fpo', frecuencia: 'trimestral', residual_pct: '10.0000', aseguradora: '' },
       ]);
     });
   });
 
-  it('la adquisición no es esquema de financiamiento; nadie captura en cotizaciones ajenas', async () => {
+  it('el residual sólo va en Full PayOut y la frecuencia es una de las cinco', async () => {
     const op = await autorizada();
     await expect(
       como(db, 'jorge', () =>
         db.query('select public.guardar_financiamiento($1, $2)', [
           op.revision,
-          JSON.stringify([fila(op.propuesta, { esquema_id: 'adquisicion' })]),
+          JSON.stringify([
+            fila(op.propuesta, { residual_capturado: 'pct', residual_pct: '5', valor_residual: '100' }),
+          ]),
         ]),
       ),
-    ).rejects.toThrow(/no es un esquema de financiamiento/);
+    ).rejects.toThrow(/residual_solo_fpo/);
+    await expect(
+      como(db, 'jorge', () =>
+        db.query('select public.guardar_financiamiento($1, $2)', [
+          op.revision,
+          JSON.stringify([fila(op.propuesta, { frecuencia: 'quincenal' })]),
+        ]),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('nadie captura en cotizaciones ajenas; las financieras las administra quien administra catálogos', async () => {
+    const op = await autorizada();
     await expect(
       como(db, 'fabiola', () =>
         db.query('select public.guardar_financiamiento($1, $2)', [
@@ -161,5 +194,8 @@ describe('propuesta de financiamiento (0017)', () => {
         ]),
       ),
     ).rejects.toThrow();
+    await expect(
+      como(db, 'jorge', () => db.query(`insert into public.financieras (nombre) values ('Otra')`)),
+    ).rejects.toThrow(/row-level security/);
   });
 });

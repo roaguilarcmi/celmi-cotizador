@@ -101,18 +101,33 @@ const decimales = (n: number, mensaje: string) =>
     ])
     .default('');
 
-/** Una fila de la propuesta de financiamiento: esquema y plazo con sus montos (se capturan, no se calculan). */
+export const FRECUENCIAS_PAGO = ['mensual', 'bimestral', 'trimestral', 'semestral', 'anual'] as const;
+
+/**
+ * Una opción de financiamiento de una propuesta (decisiones 2026-10-07). Lo captura el ejecutivo con los datos de la
+ * financiera; el valor de los equipos, el residual que falte y la tasa los calcula el servidor. Montos sin IVA.
+ */
 export const financiamientoSchema = z
   .array(
     z.object({
       propuesta_id: uuid,
-      esquema_id: z.string().min(1).max(60),
+      financiera_id: z.uuid('Elige la financiera'),
+      aseguradora: z.string().trim().max(120).default(''),
+      folio_financiera: z.string().trim().max(60, 'El número de cotización es demasiado largo').default(''),
+      /** VJM (operativo) o Full PayOut (financiero); no aplica en crédito simple. */
+      tipo_arrendamiento: z.enum(['vjm', 'fpo']).nullable().default(null),
       plazo_meses: z.number({ error: 'Plazo no válido' }).int('Plazo en meses enteros').min(1).max(240),
-      mensualidad: decimales(2, 'Mensualidad con máximo 2 decimales'),
-      valor_residual: decimales(2, 'Valor residual con máximo 2 decimales'),
+      frecuencia: z.enum(FRECUENCIAS_PAGO).default('mensual'),
+      /** Sólo Full PayOut: cómo se capturó el residual y su valor (porcentaje o monto). */
+      residual_capturado: z.enum(['pct', 'monto']).nullable().default(null),
+      residual_valor: decimales(4, 'Valor residual con máximo 4 decimales en % o 2 en monto'),
+      gastos_iniciales: decimales(2, 'Gastos iniciales con máximo 2 decimales'),
+      pago: decimales(2, 'Pago con máximo 2 decimales'),
+      pago_seguro: decimales(2, 'Pago del seguro con máximo 2 decimales'),
       factor: decimales(6, 'Factor con máximo 6 decimales'),
-      tasa_interes: decimales(4, 'Tasa con máximo 4 decimales'),
-      gastos_apertura: decimales(2, 'Gastos con máximo 2 decimales'),
+      vigencia_financiera: z
+        .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida')])
+        .default(''),
     }),
   )
   .max(500);

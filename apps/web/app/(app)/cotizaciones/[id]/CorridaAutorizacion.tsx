@@ -591,16 +591,19 @@ export function CorridaAutorizacion({
           tono="text-exito"
         />
         <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
-        <Dato
-          etiqueta={`${revision.propuestas.length - numAdicionales} propuestas${numAdicionales ? ` + ${numAdicionales} adic.` : ''} · con IVA`}
-          valor={
-            principales.length === 0
-              ? '—'
-              : principales.length === 1
-                ? pesos(principales[0] ?? 0n)
-                : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
-          }
-        />
+        {/* Lo que paga el cliente (con IVA) va aparte de las cifras internas sin IVA (2026-10-07). */}
+        <div className="rounded-md border-2 border-acento/30 bg-acento-suave/40 px-3 py-1.5">
+          <Dato
+            etiqueta={`${revision.propuestas.length - numAdicionales} propuestas${numAdicionales ? ` + ${numAdicionales} adic.` : ''} · con IVA`}
+            valor={
+              principales.length === 0
+                ? '—'
+                : principales.length === 1
+                  ? pesos(principales[0] ?? 0n)
+                  : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
+            }
+          />
+        </div>
         {editable && (
           <div className="flex flex-wrap items-center gap-2">
             <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>

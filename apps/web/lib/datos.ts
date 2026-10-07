@@ -465,10 +465,27 @@ export interface CondicionRevision {
   contenido: unknown;
 }
 
+export interface Financiera {
+  id: string;
+  nombre: string;
+  razon_social: string;
+  aseguradoras: string[];
+  activa: boolean;
+}
+
+export async function listarFinancieras(): Promise<Financiera[]> {
+  const supabase = await clienteServidor();
+  return (exigir(
+    await supabase.from('financieras').select(CONSULTAS.financieras).eq('activa', true).order('nombre'),
+    'las financieras',
+  ) ?? []) as unknown as Financiera[];
+}
+
+/** Opción de financiamiento (0017; campos nuevos en 0023). Los numeric llegan como número. */
 export interface FinanciamientoFila {
   id: string;
   propuesta_id: string;
-  esquema_id: string;
+  esquema_id: string | null;
   plazo_meses: number;
   mensualidad: string | null;
   valor_residual: string | null;
@@ -476,6 +493,16 @@ export interface FinanciamientoFila {
   tasa_interes: string | null;
   gastos_apertura: string | null;
   orden: number;
+  financiera_id: string | null;
+  aseguradora: string;
+  folio_financiera: string;
+  tipo_arrendamiento: 'vjm' | 'fpo' | null;
+  frecuencia: 'mensual' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+  valor_equipos: string | null;
+  residual_capturado: 'pct' | 'monto' | null;
+  residual_pct: string | null;
+  pago_seguro: string | null;
+  vigencia_financiera: string | null;
 }
 
 export async function listarCondicionesCatalogo(soloActivas = true): Promise<CondicionCatalogo[]> {

@@ -107,6 +107,18 @@ export function MenuColumnas({
         </span>
       </summary>
       <div className="absolute right-0 z-40 mt-2 w-[min(600px,calc(100vw-2rem))] rounded-lg border border-borde bg-superficie p-5 sombra">
+        {/* Cerrar arriba (2026-10-07), además de «Listo» abajo. */}
+        <div className="mb-3 flex items-center gap-3 border-b border-borde pb-3">
+          <span className="mr-auto text-sm font-bold">Columnas visibles</span>
+          <Boton
+            tamano="chico"
+            variante="fantasma"
+            icono="cerrar"
+            onClick={() => ref.current?.removeAttribute('open')}
+          >
+            Cerrar
+          </Boton>
+        </div>
         <div className="text-xs font-semibold text-texto-suave">Vistas rápidas</div>
         <div className="mt-2 flex flex-wrap gap-2">
           {VISTAS.map((v) => {

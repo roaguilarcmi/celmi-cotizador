@@ -6,7 +6,7 @@ import { Boton, Pill, Tarjeta } from '@/components/ui';
 import type { CampoCatalogo, DefinicionCatalogo } from '@/lib/catalogos';
 import { cambiarActivo, guardarRegistro, type Resultado } from './acciones';
 
-export type Registro = Record<string, string | number | boolean | number[] | null>;
+export type Registro = Record<string, string | number | boolean | number[] | string[] | null>;
 
 export function EditorCatalogos({
   catalogos,

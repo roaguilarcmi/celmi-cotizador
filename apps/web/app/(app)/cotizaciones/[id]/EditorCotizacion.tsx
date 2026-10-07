@@ -10,7 +10,7 @@ import type {
   CondicionCatalogo,
   CondicionRevision,
   CotizacionFila,
-  Esquema,
+  Financiera,
   FinanciamientoFila,
   RevisionDetalle,
 } from '@/lib/datos';
@@ -50,7 +50,7 @@ export function EditorCotizacion({
   puedeEliminar,
   catalogoCondiciones,
   condiciones,
-  esquemasFinanciamiento,
+  financieras,
   financiamiento,
   tipoOportunidad,
   autorizacion,
@@ -64,7 +64,7 @@ export function EditorCotizacion({
   puedeEliminar: boolean;
   catalogoCondiciones: CondicionCatalogo[];
   condiciones: CondicionRevision[];
-  esquemasFinanciamiento: Esquema[];
+  financieras: Financiera[];
   financiamiento: FinanciamientoFila[];
   tipoOportunidad: TipoOportunidad;
   /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
@@ -353,7 +353,7 @@ export function EditorCotizacion({
           revision={revision}
           cotizacionId={cotizacion.id}
           puedeEditar={puedeEditar}
-          esquemas={esquemasFinanciamiento}
+          financieras={financieras}
           filasIniciales={financiamiento}
           tipoOportunidad={tipoOportunidad}
         />

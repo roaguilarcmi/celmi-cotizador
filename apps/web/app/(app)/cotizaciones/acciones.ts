@@ -10,8 +10,15 @@ import {
 } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { centavosADecimal } from '@celmi/core';
-import { corridaDe, monedasExtranjeras } from '@/lib/corrida';
+import {
+  aEscalado,
+  centavosADecimal,
+  ESCALA_DINERO,
+  numeroDePagos,
+  tasaAnualNominal,
+  valorResidual,
+} from '@celmi/core';
+import { corridaDe, monedasExtranjeras, presentacionAutorizada } from '@/lib/corrida';
 import { obtenerRevision } from '@/lib/datos';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
@@ -134,6 +141,11 @@ export async function guardarCondicionesCotizacion(
 }
 
 /** Propuesta de financiamiento (después de autorizar precios; no requiere otra autorización). */
+/**
+ * Opciones de financiamiento (decisiones 2026-10-07). El servidor no confía en lo calculado por el navegador: toma el
+ * valor de los equipos de los precios autorizados (subtotal sin IVA de cada propuesta, con los adicionales que se
+ * suman), calcula el valor residual que falte (Full PayOut) y la tasa anual nominal con pagos vencidos.
+ */
 export async function guardarFinanciamiento(
   revisionId: string,
   cotizacionId: string,
@@ -146,7 +158,87 @@ export async function guardarFinanciamiento(
     return { error: e?.message ?? 'Revisa el financiamiento.' };
   }
   const supabase = await clienteServidor();
-  const { error } = await supabase.rpc('guardar_financiamiento', { revision: revisionId, filas: leido.data });
+  const revision = await obtenerRevision(revisionId);
+  if (!revision || revision.cotizacion_id !== cotizacionId) return { error: 'La revisión no existe.' };
+  const { data: cot } = await supabase
+    .from('cotizaciones')
+    .select('oportunidad:oportunidades(tipo)')
+    .eq('id', cotizacionId)
+    .maybeSingle();
+  const tipo = (cot?.oportunidad as { tipo?: string } | null)?.tipo ?? 'arrendamiento';
+  const presentadas = presentacionAutorizada(revision);
+  if (!presentadas) return { error: 'El financiamiento se captura cuando los precios ya están autorizados.' };
+  const valorDe = new Map(presentadas.map((p) => [p.id, p.totales.subtotal]));
+
+  const { data: financieras } = await supabase.from('financieras').select('id, nombre, aseguradoras');
+  const aseguradorasDe = new Map(
+    ((financieras ?? []) as { id: string; aseguradoras: string[] }[]).map((x) => [x.id, x.aseguradoras]),
+  );
+  const centavos = (v: string) => (v ? aEscalado(v, ESCALA_DINERO) : 0n);
+
+  const salida: Record<string, unknown>[] = [];
+  for (const [i, f] of leido.data.entries()) {
+    const n = i + 1;
+    const valor = valorDe.get(f.propuesta_id);
+    if (valor === undefined) return { error: `Opción ${n}: la propuesta no es de esta revisión.` };
+    const aseguradoras = aseguradorasDe.get(f.financiera_id);
+    if (!aseguradoras) return { error: `Opción ${n}: la financiera no existe.` };
+    if (f.aseguradora && !aseguradoras.includes(f.aseguradora))
+      return { error: `Opción ${n}: la aseguradora no es de esa financiera.` };
+    // Crédito simple: no hay tipo de arrendamiento ni residual (decisión 2026-10-07).
+    const tipoArrendamiento = tipo === 'arrendamiento' ? f.tipo_arrendamiento : null;
+    if (tipo === 'arrendamiento' && !tipoArrendamiento)
+      return { error: `Opción ${n}: elige el tipo de arrendamiento.` };
+    let pagos: number;
+    try {
+      pagos = numeroDePagos(f.plazo_meses, f.frecuencia);
+    } catch (e) {
+      return { error: `Opción ${n}: ${(e as Error).message}.` };
+    }
+    let residual: { porcentaje: string; monto: bigint } | null = null;
+    if (tipoArrendamiento === 'fpo') {
+      if (!f.residual_capturado || !f.residual_valor)
+        return { error: `Opción ${n}: en Full PayOut captura el valor residual (en % o en monto).` };
+      if (f.residual_capturado === 'monto' && !/^\d+(\.\d{1,2})?$/.test(f.residual_valor))
+        return { error: `Opción ${n}: el valor residual en monto lleva máximo 2 decimales.` };
+      try {
+        residual = valorResidual(
+          valor,
+          f.residual_capturado === 'pct'
+            ? { porcentaje: f.residual_valor }
+            : { monto: aEscalado(f.residual_valor, ESCALA_DINERO) },
+        );
+      } catch (e) {
+        return { error: `Opción ${n}: ${(e as Error).message}.` };
+      }
+    }
+    const tasa = tasaAnualNominal({
+      valor,
+      pagoPorPeriodo: centavos(f.pago) + centavos(f.pago_seguro),
+      pagos,
+      frecuencia: f.frecuencia,
+    });
+    salida.push({
+      propuesta_id: f.propuesta_id,
+      financiera_id: f.financiera_id,
+      aseguradora: f.aseguradora,
+      folio_financiera: f.folio_financiera,
+      tipo_arrendamiento: tipoArrendamiento ?? '',
+      plazo_meses: f.plazo_meses,
+      frecuencia: f.frecuencia,
+      valor_equipos: centavosADecimal(valor),
+      residual_capturado: residual ? f.residual_capturado : '',
+      residual_pct: residual?.porcentaje ?? '',
+      valor_residual: residual ? centavosADecimal(residual.monto) : '',
+      gastos_iniciales: f.gastos_iniciales,
+      pago: f.pago,
+      pago_seguro: f.pago_seguro,
+      factor: f.factor,
+      tasa_interes: tasa ?? '',
+      vigencia_financiera: f.vigencia_financiera,
+    });
+  }
+  const { error } = await supabase.rpc('guardar_financiamiento', { revision: revisionId, filas: salida });
   if (error) return { error: mensajeDe(error, 'No se pudo guardar el financiamiento.') };
   refrescar(cotizacionId);
   return { ok: 'Financiamiento guardado.' };

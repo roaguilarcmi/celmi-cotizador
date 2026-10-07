@@ -46,8 +46,10 @@ export const CONSULTAS = {
   monedas: 'codigo, nombre, activa',
   condiciones: 'id, nombre, contenido, orden, activa',
   revisionCondiciones: 'id, orden, condicion_id, contenido',
-  financiamientos:
-    'id, propuesta_id, esquema_id, plazo_meses, mensualidad, valor_residual, factor, tasa_interes, gastos_apertura, orden',
+  financiamientos: `id, propuesta_id, esquema_id, plazo_meses, mensualidad, valor_residual, factor, tasa_interes,
+    gastos_apertura, orden, financiera_id, aseguradora, folio_financiera, tipo_arrendamiento, frecuencia, valor_equipos,
+    residual_capturado, residual_pct, pago_seguro, vigencia_financiera`,
+  financieras: 'id, nombre, razon_social, aseguradoras, activa',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -73,4 +75,5 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   condiciones: 'condiciones_comerciales',
   revisionCondiciones: 'revision_condiciones',
   financiamientos: 'propuesta_financiamientos',
+  financieras: 'financieras',
 };

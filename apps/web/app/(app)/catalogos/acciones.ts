@@ -31,8 +31,20 @@ function leerCampos(tabla: string, valores: Record<string, string | boolean>) {
       if (partes.some((p) => !/^\d{1,3}$/.test(p)))
         return { error: `«${c.etiqueta}»: escribe números separados por comas.` };
       fila[c.id] = [...new Set(partes.map(Number))].sort((a, b) => a - b);
+    } else if (c.tipo === 'lista_textos') {
+      const partes = [
+        ...new Set(
+          texto
+            .split(',')
+            .map((p) => p.trim())
+            .filter(Boolean),
+        ),
+      ];
+      if (partes.length > 20 || partes.some((p) => p.length > 120))
+        return { error: `«${c.etiqueta}»: hasta 20 nombres separados por comas.` };
+      fila[c.id] = partes;
     } else {
-      if (texto.length > 120) return { error: `«${c.etiqueta}» es demasiado largo.` };
+      if (texto.length > (c.max ?? 120)) return { error: `«${c.etiqueta}» es demasiado largo.` };
       fila[c.id] = c.id === 'codigo' || c.id === 'abreviatura' ? texto.toUpperCase() || null : texto;
     }
   }

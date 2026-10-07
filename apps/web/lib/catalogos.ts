@@ -1,6 +1,6 @@
 /** Definición de los catálogos editables: misma configuración para la pantalla y para la validación del servidor. */
 
-export type TipoCampo = 'texto' | 'entero' | 'si_no' | 'lista_enteros';
+export type TipoCampo = 'texto' | 'entero' | 'si_no' | 'lista_enteros' | 'lista_textos';
 
 export interface CampoCatalogo {
   id: string;
@@ -9,10 +9,19 @@ export interface CampoCatalogo {
   requerido?: boolean;
   ancho?: string;
   ayuda?: string;
+  /** Largo máximo del texto (120 por omisión). */
+  max?: number;
 }
 
 export interface DefinicionCatalogo {
-  tabla: 'estados_oportunidad' | 'mayoristas' | 'marcas' | 'unidades' | 'monedas' | 'esquemas_adquisicion';
+  tabla:
+    | 'estados_oportunidad'
+    | 'mayoristas'
+    | 'marcas'
+    | 'unidades'
+    | 'monedas'
+    | 'esquemas_adquisicion'
+    | 'financieras';
   titulo: string;
   descripcion: string;
   /** Cómo se genera la clave de un registro nuevo. */
@@ -104,6 +113,27 @@ export const CATALOGOS: DefinicionCatalogo[] = [
     ],
   },
 ];
+
+// Financieras (2026-10-07): se eligen en cada opción de financiamiento, junto con una de sus aseguradoras.
+CATALOGOS.push({
+  tabla: 'financieras',
+  titulo: 'Financieras',
+  descripcion: 'Arrendadoras y financieras con las que se cotiza, y las aseguradoras que manejan.',
+  clave: { campo: 'id', tipo: 'uuid' },
+  campoActivo: 'activa',
+  orden: 'nombre',
+  campos: [
+    { id: 'nombre', etiqueta: 'Nombre', tipo: 'texto', requerido: true, ancho: 'w-full min-w-40' },
+    { id: 'razon_social', etiqueta: 'Razón social', tipo: 'texto', max: 200, ancho: 'w-full min-w-56' },
+    {
+      id: 'aseguradoras',
+      etiqueta: 'Aseguradoras',
+      tipo: 'lista_textos',
+      ancho: 'w-full min-w-56',
+      ayuda: 'Separadas por comas',
+    },
+  ],
+});
 
 export const catalogoPorTabla = (tabla: string) => CATALOGOS.find((c) => c.tabla === tabla);
 
