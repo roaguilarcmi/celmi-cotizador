@@ -1,0 +1,31 @@
+name: Mantener activa la base
+
+# El plan gratuito de Supabase pausa el proyecto tras 7 días sin actividad. Una consulta semanal lo mantiene activo.
+# Usa la clave publicable (la misma que ya viaja al navegador); sin los secretos configurados, no hace nada.
+# Secretos del repositorio: SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY (Settings → Secrets and variables → Actions).
+
+on:
+  schedule:
+    - cron: '17 14 * * 1' # Lunes, 8:17 h de Ciudad de México
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  consulta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar la API de Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Sin secretos configurados: no se consulta nada."
+            exit 0
+          fi
+          codigo=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            "$SUPABASE_URL/rest/v1/estados_oportunidad?select=id&limit=1" \
+            -H "apikey: $SUPABASE_KEY")
+          echo "Respuesta de Supabase: $codigo"

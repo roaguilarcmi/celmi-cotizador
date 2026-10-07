@@ -17,13 +17,22 @@ export interface Resultado {
 
 const PERMISO = 'usuarios.administrar';
 
-async function construirEnlace(tokenHash: string, tipo: 'invite' | 'recovery') {
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? '127.0.0.1:3000';
-  const local = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host);
-  const protocolo = h.get('x-forwarded-proto') ?? (local ? 'http' : 'https');
-  return `${protocolo}://${host}/acceso/confirmar?token_hash=${encodeURIComponent(tokenHash)}&type=${tipo}`;
+const SIN_SITIO =
+  'Falta configurar la dirección del sitio (SITIO_URL) en el alojamiento; sin ella no se generan enlaces.';
+
+/**
+ * Dirección base de los enlaces de alta y recuperación. Publicada, sale de SITIO_URL (configuración del servidor) y
+ * nunca de los encabezados de la petición, que podrían alterarse. Sólo en el equipo local se arma con la petición.
+ */
+async function baseDelSitio(): Promise<string | null> {
+  const fija = process.env.SITIO_URL?.trim().replace(/\/+$/, '');
+  if (fija) return /^https:\/\/[^/\s]+$/.test(fija) ? fija : null;
+  const host = (await headers()).get('host') ?? '';
+  return /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) ? `http://${host}` : null;
 }
+
+const construirEnlace = (base: string, tokenHash: string, tipo: 'invite' | 'recovery') =>
+  `${base}/acceso/confirmar?token_hash=${encodeURIComponent(tokenHash)}&type=${tipo}`;
 
 /** Crea la cuenta (sin enviar correo) y devuelve el enlace de alta. */
 export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Resultado> {
@@ -32,6 +41,9 @@ export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Re
   const leido = altaUsuarioSchema.safeParse(Object.fromEntries(datos));
   if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa los datos.' };
   const { correo, nombre, puesto, rol } = leido.data;
+  // Antes de crear la cuenta: si no se puede armar el enlace, no se crea.
+  const base = await baseDelSitio();
+  if (!base) return { error: SIN_SITIO };
 
   const admin = clienteAdmin();
   const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email: correo });
@@ -57,7 +69,7 @@ export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Re
   return {
     ok: `Se dio de alta a ${nombre}.`,
     enlace: {
-      url: await construirEnlace(data.properties.hashed_token, 'invite'),
+      url: construirEnlace(base, data.properties.hashed_token, 'invite'),
       para: nombre,
       tipo: 'invite',
     },
@@ -67,6 +79,8 @@ export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Re
 export async function enlaceRecuperacion(usuarioId: string): Promise<Resultado> {
   const sesion = await exigirPermiso(PERMISO);
   if (sesion.demo) return { error: 'Disponible al conectar Supabase.' };
+  const base = await baseDelSitio();
+  if (!base) return { error: SIN_SITIO };
   const admin = clienteAdmin();
   const { data: u } = await admin.auth.admin.getUserById(usuarioId);
   if (!u.user?.email) return { error: 'No se encontró al usuario.' };
@@ -76,7 +90,7 @@ export async function enlaceRecuperacion(usuarioId: string): Promise<Resultado> 
   const { data: p } = await admin.from('perfiles').select('nombre').eq('id', usuarioId).maybeSingle();
   return {
     enlace: {
-      url: await construirEnlace(data.properties.hashed_token, 'recovery'),
+      url: construirEnlace(base, data.properties.hashed_token, 'recovery'),
       para: (p?.nombre as string | undefined) ?? u.user.email,
       tipo: 'recovery',
     },

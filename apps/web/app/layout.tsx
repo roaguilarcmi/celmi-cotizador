@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import { SCRIPT_INICIAL } from '@/lib/scripts-iniciales';
 import './globals.css';
@@ -19,11 +20,13 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Nonce del CSP (proxy.ts). Leer los encabezados hace dinámica cada página: es lo que exige el nonce.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="es-MX" className={jakarta.variable} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: SCRIPT_INICIAL }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SCRIPT_INICIAL }} />
       </head>
       <body className="min-h-dvh">{children}</body>
     </html>

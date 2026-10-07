@@ -27,7 +27,9 @@ export async function registrarAcceso(
         usuario_id: datos.usuarioId ?? null,
         correo: datos.correo ?? null,
         realizado_por: datos.realizadoPor ?? null,
-        ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+        // Publicada en Netlify, la IP confiable es la que pone su CDN; el primer valor de x-forwarded-for lo puede
+        // falsear el cliente.
+        ip: h.get('x-nf-client-connection-ip') ?? h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
         agente: h.get('user-agent')?.slice(0, 300) ?? null,
       });
   } catch (e) {

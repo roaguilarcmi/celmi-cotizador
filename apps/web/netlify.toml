@@ -1,0 +1,15 @@
+# Publicación en Netlify (decisión 2026-10-07; guía en docs/DESPLIEGUE.md).
+# En Netlify: «Base directory» vacío (raíz del monorepo) y «Package directory» = apps/web.
+# Las rutas de este archivo son relativas a la raíz del repositorio.
+# Netlify compila en su nube: en el equipo no se instala nada. npm respeta el .npmrc del repositorio
+# (ignore-scripts: ninguna dependencia ejecuta código al instalarse).
+
+[build]
+  command = "npm run check:exe && npm run build -w @celmi/web"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "24"
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Las claves (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY y SITIO_URL) se
+  # capturan en Netlify, nunca aquí.
