@@ -518,6 +518,7 @@ export interface FinanciamientoFila {
   residual_pct: string | null;
   pago_seguro: string | null;
   vigencia_financiera: string | null;
+  fecha_emision_financiera: string | null;
 }
 
 export async function listarCondicionesCatalogo(soloActivas = true): Promise<CondicionCatalogo[]> {

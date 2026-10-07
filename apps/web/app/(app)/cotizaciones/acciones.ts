@@ -238,6 +238,7 @@ export async function guardarFinanciamiento(
       factor: f.factor,
       tasa_interes: tasa ?? '',
       vigencia_financiera: f.vigencia_financiera,
+      fecha_emision_financiera: f.fecha_emision_financiera,
     });
   }
   const { error } = await supabase.rpc('guardar_financiamiento', { revision: revisionId, filas: salida });

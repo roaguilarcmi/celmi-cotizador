@@ -4,10 +4,13 @@ import {
   aEscalado,
   ESCALA_DINERO,
   formatearMXN,
+  ATAJOS_VIGENCIA_FINANCIERA,
+  finDeMesHabil,
   MESES_POR_PAGO,
   numeroDePagos,
   tasaAnualNominal,
   valorResidual,
+  vigenciaSugerida,
   type Frecuencia,
 } from '@celmi/core';
 import { useState, useTransition } from 'react';
@@ -35,6 +38,7 @@ interface Opcion {
   pago_seguro: string;
   factor: string;
   vigencia_financiera: string;
+  fecha_emision_financiera: string;
 }
 
 let n = 0;
@@ -49,6 +53,13 @@ const FRECUENCIAS: { id: Frecuencia; nombre: string }[] = [
   { id: 'semestral', nombre: 'Semestral' },
   { id: 'anual', nombre: 'Anual' },
 ];
+/** Plazos de arrendamiento que se ofrecen (decisión 2026-10-07). */
+const PLAZOS = [24, 36, 48, 60];
+const hoy = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const TIPOS = [
   { id: 'vjm' as const, nombre: 'Valor Justo de Mercado', detalle: 'Arrendamiento operativo' },
   { id: 'fpo' as const, nombre: 'Full PayOut', detalle: 'Arrendamiento financiero' },
@@ -72,6 +83,7 @@ const vacia = (propuesta: string): Opcion => ({
   pago_seguro: '',
   factor: '',
   vigencia_financiera: '',
+  fecha_emision_financiera: '',
 });
 
 const control =
@@ -117,6 +129,7 @@ export function PasoFinanciamiento({
       pago_seguro: texto(f.pago_seguro),
       factor: texto(f.factor),
       vigencia_financiera: f.vigencia_financiera ?? '',
+      fecha_emision_financiera: f.fecha_emision_financiera ?? '',
     }));
   const [opciones, setOpciones] = useState<Opcion[]>(desdeServidor);
   const [base, setBase] = useState(() => JSON.stringify(desdeServidor()));
@@ -157,6 +170,7 @@ export function PasoFinanciamiento({
           pago_seguro: f.pago_seguro,
           factor: f.factor,
           vigencia_financiera: f.vigencia_financiera,
+          fecha_emision_financiera: f.fecha_emision_financiera,
         })),
       );
       setMensaje(r.error ? { texto: r.error, error: true } : { texto: r.ok ?? '' });
@@ -293,6 +307,10 @@ function OpcionFinanciamiento({
     }
   };
   const pagoTotal = centavos(f.pago) + centavos(f.pago_seguro);
+  const errorVigencia =
+    f.vigencia_financiera && f.fecha_emision_financiera && f.vigencia_financiera < f.fecha_emision_financiera
+      ? 'La vigencia no puede ser anterior a la emisión'
+      : null;
   const tasa =
     valor !== undefined && pagos
       ? tasaAnualNominal({ valor, pagoPorPeriodo: pagoTotal, pagos, frecuencia: f.frecuencia })
@@ -341,7 +359,14 @@ function OpcionFinanciamiento({
           <select
             value={f.financiera_id}
             disabled={!editable}
-            onChange={(e) => onCambiar({ financiera_id: e.target.value, aseguradora: '' })}
+            onChange={(e) => {
+              const elegida = financieras.find((x) => x.id === e.target.value);
+              // Si la financiera tiene una sola aseguradora, se elige sola (2026-10-07).
+              onCambiar({
+                financiera_id: e.target.value,
+                aseguradora: elegida?.aseguradoras.length === 1 ? (elegida.aseguradoras[0] ?? '') : '',
+              });
+            }}
             className={control}
           >
             <option value="">Elige…</option>
@@ -379,15 +404,56 @@ function OpcionFinanciamiento({
           />
         </label>
         <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Vigencia de su cotización
+          Fecha de emisión de su cotización
           <input
             type="date"
-            value={f.vigencia_financiera}
+            value={f.fecha_emision_financiera}
             disabled={!editable}
-            onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
+            onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
             className={control}
           />
         </label>
+        <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-4">
+          <span className="text-xs font-semibold text-texto-suave">
+            Vigencia de su cotización
+            <span className="font-normal">
+              {' '}
+              —{' '}
+              {f.fecha_emision_financiera
+                ? 'a partir de la fecha de emisión'
+                : 'a partir de hoy (no hay fecha de emisión)'}
+              ; nunca en sábado ni domingo
+            </span>
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={f.vigencia_financiera}
+              disabled={!editable}
+              aria-invalid={Boolean(errorVigencia)}
+              onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
+              className={`${control} ${errorVigencia ? 'border-peligro' : ''}`}
+            />
+            {editable &&
+              ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
+                const desde = f.fecha_emision_financiera || hoy();
+                const fecha =
+                  atajo.dias === 'fin_de_mes' ? finDeMesHabil(desde) : vigenciaSugerida(desde, atajo.dias);
+                return (
+                  <Boton
+                    key={atajo.etiqueta}
+                    tamano="chico"
+                    variante={f.vigencia_financiera === fecha ? 'primario' : 'secundario'}
+                    title={`Vence el ${fecha}`}
+                    onClick={() => onCambiar({ vigencia_financiera: fecha })}
+                  >
+                    {atajo.etiqueta}
+                  </Boton>
+                );
+              })}
+            {errorVigencia && <span className="text-xs font-semibold text-peligro">{errorVigencia}</span>}
+          </div>
+        </div>
 
         {esArrendamiento && (
           <div className="flex flex-col gap-1 sm:col-span-2">
@@ -416,15 +482,24 @@ function OpcionFinanciamiento({
           </div>
         )}
         <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Plazo (meses)
-          <input
+          Plazo
+          <select
             value={f.plazo_meses}
             disabled={!editable}
-            inputMode="numeric"
             aria-invalid={Boolean(errorPlazo)}
-            onChange={(e) => onCambiar({ plazo_meses: e.target.value.replace(/[^\d]/g, '').slice(0, 3) })}
-            className={`${control} tabular text-right ${errorPlazo ? 'border-peligro' : ''}`}
-          />
+            onChange={(e) => onCambiar({ plazo_meses: e.target.value })}
+            className={`${control} ${errorPlazo ? 'border-peligro' : ''}`}
+          >
+            <option value="">Elige…</option>
+            {/* Una opción capturada antes con otro plazo se conserva. */}
+            {[...new Set([...PLAZOS, ...(f.plazo_meses ? [Number(f.plazo_meses)] : [])])]
+              .sort((x, y) => x - y)
+              .map((p) => (
+                <option key={p} value={p}>
+                  {p} meses
+                </option>
+              ))}
+          </select>
         </label>
         <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
           Frecuencia de pago

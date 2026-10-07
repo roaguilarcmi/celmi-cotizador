@@ -199,3 +199,32 @@ describe('opciones de financiamiento (0017, 0023)', () => {
     ).rejects.toThrow(/row-level security/);
   });
 });
+
+describe('fecha de emisión de la financiera (0025)', () => {
+  it('se guarda y la vigencia no puede ser anterior', async () => {
+    const op = await autorizada();
+    const opcion = {
+      propuesta_id: op.propuesta,
+      plazo_meses: 36,
+      frecuencia: 'mensual',
+      fecha_emision_financiera: '2026-10-07',
+      vigencia_financiera: '2026-10-22',
+    };
+    await como(db, 'jorge', async () => {
+      await db.query('select public.guardar_financiamiento($1, $2)', [op.revision, JSON.stringify([opcion])]);
+      const [r] = await filas<{ fecha_emision_financiera: string }>(
+        db,
+        'select fecha_emision_financiera::text from public.propuesta_financiamientos',
+      );
+      expect(r!.fecha_emision_financiera).toBe('2026-10-07');
+    });
+    await expect(
+      como(db, 'jorge', () =>
+        db.query('select public.guardar_financiamiento($1, $2)', [
+          op.revision,
+          JSON.stringify([{ ...opcion, vigencia_financiera: '2026-10-01' }]),
+        ]),
+      ),
+    ).rejects.toThrow(/vigencia_despues_de_emision/);
+  });
+});

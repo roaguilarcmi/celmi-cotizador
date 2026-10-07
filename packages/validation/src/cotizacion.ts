@@ -128,6 +128,10 @@ export const financiamientoSchema = z
       vigencia_financiera: z
         .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida')])
         .default(''),
+      /** Fecha de emisión de la cotización de la financiera (0025). */
+      fecha_emision_financiera: z
+        .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida')])
+        .default(''),
     }),
   )
   .max(500);

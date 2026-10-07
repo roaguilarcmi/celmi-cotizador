@@ -49,7 +49,7 @@ export const CONSULTAS = {
   revisionCondiciones: 'id, orden, condicion_id, contenido',
   financiamientos: `id, propuesta_id, esquema_id, plazo_meses, mensualidad, valor_residual, factor, tasa_interes,
     gastos_apertura, orden, financiera_id, aseguradora, folio_financiera, tipo_arrendamiento, frecuencia, valor_equipos,
-    residual_capturado, residual_pct, pago_seguro, vigencia_financiera`,
+    residual_capturado, residual_pct, pago_seguro, vigencia_financiera, fecha_emision_financiera`,
   financieras: 'id, nombre, razon_social, aseguradoras, activa',
 } as const;
 

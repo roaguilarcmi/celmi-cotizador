@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esFinDeSemana, vigenciaSugerida } from './vigencia';
+import { esFinDeSemana, finDeMesHabil, vigenciaSugerida } from './vigencia';
 
 describe('vigencia', () => {
   // 2026-10-07 es miércoles.
@@ -26,5 +26,14 @@ describe('vigencia', () => {
     expect(esFinDeSemana('2026-10-12')).toBe(false);
     expect(() => esFinDeSemana('2026-02-30')).toThrow();
     expect(() => vigenciaSugerida('2026-10-07', -1)).toThrow();
+  });
+});
+
+describe('finDeMesHabil', () => {
+  it('último día del mes, o el viernes anterior si cae en fin de semana', () => {
+    expect(finDeMesHabil('2026-10-07')).toBe('2026-10-30'); // 31 oct 2026 es sábado → viernes 30
+    expect(finDeMesHabil('2026-11-15')).toBe('2026-11-30'); // lunes 30
+    expect(finDeMesHabil('2026-05-02')).toBe('2026-05-29'); // 31 may es domingo → viernes 29
+    expect(finDeMesHabil('2028-02-10')).toBe('2028-02-29'); // bisiesto, martes
   });
 });

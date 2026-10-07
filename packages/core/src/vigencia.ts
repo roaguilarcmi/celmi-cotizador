@@ -39,3 +39,23 @@ export function vigenciaSugerida(desde: string, dias: number): string {
   if (semana === 0) d.setUTCDate(d.getUTCDate() + 1);
   return escribir(d);
 }
+
+/**
+ * Último día hábil del mes de `fecha` (decisión 2026-10-07, «Fin de mes» en la vigencia de la financiera): el día
+ * inmediato anterior al mes siguiente; si es sábado o domingo, el viernes anterior (no se pasa al mes siguiente).
+ */
+export function finDeMesHabil(fecha: string): string {
+  const d = leer(fecha);
+  const fin = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  const semana = fin.getUTCDay();
+  if (semana === 6) fin.setUTCDate(fin.getUTCDate() - 1);
+  if (semana === 0) fin.setUTCDate(fin.getUTCDate() - 2);
+  return escribir(fin);
+}
+
+/** Atajos de vigencia de la cotización de la financiera, desde su fecha de emisión (2026-10-07). */
+export const ATAJOS_VIGENCIA_FINANCIERA: readonly { etiqueta: string; dias: number | 'fin_de_mes' }[] = [
+  { etiqueta: '15 días', dias: 15 },
+  { etiqueta: '30 días', dias: 30 },
+  { etiqueta: 'Fin de mes', dias: 'fin_de_mes' },
+];
