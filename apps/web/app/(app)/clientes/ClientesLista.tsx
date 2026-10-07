@@ -14,14 +14,14 @@ export function ClientesLista({ clientes, puedeCrear }: { clientes: ClienteFila[
   const [busqueda, setBusqueda] = useState('');
   const [alta, setAlta] = useState(false);
 
-  // Búsqueda por empresa, RFC, ciudad, contacto, correo o teléfono (RFP §24).
+  // Búsqueda por empresa, RFC, estado, contacto, correo o teléfono (RFP §24).
   const visibles = useMemo(() => {
     const q = paraBuscar(busqueda.trim());
     if (!q) return clientes;
     const digitos = busqueda.replace(/\D/g, '');
     return clientes.filter(
       (c) =>
-        paraBuscar(`${c.razon_social} ${c.rfc} ${c.ciudad}`).includes(q) ||
+        paraBuscar(`${c.razon_social} ${c.rfc} ${c.estado ?? ''} ${c.ciudad}`).includes(q) ||
         c.contactos.some(
           (k) =>
             paraBuscar(`${k.nombre} ${k.correo}`).includes(q) ||
@@ -105,7 +105,7 @@ export function ClientesLista({ clientes, puedeCrear }: { clientes: ClienteFila[
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-bold group-hover:text-acento-texto">{c.razon_social}</div>
                   <div className="truncate text-[13px] text-texto-suave">
-                    {[c.ciudad, c.rfc].filter(Boolean).join(' · ') || 'Sin ciudad registrada'}
+                    {[c.estado ?? c.ciudad, c.rfc].filter(Boolean).join(' · ') || 'Sin estado registrado'}
                   </div>
                   {principal ? (
                     <div className="mt-3 truncate text-[13px]">

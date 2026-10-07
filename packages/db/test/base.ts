@@ -83,6 +83,15 @@ export async function crearOportunidad(db: PGlite, ejecutivo: Usuario) {
     `insert into public.revisiones (cotizacion_id, numero) values ($1, 0) returning id`,
     [cot!.id],
   );
+  // 0024: un arrendamiento se envía a autorización sólo con el mayorista del arrendamiento.
+  const [mayorista] = await filas<{ id: string }>(
+    db,
+    `insert into public.mayoristas (nombre) values ('Mayorista ' || gen_random_uuid()) returning id`,
+  );
+  await db.query(`update public.revisiones set mayorista_arrendamiento_id = $2 where id = $1`, [
+    rev!.id,
+    mayorista!.id,
+  ]);
   const [prop] = await filas<{ id: string }>(
     db,
     `insert into public.propuestas (revision_id, orden, nombre) values ($1, 1, 'Propuesta 1') returning id`,

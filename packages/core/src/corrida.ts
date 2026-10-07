@@ -1,5 +1,6 @@
 import type { Centavos } from './decimal';
 import {
+  sumarPorcentajes,
   calcularPartida,
   calcularTotales,
   consolidarLinea,
@@ -152,6 +153,8 @@ export interface PartidaCorrida extends Omit<PartidaPresentable, 'precioUnitario
   costoUnitario: string;
   tipoCambio: string;
   utilidadPct: string;
+  /** % de transaccionalidad que se suma a la utilidad (arrendamiento con otro mayorista; 2026-10-07). */
+  transaccionPct?: string;
 }
 
 export interface Corrida {
@@ -176,7 +179,7 @@ export function calcularCorrida(propuestas: readonly PropuestaPresentable<Partid
         calcularPartida({
           costoUnitario: p.costoUnitario,
           tipoCambio: p.tipoCambio,
-          utilidadPct: p.utilidadPct,
+          utilidadPct: p.transaccionPct ? sumarPorcentajes(p.utilidadPct, p.transaccionPct) : p.utilidadPct,
           cantidad: p.cantidad,
         }),
       );

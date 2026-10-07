@@ -4,6 +4,7 @@ import type { JSONContent } from '@tiptap/core';
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
+import { CampoEstadoMx } from '@/components/CampoEstadoMx';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
@@ -140,7 +141,7 @@ export function FichaOportunidad({
                 )}
               </Dato>
               <Dato etiqueta="Tipo">{TIPOS_OPORTUNIDAD[o.tipo]?.nombre ?? '—'}</Dato>
-              <Dato etiqueta="Ciudad de entrega">{o.ciudad_entrega || '—'}</Dato>
+              <Dato etiqueta="Estado de entrega">{o.estado_entrega ?? (o.ciudad_entrega || '—')}</Dato>
               <Dato etiqueta="Ejecutivo responsable">
                 {o.ejecutivo && (
                   <span className="inline-flex items-center gap-2">
@@ -252,7 +253,7 @@ function EditarOportunidad({
             ))}
           </select>
         </div>
-        <Campo etiqueta="Ciudad de entrega" name="ciudad_entrega" defaultValue={o.ciudad_entrega} />
+        <CampoEstadoMx etiqueta="Estado de entrega" name="estado_entrega" defaultValue={o.estado_entrega} />
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <span className="text-[13px] font-semibold">Observaciones internas</span>
           <EditorEnriquecido

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
+import { CampoEstadoMx } from '@/components/CampoEstadoMx';
 import { Boton, Titulo2 } from '@/components/ui';
 import { crearCliente, type EstadoFormulario } from './acciones';
 
@@ -49,7 +50,7 @@ export function FormularioCliente({
           />
         </div>
         <Campo etiqueta="RFC" name="rfc" autoComplete="off" maxLength={13} ayuda="Opcional" />
-        <Campo etiqueta="Ciudad" name="ciudad" autoComplete="off" />
+        <CampoEstadoMx etiqueta="Estado" name="estado" />
         <div className="sm:col-span-2">
           <Campo etiqueta="Dirección" name="direccion" autoComplete="off" />
         </div>

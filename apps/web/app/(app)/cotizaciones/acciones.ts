@@ -5,6 +5,8 @@ import {
   financiamientoSchema,
   normalizarContenido,
   propuestasCotizacionSchema,
+  datosAutorizacionSchema,
+  esquemaRevisionSchema,
   tiposCambioAutorizacionSchema,
   utilidadesAutorizacionSchema,
 } from '@celmi/validation';
@@ -18,7 +20,7 @@ import {
   tasaAnualNominal,
   valorResidual,
 } from '@celmi/core';
-import { corridaDe, monedasExtranjeras, presentacionAutorizada } from '@/lib/corrida';
+import { corridaDe, monedasExtranjeras, presentacionAutorizada, transaccionPorPartida } from '@/lib/corrida';
 import { obtenerRevision } from '@/lib/datos';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
@@ -281,21 +283,34 @@ export async function guardarUtilidades(
   cotizacionId: string,
   utilidades: unknown,
   tiposCambio: unknown,
+  datos: unknown = {},
 ): Promise<Resultado> {
   await exigirPermiso('utilidad.autorizar');
   const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
   if (!leido.success) return { error: ERROR_UTILIDAD };
   const tc = tiposCambioAutorizacionSchema.safeParse(tiposCambio);
   if (!tc.success) return { error: ERROR_TC };
+  const extra = datosAutorizacionSchema.safeParse(datos);
+  if (!extra.success)
+    return { error: extra.error.issues[0]?.message ?? 'Revisa el anticipo y la transaccionalidad.' };
+  const revision = await obtenerRevision(revisionId);
+  if (!revision || revision.cotizacion_id !== cotizacionId) return { error: 'La revisión no existe.' };
+  const transacciones = transaccionPorPartida(
+    revision,
+    extra.data.transaccion_pct,
+    extra.data.transaccion_alcance,
+  );
   const partidas = Object.entries(leido.data).map(([partida_id, utilidad_pct]) => ({
     partida_id,
     utilidad_pct,
+    transaccion_pct: transacciones[partida_id] ?? '0',
   }));
   const supabase = await clienteServidor();
   const { error } = await supabase.rpc('guardar_utilidades', {
     revision: revisionId,
     partidas,
     tipos_cambio: tc.data,
+    datos: extra.data,
   });
   if (error) return { error: mensajeDe(error, 'No se pudo guardar la utilidad.') };
   refrescarBandeja(cotizacionId);
@@ -312,6 +327,7 @@ export async function autorizarRevision(
   utilidades: unknown,
   tiposCambio: unknown,
   comentario: string,
+  datos: unknown = {},
 ): Promise<Resultado> {
   await exigirPermiso('utilidad.autorizar');
   const leido = utilidadesAutorizacionSchema.safeParse(utilidades);
@@ -320,6 +336,9 @@ export async function autorizarRevision(
   if (!tc.success) return { error: ERROR_TC };
   if (typeof comentario !== 'string' || comentario.length > 2000)
     return { error: 'La nota es demasiado larga.' };
+  const extra = datosAutorizacionSchema.safeParse(datos);
+  if (!extra.success)
+    return { error: extra.error.issues[0]?.message ?? 'Revisa el anticipo y la transaccionalidad.' };
   const revision = await obtenerRevision(revisionId);
   if (!revision || revision.cotizacion_id !== cotizacionId) return { error: 'La revisión no existe.' };
   if (revision.estado !== 'pendiente_autorizacion')
@@ -327,12 +346,24 @@ export async function autorizarRevision(
   // Cada moneda extranjera de la revisión necesita su T.C. (sólo esas: en pesos no se pide).
   const faltan = monedasExtranjeras(revision).filter((m) => !tc.data[m]);
   if (faltan.length) return { error: `Indica el tipo de cambio de ${faltan.join(', ')}.` };
+  if (revision.esquema === 'adquisicion' && !extra.data.anticipo_pct)
+    return { error: 'Indica el porcentaje de anticipo.' };
+  if (Number(extra.data.transaccion_pct) > 0 && !extra.data.transaccion_alcance)
+    return {
+      error: 'Indica si la transaccionalidad va en todas las partidas o sólo en las de otro proveedor.',
+    };
+  const transacciones = transaccionPorPartida(
+    revision,
+    extra.data.transaccion_pct,
+    extra.data.transaccion_alcance,
+  );
   const utilidad = leido.data;
-  const corrida = corridaDe(revision, (id) => utilidad[id] ?? '', tc.data);
+  const corrida = corridaDe(revision, (id) => utilidad[id] ?? '', tc.data, transacciones);
   if (!corrida) return { error: 'Falta la utilidad de alguna partida o hay un dato no válido.' };
   const partidas = [...corrida.partidas].map(([partida_id, r]) => ({
     partida_id,
     utilidad_pct: utilidad[partida_id],
+    transaccion_pct: transacciones[partida_id] ?? '0',
     precio_unitario: centavosADecimal(r.precioUnitario),
   }));
   const supabase = await clienteServidor();
@@ -341,6 +372,7 @@ export async function autorizarRevision(
     partidas,
     tipos_cambio: tc.data,
     comentario: comentario.trim(),
+    datos: extra.data,
   });
   if (error) return { error: mensajeDe(error, 'No se pudo autorizar.') };
   refrescarBandeja(cotizacionId);
@@ -399,4 +431,32 @@ export async function descartarRevision(revisionId: string, cotizacionId: string
   if (!data?.length) return { error: 'Esta revisión ya no se puede descartar.' };
   refrescar(cotizacionId);
   redirect(`/cotizaciones/${cotizacionId}`);
+}
+
+/**
+ * Esquema de la cotización (Adquisición, Arrendamiento o Crédito simple) y, en arrendamiento, el mayorista con el que
+ * se trabaja (decisión 2026-10-07). Sólo en borrador; la base lo vuelve a exigir.
+ */
+export async function guardarEsquemaRevision(
+  revisionId: string,
+  cotizacionId: string,
+  datos: unknown,
+): Promise<Resultado> {
+  await obtenerSesion();
+  const leido = esquemaRevisionSchema.safeParse(datos);
+  if (!leido.success) return { error: 'Elige el esquema de la cotización.' };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('revisiones')
+    .update({
+      esquema: leido.data.esquema,
+      mayorista_arrendamiento_id:
+        leido.data.esquema === 'arrendamiento' ? leido.data.mayorista_arrendamiento_id : null,
+    })
+    .eq('id', revisionId)
+    .select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo guardar el esquema.') };
+  if (!data?.length) return { error: 'Esta revisión ya no se puede modificar.' };
+  refrescar(cotizacionId);
+  return { ok: 'Esquema guardado.' };
 }

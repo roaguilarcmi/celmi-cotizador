@@ -5,6 +5,7 @@ import { useActionState, useMemo, useState } from 'react';
 import { Buscador, paraBuscar } from '@/components/Buscador';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
+import { CampoEstadoMx } from '@/components/CampoEstadoMx';
 import { Icon } from '@/components/Icon';
 import { PasosWizard } from '@/components/PasosWizard';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
@@ -98,7 +99,8 @@ export function PasoCliente({
               <div className="min-w-0 flex-1">
                 <div className="font-bold">{cliente.razon_social}</div>
                 <div className="text-[13px] text-texto-suave">
-                  {[cliente.ciudad, cliente.rfc].filter(Boolean).join(' · ') || 'Sin ciudad ni RFC'}
+                  {[cliente.estado ?? cliente.ciudad, cliente.rfc].filter(Boolean).join(' · ') ||
+                    'Sin estado ni RFC'}
                 </div>
               </div>
               <Boton tamano="chico" onClick={() => setClienteId(null)}>
@@ -149,7 +151,7 @@ export function PasoCliente({
                             : c.contactos.length === 1
                               ? c.contactos[0]?.nombre
                               : `${c.contactos.length} contactos`}
-                          {c.ciudad && ` · ${c.ciudad}`}
+                          {(c.estado ?? c.ciudad) && ` · ${c.estado ?? c.ciudad}`}
                         </span>
                       </span>
                     </button>
@@ -205,11 +207,11 @@ export function PasoCliente({
                   placeholder="Ej. Renovación de 2 laptops"
                 />
               </div>
-              <Campo
-                etiqueta="Ciudad de entrega"
-                name="ciudad_entrega"
-                defaultValue={cliente.ciudad}
-                autoComplete="off"
+              <CampoEstadoMx
+                etiqueta="Estado de entrega"
+                name="estado_entrega"
+                defaultValue={cliente.estado}
+                ayuda="Fuera de CDMX, Edomex, Hidalgo o Morelos, la autorización lo avisa."
               />
               {ejecutivos && (
                 <div className="flex flex-col gap-1.5 sm:col-span-2">

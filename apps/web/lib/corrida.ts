@@ -29,6 +29,7 @@ export function entradaCorrida(
   revision: RevisionDetalle,
   utilidadDe: (partidaId: string) => string,
   tiposCambio: Record<string, string> = {},
+  transacciones: Record<string, string> = {},
 ): PropuestaPresentable<PartidaCorrida>[] {
   return revision.propuestas.map((p) => ({
     id: p.id,
@@ -50,6 +51,7 @@ export function entradaCorrida(
               ? (tiposCambio[pa.costo.moneda] ?? '')
               : decimal(pa.costo.tipo_cambio, 5),
         utilidadPct: utilidadDe(pa.id),
+        ...(transacciones[pa.id] ? { transaccionPct: transacciones[pa.id] } : {}),
       };
     }),
   }));
@@ -60,9 +62,10 @@ export function corridaDe(
   revision: RevisionDetalle,
   utilidadDe: (id: string) => string,
   tiposCambio: Record<string, string> = {},
+  transacciones: Record<string, string> = {},
 ): Corrida | null {
   try {
-    return calcularCorrida(entradaCorrida(revision, utilidadDe, tiposCambio));
+    return calcularCorrida(entradaCorrida(revision, utilidadDe, tiposCambio, transacciones));
   } catch {
     return null;
   }
@@ -102,3 +105,33 @@ export const monedasExtranjeras = (revision: RevisionDetalle) => [
     ),
   ),
 ];
+
+/**
+ * Partidas cuyo proveedor es distinto del mayorista del arrendamiento (0024). Una partida sin mayorista (p. ej. un
+ * cargo de envío) no cuenta como distinta.
+ */
+export const partidasDeOtroProveedor = (revision: RevisionDetalle) =>
+  revision.esquema !== 'arrendamiento' || !revision.mayorista_arrendamiento_id
+    ? []
+    : revision.propuestas.flatMap((p) =>
+        p.partidas.filter(
+          (pa) => pa.costo?.mayorista_id && pa.costo.mayorista_id !== revision.mayorista_arrendamiento_id,
+        ),
+      );
+
+/**
+ * % de transaccionalidad de cada partida (decisión 2026-10-07): el que fija quien autoriza, en todas las partidas o
+ * sólo en las de otro proveedor. Vacío si no aplica.
+ */
+export function transaccionPorPartida(
+  revision: RevisionDetalle,
+  porcentaje: string,
+  alcance: 'todas' | 'diferentes' | null,
+): Record<string, string> {
+  if (revision.esquema !== 'arrendamiento' || !porcentaje || Number(porcentaje) <= 0 || !alcance) return {};
+  const ids =
+    alcance === 'todas'
+      ? revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))
+      : partidasDeOtroProveedor(revision).map((pa) => pa.id);
+  return Object.fromEntries(ids.map((id) => [id, porcentaje]));
+}

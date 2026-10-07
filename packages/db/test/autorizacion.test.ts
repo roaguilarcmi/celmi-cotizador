@@ -227,3 +227,114 @@ describe('tipo de cambio en la autorización (0020)', () => {
     ).rejects.toThrow(/espera autorización/);
   });
 });
+
+describe('esquema por cotización, anticipo y transaccionalidad (0024)', () => {
+  const tipoDe = async (revision: string) =>
+    (
+      await filas<{ esquema: string }>(db, 'select esquema from public.revisiones where id = $1', [revision])
+    )[0]?.esquema;
+
+  it('la revisión toma el esquema de la oportunidad y se cambia sólo en borrador', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    expect(await tipoDe(op.revision)).toBe('arrendamiento');
+    await db.query(`update public.revisiones set esquema = 'adquisicion' where id = $1`, [op.revision]);
+    expect(await tipoDe(op.revision)).toBe('adquisicion');
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      op.revision,
+    ]);
+    await expect(
+      db.query(`update public.revisiones set esquema = 'credito_simple' where id = $1`, [op.revision]),
+    ).rejects.toThrow(/sólo en borrador/);
+  });
+
+  it('un arrendamiento no se envía sin mayorista de arrendamiento', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query('update public.revisiones set mayorista_arrendamiento_id = null where id = $1', [
+      op.revision,
+    ]);
+    await expect(
+      como(db, 'jorge', () =>
+        db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+          op.revision,
+        ]),
+      ),
+    ).rejects.toThrow(/mayorista/);
+  });
+
+  it('adquisición exige anticipo al autorizar', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query(`update public.revisiones set esquema = 'adquisicion' where id = $1`, [op.revision]);
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      op.revision,
+    ]);
+    await expect(
+      como(db, 'alejandro', () =>
+        db.query('select public.autorizar_revision($1, $2)', [op.revision, lista(op.partida)]),
+      ),
+    ).rejects.toThrow(/anticipo/);
+    await como(db, 'alejandro', async () => {
+      await db.query('select public.autorizar_revision($1, $2, datos => $3)', [
+        op.revision,
+        lista(op.partida),
+        '{"anticipo_pct": "50"}',
+      ]);
+      const [r] = await filas<{ anticipo_pct: string }>(
+        db,
+        'select anticipo_pct::text from public.revisiones where id = $1',
+        [op.revision],
+      );
+      expect(Number(r!.anticipo_pct)).toBe(50);
+    });
+  });
+
+  it('la transaccionalidad se suma a la utilidad y sólo aplica en arrendamiento', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    const [m] = await filas<{ id: string }>(
+      db,
+      `insert into public.mayoristas (nombre) values ('Arrendamayorista') returning id`,
+    );
+    await db.query(`update public.revisiones set mayorista_arrendamiento_id = $2 where id = $1`, [
+      op.revision,
+      m!.id,
+    ]);
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      op.revision,
+    ]);
+    // 14533.46 × (1 + (13.5 + 3) %) = 16931.4809 → 16931.48
+    const conTransaccion = JSON.stringify([
+      { partida_id: op.partida, utilidad_pct: '13.5', transaccion_pct: '3', precio_unitario: '16931.48' },
+    ]);
+    await expect(
+      como(db, 'alejandro', () =>
+        db.query('select public.autorizar_revision($1, $2, datos => $3)', [
+          op.revision,
+          conTransaccion,
+          '{"transaccion_pct": "3"}',
+        ]),
+      ),
+    ).rejects.toThrow(/todas las partidas/);
+    await como(db, 'alejandro', async () => {
+      await db.query('select public.autorizar_revision($1, $2, datos => $3)', [
+        op.revision,
+        conTransaccion,
+        '{"transaccion_pct": "3", "transaccion_alcance": "diferentes"}',
+      ]);
+      const [u] = await filas<{ transaccion_pct: string }>(
+        db,
+        'select transaccion_pct::text from public.partida_utilidad where partida_id = $1',
+        [op.partida],
+      );
+      expect(Number(u!.transaccion_pct)).toBe(3);
+    });
+  });
+
+  it('el estado del cliente y el de entrega son de la lista de la República', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query(`update public.oportunidades set estado_entrega = 'Hidalgo' where id = $1`, [
+      op.oportunidad,
+    ]);
+    await expect(
+      db.query(`update public.oportunidades set estado_entrega = 'Pachuca' where id = $1`, [op.oportunidad]),
+    ).rejects.toThrow();
+  });
+});

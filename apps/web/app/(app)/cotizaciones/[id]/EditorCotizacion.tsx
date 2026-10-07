@@ -26,6 +26,7 @@ import {
   type PropuestaEditable,
 } from './modelo';
 import { EliminarCotizacion } from './EliminarCotizacion';
+import { EsquemaCotizacion } from './EsquemaCotizacion';
 import { MenuRevisiones } from './MenuRevisiones';
 import { CorridaAutorizacion, type ReferenciaCorrida } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
@@ -244,6 +245,14 @@ export function EditorCotizacion({
         </p>
       )}
 
+      {paso === 1 && (
+        <EsquemaCotizacion
+          revision={revision}
+          cotizacionId={cotizacion.id}
+          editable={editable}
+          mayoristas={catalogos.mayoristas}
+        />
+      )}
       {paso === 1 && propuesta && (
         <Tarjeta className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-borde px-4 py-3">
@@ -355,7 +364,8 @@ export function EditorCotizacion({
           puedeEditar={puedeEditar}
           financieras={financieras}
           filasIniciales={financiamiento}
-          tipoOportunidad={tipoOportunidad}
+          // El esquema es de la cotización (0024); por omisión, el de la oportunidad.
+          tipoOportunidad={revision.esquema ?? tipoOportunidad}
         />
       )}
       {paso === 3 && verCorrida && (
@@ -369,6 +379,8 @@ export function EditorCotizacion({
           puedeAutorizar={autorizacion.puedeAutorizar}
           puedeRetirar={puedeEditar}
           solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
+          estadoEntrega={cotizacion.oportunidad?.estado_entrega ?? null}
+          ciudadEntrega={cotizacion.oportunidad?.ciudad_entrega ?? ''}
         />
       )}
       {paso === 3 && !verCorrida && (

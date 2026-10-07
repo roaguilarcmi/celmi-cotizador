@@ -2,7 +2,10 @@
 
 import {
   aEscalado,
+  anticipoDe,
   calcularPartida,
+  dividirRedondeando,
+  ESCALA_PORCENTAJE,
   centavosADecimal,
   conIva,
   ESCALA_DINERO,
@@ -10,10 +13,11 @@ import {
   importeConLetra,
   mejoraDePrecio,
   presentarPropuestas,
+  sumarPorcentajes,
   variacion,
   type ResultadoPartida,
 } from '@celmi/core';
-import { porcentaje, tipoCambio as tipoCambioSchema } from '@celmi/validation';
+import { fueraDeZona, porcentaje, tipoCambio as tipoCambioSchema, ZONA_ENTREGA } from '@celmi/validation';
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -28,7 +32,13 @@ import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Boton, Pill } from '@/components/ui';
 import { VentanaFlotante } from '@/components/VentanaFlotante';
-import { decimal, entradaCorrida, monedasExtranjeras } from '@/lib/corrida';
+import {
+  decimal,
+  entradaCorrida,
+  monedasExtranjeras,
+  partidasDeOtroProveedor,
+  transaccionPorPartida,
+} from '@/lib/corrida';
 import type { PartidaFila, RevisionDetalle } from '@/lib/datos';
 import { usePreferencia } from '@/lib/preferencias';
 import { autorizarRevision, cambiarEstadoRevision, guardarUtilidades, rechazarRevision } from '../acciones';
@@ -123,6 +133,8 @@ export function CorridaAutorizacion({
   puedeAutorizar,
   puedeRetirar,
   solicitante,
+  estadoEntrega,
+  ciudadEntrega,
 }: {
   revision: RevisionDetalle;
   cotizacionId: string;
@@ -134,6 +146,10 @@ export function CorridaAutorizacion({
   /** Quien preparó la cotización puede retirarla mientras espera. */
   puedeRetirar: boolean;
   solicitante: string | null;
+  /** Estado de entrega de la oportunidad (0024); fuera de la zona habitual se avisa. */
+  estadoEntrega: string | null;
+  /** Texto libre anterior a 0024, sólo como referencia si aún no hay estado. */
+  ciudadEntrega: string;
 }) {
   const editable = puedeAutorizar && revision.estado === 'pendiente_autorizacion';
   const monedas = monedasExtranjeras(revision);
@@ -173,7 +189,38 @@ export function CorridaAutorizacion({
     return [...cuenta].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
   })();
   const tcsValidos = monedas.every((m) => tipoCambioSchema.safeParse(tcs[m] ?? '').success);
-  const sucio = editable && (JSON.stringify([porPartida, tcs]) !== base || general !== '');
+  // Anticipo (adquisición) y transaccionalidad (arrendamiento con otro mayorista), 2026-10-07.
+  const texto = (v: number | string | null) => (v == null ? '' : String(Number(v)));
+  const [anticipo, setAnticipo] = useState(texto(revision.anticipo_pct));
+  const [transaccion, setTransaccion] = useState(texto(revision.transaccion_pct));
+  const [alcance, setAlcance] = useState<'todas' | 'diferentes' | null>(revision.transaccion_alcance);
+  const [datosBase] = useState(() =>
+    JSON.stringify([
+      texto(revision.anticipo_pct),
+      texto(revision.transaccion_pct),
+      revision.transaccion_alcance,
+    ]),
+  );
+  const esAdquisicion = revision.esquema === 'adquisicion';
+  const diferentes = partidasDeOtroProveedor(revision);
+  const conTransaccion =
+    revision.esquema === 'arrendamiento' && (diferentes.length > 0 || Boolean(transaccion));
+  const anticipoValido =
+    !esAdquisicion || (porcentaje.safeParse(anticipo).success && Number(anticipo) <= 100);
+  const transaccionValida =
+    !transaccion || (porcentaje.safeParse(transaccion).success && Number(transaccion) <= 100);
+  const falsaAlcance = Number(transaccion) > 0 && !alcance;
+  const transacciones = transaccionValida ? transaccionPorPartida(revision, transaccion, alcance) : {};
+  const datosAutorizacion = {
+    anticipo_pct: esAdquisicion ? anticipo : '',
+    transaccion_pct: revision.esquema === 'arrendamiento' ? transaccion : '',
+    transaccion_alcance: Number(transaccion) > 0 ? alcance : null,
+  };
+  const sucio =
+    editable &&
+    (JSON.stringify([porPartida, tcs]) !== base ||
+      general !== '' ||
+      JSON.stringify([anticipo, transaccion, alcance]) !== datosBase);
 
   // Un solo scroll: la hoja ocupa exactamente el alto que queda en la ventana (en pantallas grandes); en celular la
   // página crece y es la página la que se desplaza.
@@ -244,7 +291,14 @@ export function CorridaAutorizacion({
         // T.C. vacío o no válido: la fila queda sin costo hasta corregirlo.
       }
       try {
-        resultados.set(p.id, calcularPartida({ ...p, utilidadPct: utilidadDe(p.id) }));
+        const t = transacciones[p.id];
+        resultados.set(
+          p.id,
+          calcularPartida({
+            ...p,
+            utilidadPct: t ? sumarPorcentajes(utilidadDe(p.id), t) : utilidadDe(p.id),
+          }),
+        );
       } catch {
         resultados.set(p.id, null);
       }
@@ -268,10 +322,25 @@ export function CorridaAutorizacion({
     }
   })();
 
+  // Transaccionalidad en pesos (costo × %): va aparte de la utilidad para que se vea la utilidad real.
+  const escala = 100n * 10n ** BigInt(ESCALA_PORCENTAJE);
+  const transaccionDe = (id: string, base: bigint | undefined) => {
+    const t = transacciones[id];
+    if (!t || base === undefined) return 0n;
+    try {
+      return dividirRedondeando(base * BigInt(Math.round(Number(t) * 10 ** ESCALA_PORCENTAJE)), escala);
+    } catch {
+      return 0n;
+    }
+  };
+  const transaccionTotal = [...costos.entries()].reduce(
+    (s, [id, k]) => s + transaccionDe(id, k.costoTotal),
+    0n,
+  );
   const lista = [...resultados.values()].filter((r): r is ResultadoPartida => r !== null);
   const costo = [...costos.values()].reduce((s, r) => s + r.costoTotal, 0n);
   const venta = lista.reduce((s, r) => s + r.importe, 0n);
-  const utilidad = venta - costo;
+  const utilidad = venta - costo - transaccionTotal;
   const principales = presentadas?.filter((p) => !p.esAdicional).map((p) => p.totales.total) ?? [];
   const numAdicionales = revision.propuestas.filter((p) => p.es_adicional).length;
   const generalValida = general === '' || porcentaje.safeParse(general).success;
@@ -279,32 +348,53 @@ export function CorridaAutorizacion({
   // Precio = costo × T.C. + utilidad (% sobre el costo en pesos); en pesos el T.C. es 1 y no se modifica (2026-10-06).
   const conCliente = todas.some((p) => p.presentacion !== 'linea');
   const disponibles = COLUMNAS.flatMap((c) =>
-    c.id === 'pvUnit'
+    c.id === 'utilidadPct' && conTransaccion
       ? [
           c,
-          ...(conCliente ? [COLUMNA_CLIENTE] : []),
+          { id: 'transPct', titulo: 'Transaccionalidad %', grupo: 'utilidad', numero: true } as Columna,
+          {
+            id: 'transMonto',
+            titulo: 'Transaccionalidad $ total',
+            grupo: 'utilidad',
+            numero: true,
+          } as Columna,
           ...(referencia
             ? [
                 {
-                  id: 'pvAnt',
-                  titulo: `P.U. ${referencia.etiqueta} sin IVA`,
-                  grupo: 'venta',
+                  id: 'utilidadAnt',
+                  titulo: `Utilidad ${referencia.etiqueta}`,
+                  grupo: 'utilidad',
                   numero: true,
                 } as Columna,
               ]
             : []),
         ]
-      : c.id === 'utilidadPct' && referencia
+      : c.id === 'pvUnit'
         ? [
             c,
-            {
-              id: 'utilidadAnt',
-              titulo: `Utilidad ${referencia.etiqueta}`,
-              grupo: 'utilidad',
-              numero: true,
-            } as Columna,
+            ...(conCliente ? [COLUMNA_CLIENTE] : []),
+            ...(referencia
+              ? [
+                  {
+                    id: 'pvAnt',
+                    titulo: `P.U. ${referencia.etiqueta} sin IVA`,
+                    grupo: 'venta',
+                    numero: true,
+                  } as Columna,
+                ]
+              : []),
           ]
-        : [c],
+        : c.id === 'utilidadPct' && referencia
+          ? [
+              c,
+              {
+                id: 'utilidadAnt',
+                titulo: `Utilidad ${referencia.etiqueta}`,
+                grupo: 'utilidad',
+                numero: true,
+              } as Columna,
+            ]
+          : [c],
   );
   const columnas = disponibles.filter((c) => !ocultas.has(c.id));
   const gruposVisibles = (Object.keys(GRUPOS) as Grupo[])
@@ -351,10 +441,12 @@ export function CorridaAutorizacion({
   const utilidadPropuesta = (i: number) => {
     const c = presentadas?.[i];
     if (!c) return null;
+    const costoDe = (id: string) =>
+      (costos.get(id)?.costoTotal ?? 0n) + transaccionDe(id, costos.get(id)?.costoTotal);
     const costoDeLinea = (l: { partidaId: string; incluidas: string[] }) =>
-      [l.partidaId, ...l.incluidas].reduce((s, id) => s + (costos.get(id)?.costoTotal ?? 0n), 0n);
+      [l.partidaId, ...l.incluidas].reduce((s, id) => s + costoDe(id), 0n);
     let costoProp = c.lineas.reduce((s, l) => s + costoDeLinea(l), 0n);
-    costoProp += c.cargos.reduce((s, x) => s + (costos.get(x.partidaId)?.costoTotal ?? 0n), 0n);
+    costoProp += c.cargos.reduce((s, x) => s + costoDe(x.partidaId), 0n);
     if (!c.esAdicional)
       for (const a of presentadas?.filter((x) => x.esAdicional) ?? [])
         costoProp += a.lineas.filter((l) => l.seSuma).reduce((s, l) => s + costoDeLinea(l), 0n);
@@ -378,6 +470,11 @@ export function CorridaAutorizacion({
           cotizacionId,
           Object.fromEntries(Object.entries(efectivas).filter(([, v]) => porcentaje.safeParse(v).success)),
           Object.fromEntries(Object.entries(tcs).filter(([, v]) => tipoCambioSchema.safeParse(v).success)),
+          {
+            anticipo_pct: anticipoValido ? datosAutorizacion.anticipo_pct : '',
+            transaccion_pct: transaccionValida ? datosAutorizacion.transaccion_pct : '',
+            transaccion_alcance: transaccionValida ? datosAutorizacion.transaccion_alcance : null,
+          },
         ),
       ),
     );
@@ -386,7 +483,9 @@ export function CorridaAutorizacion({
     e.preventDefault();
     if (e.target !== e.currentTarget) return;
     const nota = String(new FormData(e.currentTarget).get('nota') ?? '');
-    iniciar(async () => resultado(await autorizarRevision(revision.id, cotizacionId, efectivas, tcs, nota)));
+    iniciar(async () =>
+      resultado(await autorizarRevision(revision.id, cotizacionId, efectivas, tcs, nota, datosAutorizacion)),
+    );
   };
 
   const rechazar = (e: FormEvent<HTMLFormElement>) => {
@@ -463,12 +562,36 @@ export function CorridaAutorizacion({
         return <span className="font-semibold">{v(k?.costoTotal)}</span>;
       case 'compraIva':
         return v(k ? conIva(k.costoTotal) : undefined);
+      case 'transPct':
+        return transacciones[p.id] ? (
+          <span className="font-semibold text-aviso">{transacciones[p.id]} %</span>
+        ) : (
+          <span className="text-texto-suave">—</span>
+        );
+      case 'transMonto':
+        return transacciones[p.id] ? (
+          <span className="text-aviso">{pesos(transaccionDe(p.id, k?.costoTotal))}</span>
+        ) : (
+          <span className="text-texto-suave">—</span>
+        );
       case 'utilidadUnit':
-        return <span className="text-exito">{v(r?.utilidadUnitaria)}</span>;
+        return (
+          <span className="text-exito">
+            {v(r ? r.utilidadUnitaria - transaccionDe(p.id, k?.costoUnitarioMXN) : undefined)}
+          </span>
+        );
       case 'utilidadTotal':
-        return <span className="font-semibold text-exito">{v(r?.utilidadTotal)}</span>;
+        return (
+          <span className="font-semibold text-exito">
+            {v(r ? r.utilidadTotal - transaccionDe(p.id, k?.costoTotal) : undefined)}
+          </span>
+        );
       case 'utilidadTotalIva':
-        return <span className="text-exito">{v(r ? conIva(r.utilidadTotal) : undefined)}</span>;
+        return (
+          <span className="text-exito">
+            {v(r ? conIva(r.utilidadTotal - transaccionDe(p.id, k?.costoTotal)) : undefined)}
+          </span>
+        );
       case 'pvUnit':
         return <span className="font-bold text-acento-texto">{v(r?.precioUnitario)}</span>;
       case 'pvCliente': {
@@ -517,6 +640,7 @@ export function CorridaAutorizacion({
     compraIva: conIva(costo),
     utilidadTotal: utilidad,
     utilidadTotalIva: conIva(utilidad),
+    transMonto: transaccionTotal,
     venta,
     ventaIva: conIva(venta),
   };
@@ -622,7 +746,9 @@ export function CorridaAutorizacion({
               tamano="chico"
               icono="candado"
               variante="primario"
-              disabled={pendiente || !validas || !tcsValidos}
+              disabled={
+                pendiente || !validas || !tcsValidos || !anticipoValido || !transaccionValida || falsaAlcance
+              }
               onClick={() => setDialogo('autorizar')}
               title={
                 validas && tcsValidos
@@ -697,6 +823,74 @@ export function CorridaAutorizacion({
             </Boton>
           </div>
         )}
+        {esAdquisicion && (
+          <label className="flex items-center gap-2 rounded-md border-2 border-info/40 bg-info-suave py-1 pr-1 pl-2.5">
+            <span className="text-xs leading-tight font-bold text-info">
+              Anticipo
+              <span className="block text-[10px] font-semibold opacity-80">% del total con IVA</span>
+            </span>
+            <input
+              value={anticipo}
+              disabled={!editable}
+              inputMode="decimal"
+              placeholder="50"
+              aria-invalid={!anticipoValido}
+              onChange={(e) => setAnticipo(e.target.value.replace(/[^\d.]/g, ''))}
+              className={`tabular h-9 w-20 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-info disabled:opacity-80 ${
+                anticipoValido ? 'border-info/40' : 'border-peligro'
+              }`}
+            />
+          </label>
+        )}
+        {conTransaccion && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border-2 border-aviso/50 bg-aviso-suave py-1 pr-1 pl-2.5">
+            <label htmlFor="transaccionalidad" className="text-xs leading-tight font-bold text-aviso">
+              Transaccionalidad
+              <span className="block text-[10px] font-semibold opacity-80">% que se suma a la utilidad</span>
+            </label>
+            <input
+              id="transaccionalidad"
+              value={transaccion}
+              disabled={!editable}
+              inputMode="decimal"
+              placeholder="3"
+              aria-invalid={!transaccionValida}
+              onChange={(e) => setTransaccion(e.target.value.replace(/[^\d.]/g, ''))}
+              className={`tabular h-9 w-16 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-aviso disabled:opacity-80 ${
+                transaccionValida ? 'border-aviso/40' : 'border-peligro'
+              }`}
+            />
+            {Number(transaccion) > 0 && (
+              <div role="radiogroup" aria-label="¿A qué partidas aplica?" className="flex items-center gap-1">
+                <span className="px-1 text-[11px] font-semibold text-aviso">¿A cuáles?</span>
+                {(
+                  [
+                    ['todas', 'Todas las partidas'],
+                    ['diferentes', `Sólo otro proveedor (${diferentes.length})`],
+                  ] as const
+                ).map(([id, nombre]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={alcance === id}
+                    disabled={!editable}
+                    onClick={() => setAlcance(id)}
+                    className={`min-h-9 cursor-pointer rounded-sm border px-2.5 text-xs font-semibold ${
+                      alcance === id
+                        ? 'border-aviso bg-aviso text-white'
+                        : falsaAlcance
+                          ? 'border-peligro bg-superficie text-peligro'
+                          : 'border-aviso/40 bg-superficie text-aviso'
+                    }`}
+                  >
+                    {nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <p className="text-[11px] leading-tight text-texto-suave">
           Precio = costo × T.C. + utilidad (% sobre el costo),
           <br />
@@ -725,6 +919,45 @@ export function CorridaAutorizacion({
         </p>
       )}
 
+      {fueraDeZona(estadoEntrega) && (
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-peligro/30 bg-peligro-suave px-4 py-2 text-[13px] text-peligro"
+        >
+          <Icon name="campana" size={18} className="shrink-0" />
+          {estadoEntrega ? (
+            <span>
+              <strong>Entrega fuera de la zona habitual:</strong> {estadoEntrega}. Considera fletes, viáticos
+              o costos adicionales ({ZONA_ENTREGA.join(', ')} son la zona habitual).
+            </span>
+          ) : (
+            <span>
+              <strong>Sin estado de entrega capturado</strong>
+              {ciudadEntrega ? ` (dato anterior: «${ciudadEntrega}»)` : ''}. Revisa si la entrega es fuera de{' '}
+              {ZONA_ENTREGA.join(', ')}.
+            </span>
+          )}
+        </div>
+      )}
+      {diferentes.length > 0 && (
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-aviso/30 bg-aviso-suave px-4 py-2 text-[13px] text-aviso"
+        >
+          <Icon name="campana" size={18} className="shrink-0" />
+          <span>
+            <strong>
+              Arrendamiento con{' '}
+              {catalogos.mayoristas.find((m) => m.id === revision.mayorista_arrendamiento_id)?.nombre ??
+                'el mayorista del arrendamiento'}
+              :
+            </strong>{' '}
+            {diferentes.length} {diferentes.length === 1 ? 'partida es' : 'partidas son'} de otro proveedor (
+            {diferentes.map((pa) => refDe.get(pa.id) ?? pa.sku).join(', ')}). Considera el % de
+            transaccionalidad.
+          </span>
+        </div>
+      )}
       {especiales.length > 0 && (
         <div
           role="note"
@@ -1014,6 +1247,24 @@ export function CorridaAutorizacion({
                       <p className="mt-1.5 mb-2 text-[10px] leading-snug text-texto-suave">
                         {importeConLetra(c.totales.total)}
                       </p>
+                      {esAdquisicion &&
+                        anticipoValido &&
+                        anticipo &&
+                        (() => {
+                          const a = anticipoDe(c.totales.total, anticipo);
+                          return (
+                            <dl className="tabular mb-2 space-y-0.5 rounded-sm bg-info-suave px-2 py-1.5 text-xs text-info">
+                              <div className="flex justify-between">
+                                <dt>Anticipo ({anticipo} %)</dt>
+                                <dd className="font-bold">{pesos(a.anticipo)}</dd>
+                              </div>
+                              <div className="flex justify-between">
+                                <dt>Monto para liquidar</dt>
+                                <dd className="font-bold">{pesos(a.liquidar)}</dd>
+                              </div>
+                            </dl>
+                          );
+                        })()}
                       {u && (
                         <div className="tabular mt-auto flex items-center justify-between gap-2 rounded-sm bg-exito-suave px-2 py-1.5 text-xs font-semibold text-exito">
                           <span>Utilidad {u.porcentaje} %</span>
@@ -1064,6 +1315,21 @@ export function CorridaAutorizacion({
               </dd>
               <dt className="text-texto-suave">Venta sin IVA</dt>
               <dd className="text-right font-bold">{pesos(venta)}</dd>
+              {esAdquisicion && (
+                <>
+                  <dt className="text-texto-suave">Anticipo</dt>
+                  <dd className="text-right font-bold text-info">{anticipo} % del total con IVA</dd>
+                </>
+              )}
+              {Number(transaccion) > 0 && (
+                <>
+                  <dt className="text-texto-suave">Transaccionalidad</dt>
+                  <dd className="text-right font-bold text-aviso">
+                    {transaccion} % · {alcance === 'todas' ? 'todas las partidas' : 'sólo otro proveedor'} ·{' '}
+                    {pesos(transaccionTotal)}
+                  </dd>
+                </>
+              )}
             </dl>
             <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
               Nota para el ejecutivo (opcional)

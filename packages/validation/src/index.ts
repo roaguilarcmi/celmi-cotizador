@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { estadoMx } from './estados';
 
 import { dinero, porcentaje, tipoCambio } from './numeros';
 
@@ -44,7 +45,8 @@ export const clienteSchema = z.object({
     .default('')
     .transform((v) => v || null),
   direccion: textoOpcional(300),
-  ciudad: textoOpcional(120),
+  /** Estado de la República (2026-10-07; antes «ciudad», texto libre). */
+  estado: estadoMx,
 });
 
 /** Persona de contacto de un cliente. */
@@ -69,7 +71,8 @@ export const oportunidadSchema = z.object({
   nombre: z.string().trim().min(3, 'Escribe el nombre o descripción del proyecto').max(200),
   /** Tipo general (2026-10-05); los esquemas específicos se eligen por propuesta. */
   tipo: z.enum(['adquisicion', 'arrendamiento', 'credito_simple']).default('arrendamiento'),
-  ciudad_entrega: textoOpcional(160),
+  /** Estado de entrega (2026-10-07); la autorización avisa si es fuera de la zona habitual. */
+  estado_entrega: estadoMx,
   observaciones_internas: textoOpcional(2000),
 });
 
@@ -114,6 +117,7 @@ export type CostoPartida = z.infer<typeof costoPartidaSchema>;
 export type AutorizacionPartida = z.infer<typeof autorizacionPartidaSchema>;
 
 export * from './enriquecido';
+export * from './estados';
 
 /**
  * Borradores (decisión 2026-10-05): registros a medias que se guardan para continuarlos. Son permisivos (pueden estar

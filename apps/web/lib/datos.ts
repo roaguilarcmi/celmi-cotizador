@@ -38,7 +38,9 @@ export interface ClienteFila {
   razon_social: string;
   rfc: string | null;
   direccion: string;
+  /** Texto libre anterior a 2026-10-07; ahora se captura `estado`. */
   ciudad: string;
+  estado: string | null;
   creado_en: string;
   contactos: ContactoFila[];
   oportunidades: { id: string }[];
@@ -51,7 +53,9 @@ export interface OportunidadFila {
   esquema_id: string | null;
   /** Tipo general: adquisición, arrendamiento o crédito simple (2026-10-05, 2026-10-07). */
   tipo: TipoOportunidad;
+  /** Texto libre anterior a 2026-10-07; ahora se captura `estado_entrega`. */
   ciudad_entrega: string;
+  estado_entrega: string | null;
   observaciones_internas: string;
   /** Observaciones con formato (0022); null en las capturadas antes como texto plano. */
   observaciones_contenido: unknown;
@@ -288,6 +292,8 @@ export interface CotizacionFila {
     nombre: string;
     ejecutivo_id: string;
     tipo: TipoOportunidad;
+    estado_entrega: string | null;
+    ciudad_entrega: string;
     cliente: { razon_social: string } | null;
     ejecutivo: { nombre: string } | null;
   } | null;
@@ -359,6 +365,15 @@ export interface RevisionDetalle {
   vigencia_hasta: string | null;
   condiciones: unknown;
   comentario_autorizacion: string;
+  /** Esquema de esta revisión (0024): por omisión, el tipo de la oportunidad. */
+  esquema: TipoOportunidad;
+  /** En arrendamiento: con qué mayorista se trabaja el arrendamiento. */
+  mayorista_arrendamiento_id: string | null;
+  /** Adquisición: % de anticipo sobre el total con IVA (lo fija quien autoriza). */
+  anticipo_pct: number | string | null;
+  /** Arrendamiento con otro mayorista: % de transaccionalidad y a qué partidas aplica. */
+  transaccion_pct: number | string | null;
+  transaccion_alcance: 'todas' | 'diferentes' | null;
   enviada_en: string | null;
   autorizada_en: string | null;
   revision_anterior_id: string | null;
@@ -541,14 +556,32 @@ export async function listarFinanciamiento(propuestaIds: string[]): Promise<Fina
 
 /** Utilidad guardada de cada partida (sólo la recibe quien tiene «utilidad.ver»; a los demás RLS no les da filas). */
 export async function listarUtilidades(partidas: string[]): Promise<Record<string, string>> {
-  if (!partidas.length) return {};
+  return (await listarUtilidadesYTransaccion(partidas)).utilidades;
+}
+
+/** Utilidad y % de transaccionalidad guardados por partida (sólo quien tiene «utilidad.ver» recibe filas). */
+export async function listarUtilidadesYTransaccion(
+  partidas: string[],
+): Promise<{ utilidades: Record<string, string>; transacciones: Record<string, string> }> {
+  if (!partidas.length) return { utilidades: {}, transacciones: {} };
   const supabase = await clienteServidor();
   const filas = (exigir(
     await supabase.from('partida_utilidad').select(CONSULTAS.utilidades).in('partida_id', partidas),
     'la utilidad',
-  ) ?? []) as unknown as { partida_id: string; utilidad_pct: number | string }[];
+  ) ?? []) as unknown as {
+    partida_id: string;
+    utilidad_pct: number | string;
+    transaccion_pct: number | string;
+  }[];
   // La base la entrega como número («13.5»): se pasa a texto sin ceros de más.
-  return Object.fromEntries(filas.map((f) => [f.partida_id, String(Number(f.utilidad_pct))]));
+  return {
+    utilidades: Object.fromEntries(filas.map((f) => [f.partida_id, String(Number(f.utilidad_pct))])),
+    transacciones: Object.fromEntries(
+      filas
+        .filter((f) => Number(f.transaccion_pct) > 0)
+        .map((f) => [f.partida_id, String(Number(f.transaccion_pct))]),
+    ),
+  };
 }
 
 /** T.C. que fijó quien autoriza en la revisión, por moneda (0020). */

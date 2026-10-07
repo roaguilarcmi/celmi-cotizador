@@ -148,3 +148,23 @@ export const tiposCambioAutorizacionSchema = z.record(
     .refine((m) => m !== 'MXN', 'El peso no lleva tipo de cambio'),
   tipoCambio,
 );
+
+/** Datos de la autorización a nivel revisión (0024): anticipo (adquisición) y transaccionalidad (arrendamiento). */
+export const datosAutorizacionSchema = z.object({
+  anticipo_pct: decimales(4, 'Anticipo con máximo 4 decimales').refine(
+    (v) => v === '' || Number(v) <= 100,
+    'El anticipo es de 0 a 100 %',
+  ),
+  transaccion_pct: decimales(4, 'Transaccionalidad con máximo 4 decimales').refine(
+    (v) => v === '' || Number(v) <= 100,
+    'La transaccionalidad es de 0 a 100 %',
+  ),
+  transaccion_alcance: z.enum(['todas', 'diferentes']).nullable().default(null),
+});
+export type DatosAutorizacion = z.infer<typeof datosAutorizacionSchema>;
+
+/** Esquema de la cotización y mayorista del arrendamiento (0024). */
+export const esquemaRevisionSchema = z.object({
+  esquema: z.enum(['adquisicion', 'arrendamiento', 'credito_simple']),
+  mayorista_arrendamiento_id: z.uuid().nullable().default(null),
+});

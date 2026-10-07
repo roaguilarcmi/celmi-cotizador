@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
+import { CampoEstadoMx } from '@/components/CampoEstadoMx';
 import { Icon } from '@/components/Icon';
 import { Boton, clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import type { ClienteFila, ContactoFila, Estado, OportunidadFila } from '@/lib/datos';
@@ -47,7 +48,7 @@ export function FichaCliente({
         <div className="mr-auto min-w-0">
           <h1 className="text-[28px] leading-tight font-bold tracking-tight">{cliente.razon_social}</h1>
           <p className="mt-1 text-sm text-texto-suave">
-            {[cliente.rfc && `RFC ${cliente.rfc}`, cliente.ciudad, cliente.direccion]
+            {[cliente.rfc && `RFC ${cliente.rfc}`, cliente.estado ?? cliente.ciudad, cliente.direccion]
               .filter(Boolean)
               .join(' · ') || 'Sin datos fiscales ni dirección'}
           </p>
@@ -216,7 +217,7 @@ function EditarCliente({ cliente, onListo }: { cliente: ClienteFila; onListo: ()
           />
         </div>
         <Campo etiqueta="RFC" name="rfc" defaultValue={cliente.rfc ?? ''} maxLength={13} />
-        <Campo etiqueta="Ciudad" name="ciudad" defaultValue={cliente.ciudad} />
+        <CampoEstadoMx etiqueta="Estado" name="estado" defaultValue={cliente.estado} />
         <div className="sm:col-span-2">
           <Campo etiqueta="Dirección" name="direccion" defaultValue={cliente.direccion} />
         </div>

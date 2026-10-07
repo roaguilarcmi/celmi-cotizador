@@ -240,3 +240,29 @@ export function prorratear(
   const agregado = resultado.reduce((s, l, i) => s + l.importe - (lineas[i]?.importe ?? 0n), 0n);
   return { lineas: resultado, diferencia: agregado - cargo };
 }
+
+/** «13.5» + «3» → «16.5» (porcentajes de hasta 4 decimales; para sumar transaccionalidad a la utilidad). */
+export function sumarPorcentajes(a: string, b: string): string {
+  const suma = aEscalado(a, ESCALA_PORCENTAJE) + aEscalado(b, ESCALA_PORCENTAJE);
+  const negativo = suma < 0n;
+  const t = (negativo ? -suma : suma).toString().padStart(ESCALA_PORCENTAJE + 1, '0');
+  const texto = `${t.slice(0, -ESCALA_PORCENTAJE)}.${t.slice(-ESCALA_PORCENTAJE)}`.replace(/\.?0+$/, '');
+  return (negativo ? '-' : '') + (texto || '0');
+}
+
+export interface Anticipo {
+  anticipo: Centavos;
+  /** «Monto para liquidar»: el resto del total. */
+  liquidar: Centavos;
+}
+
+/**
+ * Adquisición (decisión 2026-10-07): el anticipo es un porcentaje del total con IVA de la propuesta, redondeado a
+ * centavos; lo que falta es el «monto para liquidar», así ambos suman exactamente el total.
+ */
+export function anticipoDe(total: Centavos, porcentaje: string): Anticipo {
+  const p = aEscalado(porcentaje, ESCALA_PORCENTAJE);
+  if (p < 0n || p > CIEN_POR_CIENTO) throw new Error('El anticipo debe estar entre 0 y 100 %');
+  const anticipo = dividirRedondeando(total * p, CIEN_POR_CIENTO);
+  return { anticipo, liquidar: total - anticipo };
+}

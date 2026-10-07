@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   aEscalado,
+  anticipoDe,
+  calcularCorrida,
   calcularPartida,
   calcularTotales,
   consolidarLinea,
@@ -11,6 +13,7 @@ import {
   importeConLetra,
   mejoraDePrecio,
   precioUnitario,
+  sumarPorcentajes,
 } from './index';
 
 describe('aritmética decimal', () => {
@@ -134,5 +137,43 @@ describe('folio', () => {
   it('rechaza consecutivos fuera de rango', () => {
     expect(() => formatearFolio(2026, 0)).toThrow();
     expect(() => formatearFolio(2026, 1_000_000)).toThrow();
+  });
+});
+
+describe('transaccionalidad y anticipo (2026-10-07)', () => {
+  it('suma porcentajes sin perder decimales', () => {
+    expect(sumarPorcentajes('13.5', '3')).toBe('16.5');
+    expect(sumarPorcentajes('10', '0')).toBe('10');
+    expect(sumarPorcentajes('0.0001', '2.9999')).toBe('3');
+  });
+  it('anticipo y monto para liquidar suman el total', () => {
+    expect(anticipoDe(11600000n, '50')).toEqual({ anticipo: 5800000n, liquidar: 5800000n });
+    const r = anticipoDe(999999n, '33.3333');
+    expect(r.anticipo + r.liquidar).toBe(999999n);
+    expect(anticipoDe(100n, '100')).toEqual({ anticipo: 100n, liquidar: 0n });
+    expect(() => anticipoDe(100n, '101')).toThrow();
+  });
+  it('la corrida suma la transaccionalidad a la utilidad', () => {
+    const c = calcularCorrida([
+      {
+        id: 'p',
+        esAdicional: false,
+        partidas: [
+          {
+            id: 'a',
+            padreId: null,
+            presentacion: 'linea',
+            cantidad: 1,
+            seSuma: false,
+            prorratearEntre: [],
+            costoUnitario: '14533.46',
+            tipoCambio: '1',
+            utilidadPct: '13.5',
+            transaccionPct: '3',
+          },
+        ],
+      },
+    ]);
+    expect(c.partidas.get('a')?.precioUnitario).toBe(1693148n);
   });
 });
