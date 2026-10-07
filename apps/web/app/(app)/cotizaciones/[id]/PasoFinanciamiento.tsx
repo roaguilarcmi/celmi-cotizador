@@ -13,7 +13,7 @@ import {
   vigenciaSugerida,
   type Frecuencia,
 } from '@celmi/core';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import { CampoMoneda } from '@/components/CampoMoneda';
 import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
@@ -87,7 +87,7 @@ const vacia = (propuesta: string): Opcion => ({
 });
 
 const control =
-  'h-10 rounded-md border border-borde bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2 disabled:opacity-80';
+  'h-11 w-full rounded-md border border-texto/25 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2 disabled:opacity-80';
 
 /**
  * Opciones de financiamiento (decisiones 2026-10-07): después de autorizar precios, por cada propuesta se capturan una
@@ -331,10 +331,15 @@ function OpcionFinanciamiento({
     }
   }
 
+  const tasaNegativa = tasa !== null && Number(tasa) < 0;
+
   return (
-    <section aria-label={`Opción ${numero}`} className="rounded-md border border-borde bg-superficie">
-      <div className="flex flex-wrap items-center gap-2 border-b border-borde bg-superficie-2/60 py-1.5 pr-1.5 pl-4">
-        <span className="text-[13px] font-bold">Opción {numero}</span>
+    <section
+      aria-label={`Opción ${numero}`}
+      className="overflow-hidden rounded-lg border-2 border-borde bg-superficie"
+    >
+      <div className="flex flex-wrap items-center gap-2 border-b border-borde bg-superficie-2 py-1.5 pr-1.5 pl-4">
+        <span className="text-sm font-bold">Opción {numero}</span>
         <span className="text-[13px] text-texto-suave">
           {[
             financiera?.nombre,
@@ -353,12 +358,13 @@ function OpcionFinanciamiento({
         )}
       </div>
 
-      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Financiera
+      {/* Sección 1 · La financiera y su cotización. */}
+      <Seccion titulo="Financiera">
+        <Campo etiqueta="Financiera">
           <select
             value={f.financiera_id}
             disabled={!editable}
+            autoComplete="off"
             onChange={(e) => {
               const elegida = financieras.find((x) => x.id === e.target.value);
               // Si la financiera tiene una sola aseguradora, se elige sola (2026-10-07).
@@ -376,12 +382,12 @@ function OpcionFinanciamiento({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Aseguradora
+        </Campo>
+        <Campo etiqueta="Aseguradora">
           <select
             value={f.aseguradora}
             disabled={!editable || !financiera}
+            autoComplete="off"
             onChange={(e) => onCambiar({ aseguradora: e.target.value })}
             className={control}
           >
@@ -392,47 +398,48 @@ function OpcionFinanciamiento({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          # de cotización de la financiera
+        </Campo>
+        <Campo etiqueta="# de cotización de la financiera">
           <input
             value={f.folio_financiera}
             disabled={!editable}
             maxLength={60}
+            autoComplete="off"
             onChange={(e) => onCambiar({ folio_financiera: e.target.value })}
             className={control}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Fecha de emisión de su cotización
-          <input
-            type="date"
-            value={f.fecha_emision_financiera}
-            disabled={!editable}
-            onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
-            className={control}
-          />
-        </label>
-        <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-4">
-          <span className="text-xs font-semibold text-texto-suave">
-            Vigencia de su cotización
-            <span className="font-normal">
-              {' '}
-              —{' '}
-              {f.fecha_emision_financiera
-                ? 'a partir de la fecha de emisión'
-                : 'a partir de hoy (no hay fecha de emisión)'}
-              ; nunca en sábado ni domingo
-            </span>
-          </span>
+        </Campo>
+        <Campo etiqueta="Fecha de emisión de su cotización">
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={f.fecha_emision_financiera}
+              disabled={!editable}
+              autoComplete="off"
+              onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
+              className={`${control} min-w-0 flex-1`}
+            />
+            {editable && (
+              <Boton tamano="chico" onClick={() => onCambiar({ fecha_emision_financiera: hoy() })}>
+                Hoy
+              </Boton>
+            )}
+          </div>
+        </Campo>
+        <Campo
+          etiqueta="Vigencia de su cotización"
+          ayuda={`Desde ${f.fecha_emision_financiera ? 'la emisión' : 'hoy'}; nunca en sábado ni domingo.`}
+          ancho
+        >
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="date"
               value={f.vigencia_financiera}
               disabled={!editable}
+              autoComplete="off"
               aria-invalid={Boolean(errorVigencia)}
               onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
-              className={`${control} ${errorVigencia ? 'border-peligro' : ''}`}
+              className={`${control} w-44 ${errorVigencia ? 'border-peligro' : ''}`}
             />
             {editable &&
               ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
@@ -453,11 +460,13 @@ function OpcionFinanciamiento({
               })}
             {errorVigencia && <span className="text-xs font-semibold text-peligro">{errorVigencia}</span>}
           </div>
-        </div>
+        </Campo>
+      </Seccion>
 
+      {/* Sección 2 · Condiciones del financiamiento. */}
+      <Seccion titulo="Condiciones">
         {esArrendamiento && (
-          <div className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-xs font-semibold text-texto-suave">Tipo de arrendamiento</span>
+          <Campo etiqueta="Tipo de arrendamiento" ancho>
             <div role="radiogroup" aria-label="Tipo de arrendamiento" className="grid grid-cols-2 gap-2">
               {TIPOS.map((t) => {
                 const activo = f.tipo_arrendamiento === t.id;
@@ -469,7 +478,7 @@ function OpcionFinanciamiento({
                     aria-checked={activo}
                     disabled={!editable}
                     onClick={() => onCambiar({ tipo_arrendamiento: t.id })}
-                    className={`flex min-h-10 cursor-pointer flex-col justify-center rounded-md border-2 px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed ${
+                    className={`flex min-h-11 cursor-pointer flex-col justify-center rounded-md border-2 px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed ${
                       activo ? 'border-acento bg-acento-suave/50' : 'border-borde hover:border-acento/40'
                     }`}
                   >
@@ -479,13 +488,13 @@ function OpcionFinanciamiento({
                 );
               })}
             </div>
-          </div>
+          </Campo>
         )}
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Plazo
+        <Campo etiqueta="Plazo" error={errorPlazo}>
           <select
             value={f.plazo_meses}
             disabled={!editable}
+            autoComplete="off"
             aria-invalid={Boolean(errorPlazo)}
             onChange={(e) => onCambiar({ plazo_meses: e.target.value })}
             className={`${control} ${errorPlazo ? 'border-peligro' : ''}`}
@@ -500,12 +509,12 @@ function OpcionFinanciamiento({
                 </option>
               ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-texto-suave">
-          Frecuencia de pago
+        </Campo>
+        <Campo etiqueta="Frecuencia de pago">
           <select
             value={f.frecuencia}
             disabled={!editable}
+            autoComplete="off"
             onChange={(e) => onCambiar({ frecuencia: e.target.value as Frecuencia })}
             className={control}
           >
@@ -515,14 +524,11 @@ function OpcionFinanciamiento({
               </option>
             ))}
           </select>
-        </label>
+        </Campo>
 
         {esFpo && (
-          <div className="flex flex-col gap-1 rounded-md bg-superficie-2/70 p-3 sm:col-span-2 lg:col-span-4">
-            <span className="text-xs font-semibold text-texto-suave">
-              Valor residual (Full PayOut) — captura uno; el otro se calcula
-            </span>
-            <div className="flex flex-wrap items-end gap-3">
+          <Campo etiqueta="Valor residual (Full PayOut)" ayuda="Captura uno; el otro se calcula." ancho>
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex rounded-md border border-borde bg-superficie p-0.5" role="radiogroup">
                 {(
                   [
@@ -547,7 +553,7 @@ function OpcionFinanciamiento({
               </div>
               <div className="w-44">
                 <CampoMoneda
-                  etiqueta={f.residual_capturado === 'pct' ? 'Porcentaje del valor' : 'Monto'}
+                  etiqueta={<span className="sr-only">Valor residual</span>}
                   valor={f.residual_valor}
                   onCambio={(v) => onCambiar({ residual_valor: v })}
                   disabled={!editable}
@@ -557,7 +563,7 @@ function OpcionFinanciamiento({
                   invalido={Boolean(errorResidual)}
                 />
               </div>
-              <p className="pb-2.5 text-[13px]">
+              <span className="text-[13px]">
                 {errorResidual ? (
                   <span className="font-semibold text-peligro">{errorResidual}</span>
                 ) : residual ? (
@@ -572,11 +578,14 @@ function OpcionFinanciamiento({
                 ) : (
                   <span className="text-texto-suave">Captura el residual.</span>
                 )}
-              </p>
+              </span>
             </div>
-          </div>
+          </Campo>
         )}
+      </Seccion>
 
+      {/* Sección 3 · Montos, todos sin IVA. */}
+      <Seccion titulo="Montos sin IVA">
         <CampoMoneda
           etiqueta="Gastos iniciales (MXN)"
           valor={f.gastos_iniciales}
@@ -603,9 +612,9 @@ function OpcionFinanciamiento({
           decimales={6}
           prefijo=""
         />
-      </div>
+      </Seccion>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-borde px-4 py-2.5 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-borde bg-superficie-2/60 px-4 py-2.5 text-[13px]">
         <span className="text-texto-suave">
           {nombrePago(f.frecuencia)} total (equipos + seguro):{' '}
           <strong className="tabular text-texto">{formatearMXN(pagoTotal)}</strong>
@@ -619,14 +628,60 @@ function OpcionFinanciamiento({
         </span>
         <span className="text-texto-suave">
           Tasa anual (calculada):{' '}
-          <strong className="tabular text-acento-texto">{tasa ? `${Number(tasa).toFixed(2)} %` : '—'}</strong>
+          <strong className={`tabular ${tasaNegativa ? 'text-peligro' : 'text-acento-texto'}`}>
+            {tasa ? `${Number(tasa).toFixed(2)} %` : '—'}
+          </strong>
         </span>
         {valor !== undefined && (
           <span className="ml-auto text-xs text-texto-suave">
             Sobre un valor de {formatearMXN(valor)} sin IVA
           </span>
         )}
+        {tasaNegativa && valor !== undefined && pagos && (
+          <p className="w-full text-xs font-semibold text-peligro">
+            Los pagos ({pagos} × {formatearMXN(pagoTotal)} = {formatearMXN(pagoTotal * BigInt(pagos))}) no
+            alcanzan el valor de los equipos ({formatearMXN(valor)}), por eso la tasa sale negativa. Revisa la
+            mensualidad, el seguro o el plazo.
+          </p>
+        )}
       </div>
     </section>
+  );
+}
+
+/** Grupo de campos con título y separador (opciones de financiamiento, 2026-10-07). */
+function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div className="border-b border-borde/70 px-4 pt-3 pb-4 last:border-b-0">
+      <h4 className="mb-3 text-[11px] font-bold tracking-wide text-acento-texto uppercase">{titulo}</h4>
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+    </div>
+  );
+}
+
+/** Etiqueta clara arriba del control; `ancho` ocupa dos columnas. */
+function Campo({
+  etiqueta,
+  ayuda,
+  error,
+  ancho,
+  children,
+}: {
+  etiqueta: string;
+  ayuda?: string;
+  error?: string | null;
+  ancho?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${ancho ? 'sm:col-span-2' : ''}`}>
+      <span className="text-[13px] font-semibold text-texto">{etiqueta}</span>
+      {children}
+      {error ? (
+        <span className="text-xs font-semibold text-peligro">{error}</span>
+      ) : (
+        ayuda && <span className="text-xs text-texto-suave">{ayuda}</span>
+      )}
+    </div>
   );
 }

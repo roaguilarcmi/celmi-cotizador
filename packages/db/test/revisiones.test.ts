@@ -28,10 +28,11 @@ async function autorizadaConFinanciamiento() {
 
 /** Crea la Rev nueva fuera de `como` (para que persista) y devuelve su id. */
 async function nuevaRev(cotizacion: string, motivo: 'solicitud_cliente' | 'mejora_precio') {
-  const [r] = await filas<{ id: string }>(db, `select public.crear_revision($1, $2) as id`, [
-    cotizacion,
-    motivo,
-  ]);
+  const [r] = await filas<{ id: string }>(
+    db,
+    `select public.crear_revision($1, $2, 'Razón de prueba') as id`,
+    [cotizacion, motivo],
+  );
   return r!.id;
 }
 
@@ -142,5 +143,30 @@ describe('revisiones (0021)', () => {
       const r = await db.query('delete from public.revisiones where id = $1', [rev]);
       expect(r.affectedRows).toBe(0);
     });
+  });
+});
+
+describe('razón y visibilidad de la Rev (0026)', () => {
+  it('error de captura, con razón obligatoria y visibilidad elegida', async () => {
+    const op = await autorizadaConFinanciamiento();
+    await expect(
+      db.query(`select public.crear_revision($1, 'error_captura', '  ')`, [op.cotizacion]),
+    ).rejects.toThrow(/razón/);
+    await expect(
+      db.query(`select public.crear_revision($1, 'error_captura', 'Cantidad mal capturada', 'otra')`, [
+        op.cotizacion,
+      ]),
+    ).rejects.toThrow(/presenta/);
+    const [r] = await filas<{ id: string }>(
+      db,
+      `select public.crear_revision($1, 'error_captura', 'Cantidad mal capturada', 'interna') as id`,
+      [op.cotizacion],
+    );
+    const [rev] = await filas<{ motivo: string; razon: string; visibilidad: string }>(
+      db,
+      'select motivo::text, razon, visibilidad from public.revisiones where id = $1',
+      [r!.id],
+    );
+    expect(rev).toEqual({ motivo: 'error_captura', razon: 'Cantidad mal capturada', visibilidad: 'interna' });
   });
 });

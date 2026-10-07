@@ -107,7 +107,7 @@ describe('reglas de la cotización (Fase 3A, decisiones 2026-10-05)', () => {
     await como(db, 'jorge', async () => {
       const [{ id }] = (await filas<{ id: string }>(
         db,
-        `select public.crear_revision($1, 'mejora_precio') as id`,
+        `select public.crear_revision($1, 'mejora_precio', 'Razón de prueba') as id`,
         [op.cotizacion],
       )) as [{ id: string }];
       const [rev] = await filas<{ numero: number; estado: string }>(
@@ -140,7 +140,9 @@ describe('reglas de la cotización (Fase 3A, decisiones 2026-10-05)', () => {
     const otra = await crearOportunidad(db, 'fabiola');
     await expect(
       como(db, 'fabiola', () =>
-        db.query(`select public.crear_revision($1, 'solicitud_cliente')`, [otra.cotizacion]),
+        db.query(`select public.crear_revision($1, 'solicitud_cliente', 'Razón de prueba')`, [
+          otra.cotizacion,
+        ]),
       ),
     ).rejects.toThrow(/a partir de una autorizada/);
   });
@@ -401,7 +403,7 @@ describe('adicionales de una partida y cargos prorrateados (0016)', () => {
     await como(db, 'fabiola', async () => {
       const [{ id }] = (await filas<{ id: string }>(
         db,
-        `select public.crear_revision($1, 'solicitud_cliente') as id`,
+        `select public.crear_revision($1, 'solicitud_cliente', 'Razón de prueba') as id`,
         [otra.cotizacion],
       )) as [{ id: string }];
       expect(await partidas(id)).toEqual([
@@ -443,7 +445,9 @@ describe('eliminar cotizaciones (0018)', () => {
     ]);
     await db.query(`update public.revisiones set estado = 'autorizada' where id = $1`, [otra.revision]);
     await como(db, 'fabiola', async () => {
-      await db.query(`select public.crear_revision($1, 'solicitud_cliente')`, [otra.cotizacion]);
+      await db.query(`select public.crear_revision($1, 'solicitud_cliente', 'Razón de prueba')`, [
+        otra.cotizacion,
+      ]);
       expect((await eliminar(otra.cotizacion)).affectedRows).toBe(0);
     });
   });

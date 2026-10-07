@@ -84,7 +84,7 @@ describe('condiciones comerciales (0017)', () => {
     await como(db, 'jorge', async () => {
       const [{ id }] = (await filas<{ id: string }>(
         db,
-        `select public.crear_revision($1, 'solicitud_cliente') as id`,
+        `select public.crear_revision($1, 'solicitud_cliente', 'Razón de prueba') as id`,
         [op.cotizacion],
       )) as [{ id: string }];
       const heredadas = await filas(db, 'select 1 from public.revision_condiciones where revision_id = $1', [

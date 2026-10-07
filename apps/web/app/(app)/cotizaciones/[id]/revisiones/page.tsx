@@ -15,6 +15,7 @@ import { Boton, clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { decimal, presentacionAutorizada } from '@/lib/corrida';
 import { listarUtilidades, obtenerCotizacion, obtenerRevision, type RevisionDetalle } from '@/lib/datos';
 import { obtenerSesion } from '@/lib/sesion';
+import { MOTIVOS_REVISION, VISIBILIDADES_REVISION } from '@/lib/revisiones';
 import { ESTADOS } from '../../estados';
 import { Cambio, FilaCambio, Vacio } from './FilaCambio';
 
@@ -26,11 +27,6 @@ const fecha = new Intl.DateTimeFormat('es-MX', {
   timeStyle: 'short',
   timeZone: 'America/Mexico_City',
 });
-const MOTIVOS = {
-  inicial: 'Original',
-  solicitud_cliente: 'Solicitud del cliente',
-  mejora_precio: 'Mejora de precio',
-} as const;
 
 const esUuid = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
 
@@ -200,7 +196,11 @@ export default async function PaginaRevisiones({
                   <Pill tono={ESTADOS[r.estado].tono}>{ESTADOS[r.estado].texto}</Pill>
                   {i === 0 && <span className="text-xs font-semibold text-acento-texto">Vigente</span>}
                 </div>
-                <p className="mt-0.5 text-[13px] text-texto-suave">{MOTIVOS[r.motivo]}</p>
+                <p className="mt-0.5 text-[13px] text-texto-suave">
+                  {MOTIVOS_REVISION[r.motivo].nombre}
+                  {r.numero > 0 && ` · ${VISIBILIDADES_REVISION[r.visibilidad].nombre}`}
+                </p>
+                {r.razon && <p className="mt-0.5 text-[13px] italic">«{r.razon}»</p>}
                 <p className="mt-1 text-xs text-texto-suave">
                   Creada {r.autor ? `por ${r.autor.nombre} ` : ''}el {fecha.format(new Date(r.creado_en))}
                 </p>

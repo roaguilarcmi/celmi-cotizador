@@ -16,6 +16,7 @@ import {
   aEscalado,
   centavosADecimal,
   ESCALA_DINERO,
+  formatearMXN,
   numeroDePagos,
   tasaAnualNominal,
   valorResidual,
@@ -214,12 +215,13 @@ export async function guardarFinanciamiento(
         return { error: `Opción ${n}: ${(e as Error).message}.` };
       }
     }
-    const tasa = tasaAnualNominal({
-      valor,
-      pagoPorPeriodo: centavos(f.pago) + centavos(f.pago_seguro),
-      pagos,
-      frecuencia: f.frecuencia,
-    });
+    const pagoPorPeriodo = centavos(f.pago) + centavos(f.pago_seguro);
+    const tasa = tasaAnualNominal({ valor, pagoPorPeriodo, pagos, frecuencia: f.frecuencia });
+    // Tasa negativa: los pagos no alcanzan el valor de los equipos. Se explica en lugar del error de la base.
+    if (tasa !== null && Number(tasa) < 0)
+      return {
+        error: `Opción ${n}: con esos pagos la tasa sale negativa (${Number(tasa).toFixed(2)} %). ${pagos} pagos de ${formatearMXN(pagoPorPeriodo)} (equipos + seguro) suman ${formatearMXN(pagoPorPeriodo * BigInt(pagos))}, menos que el valor de los equipos (${formatearMXN(valor)}). Revisa la mensualidad, el seguro o el plazo.`,
+      };
     salida.push({
       propuesta_id: f.propuesta_id,
       financiera_id: f.financiera_id,
@@ -409,11 +411,27 @@ export async function rechazarRevision(
  * Nueva Rev a partir de la autorizada: la base copia propuestas, partidas, costos, adicionales y repartos (con su
  * origen); en una mejora de precio el costo actual pasa a «Precio anterior». Vuelve a pasar por autorización.
  */
-export async function crearNuevaRevision(cotizacionId: string, motivo: string): Promise<Resultado> {
+export async function crearNuevaRevision(
+  cotizacionId: string,
+  motivo: string,
+  razon: string,
+  visibilidad: string,
+): Promise<Resultado> {
   await obtenerSesion();
-  if (motivo !== 'solicitud_cliente' && motivo !== 'mejora_precio') return { error: 'Elige el motivo.' };
+  if (!['solicitud_cliente', 'mejora_precio', 'error_captura'].includes(motivo))
+    return { error: 'Elige el motivo.' };
+  if (typeof razon !== 'string' || razon.trim().length < 5)
+    return { error: 'Explica la razón de la revisión (al menos unas palabras).' };
+  if (razon.length > 1000) return { error: 'La razón es demasiado larga (máximo 1,000 caracteres).' };
+  if (!['nuevo_folio', 'visible', 'interna'].includes(visibilidad))
+    return { error: 'Elige cómo se presenta la revisión.' };
   const supabase = await clienteServidor();
-  const { data: id, error } = await supabase.rpc('crear_revision', { cotizacion: cotizacionId, motivo });
+  const { data: id, error } = await supabase.rpc('crear_revision', {
+    cotizacion: cotizacionId,
+    motivo,
+    razon: razon.trim(),
+    visibilidad,
+  });
   if (error || typeof id !== 'string')
     return {
       error: error ? mensajeDe(error, 'No se pudo crear la revisión.') : 'No se pudo crear la revisión.',

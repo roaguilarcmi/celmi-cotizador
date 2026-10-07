@@ -42,13 +42,13 @@ export function CampoMoneda({
   const [enfocado, setEnfocado] = useState(false);
   const mostrado = enfocado || !valor ? valor : conSeparadores(valor, decimales);
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-semibold text-texto-suave">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[13px] font-semibold text-texto">
         {etiqueta}
       </label>
       <div
-        className={`flex h-10 items-center rounded-md border bg-superficie text-sm focus-within:border-acento focus-within:ring-4 focus-within:ring-acento-suave ${
-          invalido ? 'border-peligro' : 'border-borde'
+        className={`flex h-11 items-center rounded-md border bg-superficie text-sm focus-within:border-acento focus-within:ring-4 focus-within:ring-acento-suave ${
+          invalido ? 'border-peligro' : 'border-texto/25'
         } ${disabled ? 'bg-superficie-2 opacity-80' : ''}`}
       >
         {prefijo && <span className="pl-3 text-texto-suave">{prefijo}</span>}
@@ -57,6 +57,8 @@ export function CampoMoneda({
           value={mostrado}
           disabled={disabled}
           inputMode="decimal"
+          // Datos de una cotización: el navegador no los guarda en su historial de formularios (2026-10-07).
+          autoComplete="off"
           aria-invalid={invalido}
           onFocus={() => setEnfocado(true)}
           onBlur={() => setEnfocado(false)}

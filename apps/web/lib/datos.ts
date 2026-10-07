@@ -1,6 +1,7 @@
 import { CONSULTAS } from './consultas';
 import { clienteServidor } from './supabase/servidor';
 import { ESTADOS_ABIERTOS, type EstadoTarea, type EtapaTarea } from './etapas-tareas';
+import type { MotivoRevision, VisibilidadRevision } from './revisiones';
 import type { TipoOportunidad } from './tipos-oportunidad';
 
 /*
@@ -301,7 +302,9 @@ export interface CotizacionFila {
     id: string;
     numero: number;
     estado: EstadoRevision;
-    motivo: 'inicial' | 'solicitud_cliente' | 'mejora_precio';
+    motivo: MotivoRevision;
+    razon: string;
+    visibilidad: VisibilidadRevision;
     creado_en: string;
     enviada_en: string | null;
     autorizada_en: string | null;
@@ -361,7 +364,9 @@ export interface RevisionDetalle {
   cotizacion_id: string;
   numero: number;
   estado: EstadoRevision;
-  motivo: 'inicial' | 'solicitud_cliente' | 'mejora_precio';
+  motivo: MotivoRevision;
+  razon: string;
+  visibilidad: VisibilidadRevision;
   vigencia_hasta: string | null;
   condiciones: unknown;
   comentario_autorizacion: string;
