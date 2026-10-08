@@ -79,7 +79,25 @@ export interface ReferenciaCorrida {
 }
 
 /** Columnas centradas (como en Excel, los importes van a la derecha y el texto a la izquierda). */
-const CENTRADAS = new Set(['cantidad', 'unidad', 'moneda', 'tc', 'utilidadPct', 'entrega']);
+const CENTRADAS = new Set(['cantidad', 'unidad', 'moneda', 'tc', 'utilidadPct', 'entrega', 'vigenciaPrecio']);
+
+const fechaCorta = new Intl.DateTimeFormat('es-MX', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * Estado de la vigencia del costo de una partida frente a hoy y a la vigencia de la cotización (2026-10-08):
+ * vencido, vence antes que la cotización o vigente.
+ */
+function estadoVigenciaPrecio(fecha: string | null | undefined, hoy: string, vigenciaCotizacion: string) {
+  if (!fecha) return null;
+  if (fecha < hoy) return 'vencido' as const;
+  if (vigenciaCotizacion && fecha < vigenciaCotizacion) return 'antes' as const;
+  return 'vigente' as const;
+}
 
 /** Fila de la corrida: partida, adicional (incluido o visible) o cargo prorrateado, con su referencia. */
 interface FilaCorrida {
@@ -627,6 +645,29 @@ export function CorridaAutorizacion({
           </>
         );
       }
+      case 'vigenciaPrecio': {
+        const fecha = p.costo?.vigencia;
+        if (!fecha) return <span className="text-texto-suave">Sin fecha</span>;
+        const estado = estadoVigenciaPrecio(fecha, hoyLocal(), fechaVigencia);
+        const texto = fechaCorta.format(new Date(`${fecha}T00:00:00Z`));
+        return estado === 'vencido' ? (
+          <span
+            title="El precio del mayorista ya venció"
+            className="rounded-sm bg-peligro px-1.5 py-0.5 text-[11px] font-bold text-white"
+          >
+            {texto} · vencido
+          </span>
+        ) : estado === 'antes' ? (
+          <span
+            title="El precio del mayorista vence antes que la cotización"
+            className="rounded-sm bg-aviso-suave px-1.5 py-0.5 text-[11px] font-bold text-aviso"
+          >
+            {texto}
+          </span>
+        ) : (
+          texto
+        );
+      }
       case 'moneda':
         return p.costo?.moneda ?? '—';
       case 'tc':
@@ -789,10 +830,42 @@ export function CorridaAutorizacion({
       filas: especiales.map((f) => ({ id: f.p.id, ref: f.ref, descripcion: f.p.descripcion, tipo: f.tipo })),
     });
 
+  // Precios del mayorista vencidos o que vencen antes que la cotización (2026-10-08).
+  const conPrecioVencido = todas.filter(
+    (pa) => estadoVigenciaPrecio(pa.costo?.vigencia, hoyLocal(), fechaVigencia) === 'vencido',
+  );
+  const conPrecioAntes = todas.filter(
+    (pa) => estadoVigenciaPrecio(pa.costo?.vigencia, hoyLocal(), fechaVigencia) === 'antes',
+  );
+  if (conPrecioVencido.length + conPrecioAntes.length > 0)
+    avisos.push({
+      id: 'vigencias',
+      tono: conPrecioVencido.length ? 'peligro' : 'aviso',
+      titulo: conPrecioVencido.length
+        ? 'Precios de mayorista vencidos'
+        : 'Precios que vencen antes que la cotización',
+      detalle:
+        [
+          conPrecioVencido.length ? `${conPrecioVencido.length} con el precio del mayorista ya vencido` : '',
+          conPrecioAntes.length
+            ? `${conPrecioAntes.length} vencen antes que la vigencia de la cotización`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('; ') + '. Confirma el costo con el mayorista.',
+      filas: [...conPrecioVencido, ...conPrecioAntes].map((pa) => ({
+        id: pa.id,
+        ref: refDe.get(pa.id) ?? pa.sku,
+        descripcion: pa.descripcion,
+      })),
+    });
+
   // Filas señaladas por un aviso: llevan franja, campana y etiqueta en la propia hoja (propuesta 2, 2026-10-08).
   const avisoDeFila = new Map<string, string>();
   for (const pa of diferentes) avisoDeFila.set(pa.id, 'Otro proveedor');
   for (const f of especiales) if (!avisoDeFila.has(f.p.id)) avisoDeFila.set(f.p.id, 'Revisa a detalle');
+  for (const pa of conPrecioVencido) avisoDeFila.set(pa.id, 'Precio vencido');
+  for (const pa of conPrecioAntes) if (!avisoDeFila.has(pa.id)) avisoDeFila.set(pa.id, 'Precio vence antes');
   const atajos = ATAJOS_VIGENCIA.map((a) => ({ ...a, fecha: vigenciaSugerida(hoyLocal(), a.dias) }));
 
   const contenido = (
@@ -863,16 +936,19 @@ export function CorridaAutorizacion({
           </div>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* Cifras en dos por dos, junto a la decisión (2026-10-08). */}
-          <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1 border-l border-borde pl-3">
+          {/*
+            Cifras en dos renglones, junto a la decisión (2026-10-08). La transaccionalidad va aparte: no entra en la
+            utilidad (ni en monto ni en %).
+          */}
+          <div className="grid shrink-0 grid-flow-col grid-rows-2 gap-x-4 gap-y-1 border-l border-borde pl-3">
             <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
+            <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
             <Dato
               etiqueta="Utilidad sin IVA"
               valor={validas ? pesos(utilidad) : '—'}
               detalle={validas ? `${pct(utilidad, costo)} %` : undefined}
               tono="text-exito"
             />
-            <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
             <Dato
               etiqueta={`Al cliente con IVA${numAdicionales ? ` (+${numAdicionales} adic.)` : ''}`}
               valor={
@@ -883,6 +959,14 @@ export function CorridaAutorizacion({
                     : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
               }
             />
+            {conTransaccion && (
+              <Dato
+                etiqueta="Transaccionalidad sin IVA"
+                valor={pesos(transaccionTotal)}
+                detalle={Number(transaccion) > 0 ? `${transaccion} %` : undefined}
+                tono="text-aviso"
+              />
+            )}
           </div>
           {editable && (
             <div className="flex flex-wrap items-center gap-2">

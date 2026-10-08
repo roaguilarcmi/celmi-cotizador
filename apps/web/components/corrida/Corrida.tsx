@@ -37,6 +37,7 @@ export const COLUMNAS: Columna[] = [
   { id: 'unidad', titulo: 'Unidad de medida', grupo: 'producto' },
   { id: 'cantidad', titulo: 'Cantidad', grupo: 'producto', numero: true },
   { id: 'unitario', titulo: 'Unitario sin IVA', grupo: 'costo', numero: true },
+  { id: 'vigenciaPrecio', titulo: 'Vigencia del precio', grupo: 'costo' },
   { id: 'moneda', titulo: 'Moneda', grupo: 'costo' },
   { id: 'tc', titulo: 'T.C.', grupo: 'costo', numero: true },
   { id: 'unitarioFinal', titulo: 'Unitario final sin IVA', grupo: 'costo', numero: true },
@@ -58,6 +59,8 @@ const ESENCIALES = new Set([
   'cantidad',
   'mayorista',
   'unitario',
+  // Vigencia del costo del mayorista: clave para decidir (2026-10-08).
+  'vigenciaPrecio',
   'compra',
   'utilidadPct',
   'utilidadUnit',
