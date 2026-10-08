@@ -42,7 +42,7 @@ export function Cambio({
       <s className="text-texto-suave">{antes}</s>
       <Icon name="derecha" size={12} className="text-texto-suave" />
       <strong>{despues}</strong>
-      {variacionPct && variacionPct !== '0.0' && (
+      {variacionPct && Number(variacionPct) !== 0 && (
         <span
           className={`rounded-sm px-1 text-[11px] font-bold ${
             baja === bajaEsBuena ? 'bg-exito-suave text-exito' : 'bg-aviso-suave text-aviso'

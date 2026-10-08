@@ -83,7 +83,11 @@ export function EditorCatalogos({
               <thead>
                 <tr className="bg-superficie-2 text-left text-xs font-semibold text-texto-suave">
                   {def.campos.map((c) => (
-                    <th key={c.id} scope="col" className="border-b border-borde px-4 py-2.5">
+                    <th
+                      key={c.id}
+                      scope="col"
+                      className={`border-b border-borde px-4 py-2.5 ${c.tipo === 'si_no' ? 'w-36 text-center' : ''}`}
+                    >
                       {c.etiqueta}
                     </th>
                   ))}
@@ -159,7 +163,7 @@ function FilaRegistro({
       return (
         <td
           key={c.id}
-          className={`px-4 py-3 ${c.id === 'nombre' ? 'font-semibold' : ''} ${activo ? '' : 'text-texto-suave'}`}
+          className={`px-4 py-3 ${c.tipo === 'si_no' ? 'text-center' : ''} ${c.id === 'nombre' ? 'font-semibold' : ''} ${activo ? '' : 'text-texto-suave'}`}
         >
           {c.tipo === 'si_no' ? (
             v ? (
@@ -167,7 +171,10 @@ function FilaRegistro({
                 Sí
               </Pill>
             ) : (
-              <span className="text-texto-suave">No</span>
+              // Misma forma que «Sí» para que queden alineados (2026-10-08).
+              <Pill tono="neutro" punto={false}>
+                No
+              </Pill>
             )
           ) : (
             String(v) || '—'
@@ -177,7 +184,7 @@ function FilaRegistro({
     }
     const bloqueada = c.id === 'codigo' && !nueva;
     return (
-      <td key={c.id} className="px-4 py-2">
+      <td key={c.id} className={`px-4 py-2 ${c.tipo === 'si_no' ? 'text-center' : ''}`}>
         <label className="sr-only" htmlFor={`${def.tabla}-${clave ?? 'nuevo'}-${c.id}`}>
           {c.etiqueta}
         </label>
@@ -187,7 +194,7 @@ function FilaRegistro({
             type="checkbox"
             checked={v === true}
             onChange={(e) => setValores((s) => ({ ...s, [c.id]: e.target.checked }))}
-            className="size-5 accent-[var(--c-acento)]"
+            className="size-5 align-middle accent-[var(--c-acento)]"
           />
         ) : (
           <input

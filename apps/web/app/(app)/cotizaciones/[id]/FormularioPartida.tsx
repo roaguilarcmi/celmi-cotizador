@@ -756,6 +756,8 @@ function Campo({
 
 /** «Precio anterior» tachado con el % de mejora (aclaración 2026-10-03). */
 export function PrecioAnterior({ anterior, actual }: { anterior: string; actual: string }) {
+  // Si el costo no cambió, no se marca (2026-10-08).
+  if (actual && Number(actual.replaceAll(',', '')) === Number(anterior)) return null;
   let porcentaje: string | null = null;
   try {
     if (actual) porcentaje = mejoraDePrecio(anterior, actual.replaceAll(',', '')).porcentaje;

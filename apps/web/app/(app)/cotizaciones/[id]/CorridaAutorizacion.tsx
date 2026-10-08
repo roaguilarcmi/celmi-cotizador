@@ -174,9 +174,10 @@ export function CorridaAutorizacion({
   const [completaGuardada, guardarCompleta] = usePreferencia('celmi-corrida-completa');
   const completa = completaGuardada === '1';
   const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | 'retirar' | null>(null);
-  // Menos saturación (2026-10-07): los parámetros van en un panel flotante y los avisos se pliegan a un contador.
-  const [parametrosAbiertos, setParametrosAbiertos] = useState(false);
-  const [avisosAbiertos, setAvisosAbiertos] = useState(true);
+  // Avisos (2026-10-08): contador rojo que parpadea hasta abrirlo, filas marcadas y confirmación al autorizar.
+  const [verAvisos, setVerAvisos] = useState(false);
+  const [avisosVistos, setAvisosVistos] = useState(false);
+  const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
   const [devolver, setDevolver] = useState(false);
   /** Fila resaltada un momento al saltar a ella desde el aviso de revisión. */
   const [resaltada, setResaltada] = useState<string | null>(null);
@@ -184,14 +185,14 @@ export function CorridaAutorizacion({
   const [pendiente, iniciar] = useTransition();
   const area = useRef<HTMLDivElement>(null);
   const menuDevolver = useRef<HTMLDivElement>(null);
-  const barraParametros = useRef<HTMLDivElement>(null);
+  const menuAvisos = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!parametrosAbiertos) return;
+    if (!verAvisos) return;
     const fuera = (e: MouseEvent) => {
-      if (!barraParametros.current?.contains(e.target as Node)) setParametrosAbiertos(false);
+      if (!menuAvisos.current?.contains(e.target as Node)) setVerAvisos(false);
     };
     const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setParametrosAbiertos(false);
+      if (e.key === 'Escape') setVerAvisos(false);
     };
     document.addEventListener('mousedown', fuera);
     document.addEventListener('keydown', tecla);
@@ -199,7 +200,7 @@ export function CorridaAutorizacion({
       document.removeEventListener('mousedown', fuera);
       document.removeEventListener('keydown', tecla);
     };
-  }, [parametrosAbiertos]);
+  }, [verAvisos]);
   useEffect(() => {
     if (!devolver) return;
     const fuera = (e: MouseEvent) => {
@@ -317,7 +318,7 @@ export function CorridaAutorizacion({
         e.key === 'Escape' &&
         completa &&
         !devolver &&
-        !parametrosAbiertos &&
+        !verAvisos &&
         !document.querySelector('dialog[open]')
       )
         guardarCompleta(null);
@@ -331,7 +332,7 @@ export function CorridaAutorizacion({
       window.removeEventListener('keydown', tecla);
       window.removeEventListener('beforeunload', salir);
     };
-  }, [completa, sucio, guardarCompleta, devolver, parametrosAbiertos]);
+  }, [completa, sucio, guardarCompleta, devolver, verAvisos]);
 
   // Costo (no depende de la utilidad) y resultado de cada partida por separado: un dato inválido sólo marca su fila.
   let entrada: ReturnType<typeof entradaCorrida> | null = null;
@@ -603,7 +604,8 @@ export function CorridaAutorizacion({
         if (!p.costo) return '—';
         const unitario = decimal(p.costo.costo_unitario, 2);
         let mejora: ReactNode = null;
-        if (p.costo.costo_anterior != null) {
+        // Sin cambio de costo no se marca nada (2026-10-08: aparecía «▲ 0.0 %»).
+        if (p.costo.costo_anterior != null && decimal(p.costo.costo_anterior, 2) !== unitario) {
           const anterior = decimal(p.costo.costo_anterior, 2);
           const m = mejoraDePrecio(anterior, unitario);
           mejora = (
@@ -696,7 +698,7 @@ export function CorridaAutorizacion({
         const cambio = r ? variacion(antes, centavosADecimal(r.precioUnitario)) : null;
         return (
           <>
-            {cambio && cambio !== '0.0' && (
+            {cambio && Number(cambio) !== 0 && (
               <span
                 className={`mr-1.5 rounded-sm px-1 text-[11px] font-bold ${cambio.startsWith('-') ? 'bg-exito-suave text-exito' : 'bg-aviso-suave text-aviso'}`}
               >
@@ -746,7 +748,7 @@ export function CorridaAutorizacion({
       <Pill tono="aviso">Pendiente de autorización</Pill>
     );
 
-  // Avisos para quien autoriza en una sola franja plegable (antes eran tres bandas; 2026-10-07).
+  // Avisos para quien autoriza: fuera de zona, otro proveedor y «revisa a detalle».
   const mayoristaArrendamiento =
     catalogos.mayoristas.find((m) => m.id === revision.mayorista_arrendamiento_id)?.nombre ??
     'el mayorista del arrendamiento';
@@ -787,255 +789,436 @@ export function CorridaAutorizacion({
       filas: especiales.map((f) => ({ id: f.p.id, ref: f.ref, descripcion: f.p.descripcion, tipo: f.tipo })),
     });
 
-  // Resumen de los parámetros cuando su panel está plegado (lo que falta, en rojo).
-  const resumenParametros: { texto: string; falta?: boolean }[] = [
-    {
-      texto: vigenciaValida ? `Vigencia ${textoVigencia(vigenciaIso)}` : 'Falta la vigencia',
-      falta: !vigenciaValida,
-    },
-    ...monedas.map((m) =>
-      tipoCambioSchema.safeParse(tcs[m] ?? '').success
-        ? { texto: `T.C. ${m} ${tcs[m]}` }
-        : { texto: `Falta el T.C. ${m}`, falta: true },
-    ),
-    ...(esAdquisicion
-      ? [
-          anticipoValido && anticipo
-            ? { texto: `Anticipo ${anticipo} %` }
-            : { texto: 'Falta el anticipo', falta: true },
-        ]
-      : []),
-    ...(conTransaccion && Number(transaccion) > 0
-      ? [
-          {
-            texto: `Transaccionalidad ${transaccion} % · ${alcance === 'todas' ? 'todas' : alcance === 'diferentes' ? 'otro proveedor' : '¿a cuáles?'}`,
-            falta: falsaAlcance,
-          },
-        ]
-      : []),
-  ];
-
-  const faltanParametros = resumenParametros.some((x) => x.falta);
+  // Filas señaladas por un aviso: llevan franja, campana y etiqueta en la propia hoja (propuesta 2, 2026-10-08).
+  const avisoDeFila = new Map<string, string>();
+  for (const pa of diferentes) avisoDeFila.set(pa.id, 'Otro proveedor');
+  for (const f of especiales) if (!avisoDeFila.has(f.p.id)) avisoDeFila.set(f.p.id, 'Revisa a detalle');
   const atajos = ATAJOS_VIGENCIA.map((a) => ({ ...a, fecha: vigenciaSugerida(hoyLocal(), a.dias) }));
 
   const contenido = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-borde bg-superficie">
-      {/* Barra 1: estado, cifras clave y decisión. */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-borde px-4 py-2.5">
-        <div className="mr-auto min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
-            {estadoPill}
-          </div>
-          <p className="mt-0.5 text-xs text-texto-suave">
-            {revision.estado === 'pendiente_autorizacion' ? (
-              <>
-                <strong className="text-texto">{solicitante ?? 'El ejecutivo'}</strong> solicitó autorización
-                {revision.enviada_en ? ` el ${fechaHora.format(new Date(revision.enviada_en))}` : ''}
-                {puedeRetirar && !puedeAutorizar && (
-                  <>
-                    {' · '}
-                    <button
-                      type="button"
-                      disabled={pendiente}
-                      onClick={() =>
-                        iniciar(async () =>
-                          resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador'), true),
-                        )
-                      }
-                      className="cursor-pointer font-semibold text-acento-texto hover:underline"
-                    >
-                      Retirar para corregir
-                    </button>
-                  </>
-                )}
-              </>
-            ) : revision.estado === 'rechazada' ? (
-              <>Motivo: «{revision.comentario_autorizacion}»</>
-            ) : (
-              <>
-                {revision.autorizada_en
-                  ? `Autorizada el ${fechaHora.format(new Date(revision.autorizada_en))}`
-                  : ''}
-                {revision.vigencia_hasta ? ` · Vigencia ${textoVigencia(revision.vigencia_hasta)}` : ''}
-                {revision.comentario_autorizacion ? ` · Nota: «${revision.comentario_autorizacion}»` : ''}
-              </>
-            )}
-          </p>
-        </div>
-        <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
-        <Dato
-          etiqueta="Utilidad sin IVA"
-          valor={validas ? pesos(utilidad) : '—'}
-          detalle={validas ? `${pct(utilidad, costo)} %` : undefined}
-          tono="text-exito"
-        />
-        <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
-        {/* Lo que paga el cliente (con IVA) va aparte de las cifras internas sin IVA (2026-10-07). */}
-        <div className="rounded-md border-2 border-acento/30 bg-acento-suave/40 px-3 py-1.5">
-          <Dato
-            etiqueta={`${revision.propuestas.length - numAdicionales} propuestas${numAdicionales ? ` + ${numAdicionales} adic.` : ''} · con IVA`}
-            valor={
-              principales.length === 0
-                ? '—'
-                : principales.length === 1
-                  ? pesos(principales[0] ?? 0n)
-                  : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
-            }
-          />
-        </div>
-        {editable && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
-              Guardar avance
-            </Boton>
-            {/* Retirar y rechazar en un solo menú: menos botones a la vista (2026-10-07). */}
-            <div ref={menuDevolver} className="relative">
-              <Boton
-                tamano="chico"
-                variante="peligro"
-                icono="izquierda"
-                iconoFinal="abajo"
-                disabled={pendiente}
-                aria-expanded={devolver}
-                aria-haspopup="menu"
-                onClick={() => setDevolver((x) => !x)}
-              >
-                Devolver
-              </Boton>
-              {devolver && (
-                <div
-                  role="menu"
-                  className="animar-entrada absolute top-full right-0 z-40 mt-1.5 w-80 rounded-lg border border-borde bg-superficie p-1.5 sombra"
-                >
-                  {(
-                    [
-                      {
-                        id: 'retirar',
-                        titulo: 'Retirar para corregir',
-                        detalle: `Regresa a borrador. Se avisa a ${[capturista, solicitante].filter(Boolean).join(' y ') || 'quien la preparó'}.`,
-                        icono: 'izquierda',
-                      },
-                      {
-                        id: 'rechazar',
-                        titulo: 'Rechazar',
-                        detalle: 'Queda rechazada con el motivo que escribas.',
-                        icono: 'cerrar',
-                      },
-                    ] as const
-                  ).map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setDevolver(false);
-                        setDialogo(o.id);
-                      }}
-                      className="flex w-full cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-superficie-2"
-                    >
-                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-peligro-suave text-peligro">
-                        <Icon name={o.icono} size={14} />
-                      </span>
-                      <span>
-                        <span className="block text-[13px] font-semibold">{o.titulo}</span>
-                        <span className="block text-xs text-texto-suave">{o.detalle}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Boton
-              tamano="chico"
-              icono="candado"
-              variante="primario"
-              disabled={
-                pendiente ||
-                !validas ||
-                !tcsValidos ||
-                !anticipoValido ||
-                !transaccionValida ||
-                falsaAlcance ||
-                !vigenciaValida
-              }
-              onClick={() => setDialogo('autorizar')}
-              title={
-                !vigenciaValida
-                  ? 'Define la vigencia de la cotización'
-                  : validas && tcsValidos
-                    ? undefined
-                    : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
-              }
+      {/* Renglón 1: estado, avisos y decisión. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde px-4 py-2.5">
+        <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
+        {estadoPill}
+        {avisos.length > 0 && (
+          <div ref={menuAvisos} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setVerAvisos((x) => !x);
+                setAvisosVistos(true);
+              }}
+              aria-expanded={verAvisos}
+              className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-pill bg-peligro px-3 text-xs font-bold text-white transition-transform hover:brightness-110 ${
+                avisosVistos ? '' : 'animate-pulse'
+              }`}
             >
-              Autorizar
-            </Boton>
+              <Icon name="campana" size={14} strokeWidth={2.4} />
+              {avisos.length} {avisos.length === 1 ? 'aviso' : 'avisos'}
+              <Icon name={verAvisos ? 'arriba' : 'abajo'} size={12} strokeWidth={2.6} />
+            </button>
+            {verAvisos && (
+              <div
+                role="dialog"
+                aria-label="Avisos de esta cotización"
+                className="animar-entrada absolute top-full left-0 z-40 mt-1.5 w-[min(440px,calc(100vw-2rem))] rounded-lg border border-borde bg-superficie p-2 sombra"
+              >
+                {avisos.map((a) => (
+                  <div key={a.id} className="flex gap-3 rounded-md px-3 py-2.5">
+                    <span
+                      className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-white ${
+                        a.tono === 'peligro' ? 'bg-peligro' : 'bg-aviso'
+                      }`}
+                    >
+                      <Icon name="campana" size={15} />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold">{a.titulo}</div>
+                      <div className="text-xs text-texto-suave">{a.detalle}</div>
+                      {a.filas && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {a.filas.map((x) => (
+                            <button
+                              key={x.id}
+                              type="button"
+                              onClick={() => {
+                                setVerAvisos(false);
+                                irAFila(x.id);
+                              }}
+                              title={`Ir a ${x.ref}: ${x.descripcion}`}
+                              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-sm border border-aviso/40 px-2 text-[11px] font-bold text-aviso tabular hover:bg-aviso-suave"
+                            >
+                              {x.ref}
+                              <Icon name="derecha" size={11} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Cifras en dos por dos, junto a la decisión (2026-10-08). */}
+          <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1 border-l border-borde pl-3">
+            <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
+            <Dato
+              etiqueta="Utilidad sin IVA"
+              valor={validas ? pesos(utilidad) : '—'}
+              detalle={validas ? `${pct(utilidad, costo)} %` : undefined}
+              tono="text-exito"
+            />
+            <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
+            <Dato
+              etiqueta={`Al cliente con IVA${numAdicionales ? ` (+${numAdicionales} adic.)` : ''}`}
+              valor={
+                principales.length === 0
+                  ? '—'
+                  : principales.length === 1
+                    ? pesos(principales[0] ?? 0n)
+                    : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
+              }
+            />
+          </div>
+          {editable && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
+                Guardar avance
+              </Boton>
+              {/* Retirar y rechazar en un solo menú: menos botones a la vista (2026-10-07). */}
+              <div ref={menuDevolver} className="relative">
+                <Boton
+                  tamano="chico"
+                  variante="peligro"
+                  icono="izquierda"
+                  iconoFinal="abajo"
+                  disabled={pendiente}
+                  aria-expanded={devolver}
+                  aria-haspopup="menu"
+                  onClick={() => setDevolver((x) => !x)}
+                >
+                  Devolver
+                </Boton>
+                {devolver && (
+                  <div
+                    role="menu"
+                    className="animar-entrada absolute top-full right-0 z-40 mt-1.5 w-80 rounded-lg border border-borde bg-superficie p-1.5 sombra"
+                  >
+                    {(
+                      [
+                        {
+                          id: 'retirar',
+                          titulo: 'Retirar para corregir',
+                          detalle: `Regresa a borrador. Se avisa a ${[capturista, solicitante].filter((x, i, xs) => x && xs.indexOf(x) === i).join(' y ') || 'quien la preparó'}.`,
+                          icono: 'izquierda',
+                        },
+                        {
+                          id: 'rechazar',
+                          titulo: 'Rechazar',
+                          detalle: 'Queda rechazada con el motivo que escribas.',
+                          icono: 'cerrar',
+                        },
+                      ] as const
+                    ).map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setDevolver(false);
+                          setDialogo(o.id);
+                        }}
+                        className="flex w-full cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-superficie-2"
+                      >
+                        <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-peligro-suave text-peligro">
+                          <Icon name={o.icono} size={14} />
+                        </span>
+                        <span>
+                          <span className="block text-[13px] font-semibold">{o.titulo}</span>
+                          <span className="block text-xs text-texto-suave">{o.detalle}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Boton
+                tamano="chico"
+                icono="candado"
+                variante="primario"
+                disabled={
+                  pendiente ||
+                  !validas ||
+                  !tcsValidos ||
+                  !anticipoValido ||
+                  !transaccionValida ||
+                  falsaAlcance ||
+                  !vigenciaValida
+                }
+                onClick={() => {
+                  setConfirmados(new Set());
+                  setDialogo('autorizar');
+                }}
+                title={
+                  !vigenciaValida
+                    ? 'Define la vigencia de la cotización'
+                    : validas && tcsValidos
+                      ? undefined
+                      : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
+                }
+              >
+                Autorizar
+              </Boton>
+            </div>
+          )}
+        </div>
       </div>
 
       {/*
-        Barra 2, siempre en un renglón (2026-10-07): el resumen de los parámetros (lo que falta, en rojo) abre un
-        panel flotante sobre la hoja para capturarlos; así la hoja no pierde alto.
+        Renglón 2 (propuesta C, 2026-10-08): tarjetas de parámetros siempre visibles y editables, y las cifras a la
+        derecha en el mismo bloque.
       */}
-      <div
-        ref={barraParametros}
-        className="relative flex items-center gap-2 border-b border-borde bg-superficie-2/60 px-3 py-1.5"
-      >
-        <button
-          type="button"
-          onClick={() => setParametrosAbiertos((x) => !x)}
-          aria-expanded={parametrosAbiertos}
-          aria-controls="panel-parametros"
-          className={`inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-bold transition-colors ${
-            parametrosAbiertos
-              ? 'border-acento bg-acento-suave text-acento-texto'
-              : faltanParametros && editable
-                ? 'border-peligro/40 bg-peligro-suave text-peligro'
-                : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
-          }`}
+      <div className="flex flex-wrap items-stretch gap-2 border-b border-borde bg-superficie-2/60 px-3 py-2.5">
+        <Tarjeta2
+          borde={vigenciaValida ? 'border-acento/40' : 'border-peligro/60'}
+          etiqueta="Vigencia"
+          ayuda={
+            vigenciaEnFinDeSemana
+              ? 'No puede caer en sábado ni domingo'
+              : vigenciaValida
+                ? undefined
+                : 'Obligatoria para autorizar'
+          }
+          error={!vigenciaValida}
         >
-          <Icon name="herramienta" size={14} />
-          Parámetros
-          <Icon name={parametrosAbiertos ? 'arriba' : 'abajo'} size={12} strokeWidth={2.6} />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-          {resumenParametros.map((x) => (
-            <button
-              key={x.texto}
-              type="button"
-              onClick={() => setParametrosAbiertos(true)}
-              title={x.texto}
-              className={`inline-flex h-7 shrink-0 cursor-pointer items-center rounded-pill border px-2.5 text-xs font-semibold whitespace-nowrap ${
-                x.falta
-                  ? 'border-peligro/40 bg-peligro-suave text-peligro'
-                  : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
-              }`}
-            >
-              {x.texto}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {avisos.length > 0 && !avisosAbiertos && (
-            <button
-              type="button"
-              onClick={() => setAvisosAbiertos(true)}
-              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-pill bg-aviso-suave px-3 text-xs font-bold text-aviso hover:brightness-95"
-            >
-              <Icon name="campana" size={13} />
-              {avisos.length} {avisos.length === 1 ? 'aviso' : 'avisos'}
-            </button>
-          )}
-          <span
-            tabIndex={0}
-            title="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
-            aria-label="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
-            className="inline-flex size-8 cursor-help items-center justify-center rounded-full text-[13px] font-bold text-texto-suave italic hover:bg-superficie hover:text-texto"
+          <input
+            type="date"
+            aria-label="Fecha de vigencia"
+            value={fechaVigencia}
+            disabled={!editable}
+            autoComplete="off"
+            aria-invalid={!vigenciaValida}
+            onChange={(e) => setVigencia(e.target.value ? `${e.target.value}T${horaVigencia}` : '')}
+            className={`${controlParametro} w-[128px] font-bold ${vigenciaValida ? '' : 'border-peligro'}`}
+          />
+          {/* Hora en 24 h (el control nativo la mostraba como «02:00» sin a. m./p. m.). */}
+          <select
+            aria-label="Hora de vigencia"
+            value={horaVigencia}
+            disabled={!editable || !fechaVigencia}
+            onChange={(e) => setVigencia(fechaVigencia ? `${fechaVigencia}T${e.target.value}` : '')}
+            className={`${controlParametro} tabular w-[74px] cursor-pointer`}
           >
-            ƒ
+            {(HORAS.includes(horaVigencia) ? HORAS : [...HORAS, horaVigencia].sort()).map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+          {editable && (
+            <select
+              aria-label="Atajos de vigencia"
+              title="Atajos de vigencia (a las 14:00 h)"
+              value=""
+              onChange={(e) => e.target.value && setVigencia(`${e.target.value}T${HORA_VIGENCIA}`)}
+              className={`${controlParametro} w-[76px] cursor-pointer text-texto-suave`}
+            >
+              <option value="">Atajos</option>
+              {atajos.map((a) => (
+                <option key={a.dias} value={a.fecha}>
+                  {a.etiqueta}
+                </option>
+              ))}
+            </select>
+          )}
+        </Tarjeta2>
+
+        <Tarjeta2
+          borde={tcsValidos ? 'border-aviso/50' : 'border-peligro/60'}
+          etiqueta="Tipo de cambio"
+          ayuda={monedas.length ? undefined : 'Todo en pesos'}
+          error={!tcsValidos}
+        >
+          <span
+            title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
+            className="inline-flex h-10 items-center gap-1 text-xs font-semibold text-texto-suave"
+          >
+            <Icon name="candado" size={11} />
+            MXN <strong className="text-texto">1</strong>
           </span>
+          {monedas.map((m) => {
+            const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
+            return (
+              <label key={m} className="inline-flex items-center gap-1 text-xs font-bold text-aviso">
+                {m}
+                <input
+                  value={tcs[m] ?? ''}
+                  disabled={!editable}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0.00000"
+                  aria-label={`Tipo de cambio ${m}`}
+                  aria-invalid={!valido}
+                  onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
+                  className={`${controlParametro} tabular w-[92px] text-center font-bold ${valido ? '' : 'border-peligro'}`}
+                />
+              </label>
+            );
+          })}
+        </Tarjeta2>
+
+        {editable && (
+          <Tarjeta2 borde="border-exito/50" etiqueta="Utilidad general">
+            <CampoPorcentaje
+              valor={general}
+              onCambio={(v) => setGeneral(v.trim())}
+              valido={generalValida}
+              placeholder="13.5"
+              etiqueta="Utilidad general"
+              ancho="w-[76px]"
+            />
+            <Boton
+              tamano="chico"
+              variante="exito"
+              onClick={() => setPorPartida({})}
+              disabled={!general || !generalValida}
+              title="Aplicar a todas las partidas"
+            >
+              Aplicar
+            </Boton>
+          </Tarjeta2>
+        )}
+
+        {esAdquisicion && (
+          <Tarjeta2
+            borde={anticipoValido && anticipo ? 'border-info/50' : 'border-peligro/60'}
+            etiqueta="Anticipo"
+            ayuda="Del total con IVA"
+            error={!(anticipoValido && anticipo)}
+          >
+            <CampoPorcentaje
+              valor={anticipo}
+              onCambio={(v) => setAnticipo(v.replace(/[^\d.]/g, ''))}
+              valido={anticipoValido}
+              placeholder="50"
+              etiqueta="Anticipo"
+              deshabilitado={!editable}
+              ancho="w-[76px]"
+            />
+          </Tarjeta2>
+        )}
+
+        {conTransaccion && (
+          <Tarjeta2
+            borde={falsaAlcance ? 'border-peligro/60' : 'border-aviso/50'}
+            etiqueta="Transaccionalidad"
+            ayuda={falsaAlcance ? '¿A qué partidas aplica?' : undefined}
+            error={falsaAlcance}
+          >
+            <CampoPorcentaje
+              valor={transaccion}
+              onCambio={(v) => setTransaccion(v.replace(/[^\d.]/g, ''))}
+              valido={transaccionValida}
+              placeholder="3"
+              etiqueta="Transaccionalidad"
+              deshabilitado={!editable}
+              ancho="w-[64px]"
+            />
+            {Number(transaccion) > 0 && (
+              <div
+                role="radiogroup"
+                aria-label="¿A qué partidas aplica?"
+                className={`inline-flex h-10 rounded-sm border p-0.5 ${falsaAlcance ? 'border-peligro' : 'border-borde'}`}
+              >
+                {(
+                  [
+                    ['todas', 'Todas'],
+                    ['diferentes', `Otro prov. (${diferentes.length})`],
+                  ] as const
+                ).map(([id, nombre]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={alcance === id}
+                    disabled={!editable}
+                    onClick={() => setAlcance(id)}
+                    className={`cursor-pointer rounded-[3px] px-2 text-[11px] font-semibold transition-colors ${
+                      alcance === id ? 'bg-aviso text-white' : 'text-texto-suave hover:text-texto'
+                    }`}
+                  >
+                    {nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Tarjeta2>
+        )}
+      </div>
+
+      {/* Renglón 3: la entrega fuera de zona no está en una fila: va en una banda roja. */}
+      {fueraDeZona(estadoEntrega) && (
+        <div
+          role="note"
+          className="flex items-center gap-2.5 border-b border-peligro bg-peligro px-4 py-2 text-[13px] text-white"
+        >
+          <Icon name="campana" size={16} strokeWidth={2.4} className="shrink-0" />
+          <span>
+            <strong>{estadoEntrega ? `Entrega en ${estadoEntrega}` : 'Sin estado de entrega'}:</strong>{' '}
+            {avisos.find((a) => a.id === 'zona')?.detalle}
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 border-b border-borde px-3 py-1.5">
+        <p className="min-w-0 truncate text-xs text-texto-suave">
+          {revision.estado === 'pendiente_autorizacion' ? (
+            <>
+              <strong className="text-texto">{solicitante ?? 'El ejecutivo'}</strong> solicitó autorización
+              {revision.enviada_en ? ` el ${fechaHora.format(new Date(revision.enviada_en))}` : ''}
+              {puedeRetirar && !puedeAutorizar && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    disabled={pendiente}
+                    onClick={() =>
+                      iniciar(async () =>
+                        resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador'), true),
+                      )
+                    }
+                    className="cursor-pointer font-semibold text-acento-texto hover:underline"
+                  >
+                    Retirar para corregir
+                  </button>
+                </>
+              )}
+            </>
+          ) : revision.estado === 'rechazada' ? (
+            <>Motivo: «{revision.comentario_autorizacion}»</>
+          ) : (
+            <>
+              {revision.autorizada_en
+                ? `Autorizada el ${fechaHora.format(new Date(revision.autorizada_en))}`
+                : ''}
+              {revision.comentario_autorizacion ? ` · Nota: «${revision.comentario_autorizacion}»` : ''}
+            </>
+          )}
+        </p>
+        <span
+          tabIndex={0}
+          title="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
+          aria-label="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
+          className="inline-flex size-7 shrink-0 cursor-help items-center justify-center rounded-full text-[13px] font-bold text-texto-suave italic hover:bg-superficie-2 hover:text-texto"
+        >
+          ƒ
+        </span>
+
+        <div className="ml-auto flex items-center gap-2">
           <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
           <Boton
             tamano="chico"
@@ -1047,271 +1230,7 @@ export function CorridaAutorizacion({
             {completa ? 'Salir de pantalla completa' : 'Pantalla completa'}
           </Boton>
         </div>
-
-        {parametrosAbiertos && (
-          <div
-            id="panel-parametros"
-            role="dialog"
-            aria-label="Parámetros de la autorización"
-            className="animar-entrada absolute top-full left-3 z-30 mt-1.5 w-[min(820px,calc(100%-1.5rem))] rounded-lg border border-borde bg-superficie p-4 sombra"
-          >
-            <div className="mb-3 flex items-center gap-3">
-              <span className="mr-auto text-sm font-bold">Parámetros de la autorización</span>
-              <Boton
-                tamano="chico"
-                variante={faltanParametros ? 'fantasma' : 'primario'}
-                icono={faltanParametros ? 'cerrar' : 'palomita'}
-                onClick={() => setParametrosAbiertos(false)}
-              >
-                {faltanParametros ? 'Cerrar' : 'Listo'}
-              </Boton>
-            </div>
-            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-              <CampoParametro
-                punto="bg-acento"
-                etiqueta="Vigencia de la cotización"
-                ayuda={
-                  vigenciaEnFinDeSemana
-                    ? 'No puede caer en sábado ni domingo.'
-                    : vigenciaValida
-                      ? `Vence el ${textoVigencia(vigenciaIso)}`
-                      : '14:00 h por omisión; nunca en sábado ni domingo.'
-                }
-                error={vigenciaEnFinDeSemana}
-                ancho
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
-                    aria-label="Fecha de vigencia"
-                    value={fechaVigencia}
-                    disabled={!editable}
-                    autoComplete="off"
-                    aria-invalid={!vigenciaValida}
-                    onChange={(e) => setVigencia(e.target.value ? `${e.target.value}T${horaVigencia}` : '')}
-                    className={`${controlParametro} w-[150px] ${vigenciaValida ? '' : 'border-peligro'}`}
-                  />
-                  {/* Hora en 24 h (el control nativo la mostraba como «02:00» sin a. m./p. m.). */}
-                  <select
-                    aria-label="Hora de vigencia"
-                    value={horaVigencia}
-                    disabled={!editable || !fechaVigencia}
-                    onChange={(e) => setVigencia(fechaVigencia ? `${fechaVigencia}T${e.target.value}` : '')}
-                    className={`${controlParametro} tabular w-[92px] cursor-pointer`}
-                  >
-                    {(HORAS.includes(horaVigencia) ? HORAS : [...HORAS, horaVigencia].sort()).map((h) => (
-                      <option key={h} value={h}>
-                        {h} h
-                      </option>
-                    ))}
-                  </select>
-                  {editable && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {atajos.map((a) => (
-                        <button
-                          key={a.dias}
-                          type="button"
-                          onClick={() => setVigencia(`${a.fecha}T${HORA_VIGENCIA}`)}
-                          aria-pressed={fechaVigencia === a.fecha}
-                          className={`h-9 cursor-pointer rounded-pill border px-3 text-xs font-semibold transition-colors ${
-                            fechaVigencia === a.fecha
-                              ? 'border-acento bg-acento-suave text-acento-texto'
-                              : 'border-borde text-texto hover:bg-superficie-2'
-                          }`}
-                        >
-                          {a.etiqueta}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CampoParametro>
-
-              <CampoParametro
-                punto="bg-aviso"
-                etiqueta="Tipo de cambio"
-                ayuda="5 decimales; en pesos es 1 y no cambia."
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-borde bg-superficie-2 px-2.5 text-xs font-semibold text-texto-suave"
-                  >
-                    <Icon name="candado" size={12} />
-                    MXN <strong className="text-texto">1</strong>
-                  </span>
-                  {monedas.map((m) => {
-                    const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
-                    return (
-                      <label
-                        key={m}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-aviso"
-                      >
-                        {m}
-                        <input
-                          value={tcs[m] ?? ''}
-                          disabled={!editable}
-                          inputMode="decimal"
-                          autoComplete="off"
-                          placeholder="0.00000"
-                          aria-label={`Tipo de cambio ${m}`}
-                          aria-invalid={!valido}
-                          onChange={(e) =>
-                            setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))
-                          }
-                          className={`${controlParametro} tabular w-28 text-center font-bold ${valido ? '' : 'border-peligro'}`}
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-              </CampoParametro>
-
-              {editable && (
-                <CampoParametro
-                  punto="bg-exito"
-                  etiqueta="Utilidad general"
-                  ayuda="% sobre el costo; «Aplicar a todas» reemplaza la de cada partida."
-                >
-                  <div className="flex items-center gap-2">
-                    <CampoPorcentaje
-                      valor={general}
-                      onCambio={(v) => setGeneral(v.trim())}
-                      valido={generalValida}
-                      placeholder="13.5"
-                      etiqueta="Utilidad general"
-                      ancho="w-24"
-                    />
-                    <Boton
-                      tamano="chico"
-                      variante="exito"
-                      onClick={() => setPorPartida({})}
-                      disabled={!general || !generalValida}
-                    >
-                      Aplicar a todas
-                    </Boton>
-                  </div>
-                </CampoParametro>
-              )}
-
-              {esAdquisicion && (
-                <CampoParametro
-                  punto="bg-info"
-                  etiqueta="Anticipo"
-                  ayuda="% del total con IVA de cada propuesta."
-                >
-                  <CampoPorcentaje
-                    valor={anticipo}
-                    onCambio={(v) => setAnticipo(v.replace(/[^\d.]/g, ''))}
-                    valido={anticipoValido}
-                    placeholder="50"
-                    etiqueta="Anticipo"
-                    deshabilitado={!editable}
-                    ancho="w-24"
-                  />
-                </CampoParametro>
-              )}
-
-              {conTransaccion && (
-                <CampoParametro
-                  punto="bg-aviso"
-                  etiqueta="Transaccionalidad"
-                  ayuda="% que se suma a la utilidad."
-                  error={falsaAlcance}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CampoPorcentaje
-                      valor={transaccion}
-                      onCambio={(v) => setTransaccion(v.replace(/[^\d.]/g, ''))}
-                      valido={transaccionValida}
-                      placeholder="3"
-                      etiqueta="Transaccionalidad"
-                      deshabilitado={!editable}
-                      ancho="w-24"
-                    />
-                    {Number(transaccion) > 0 && (
-                      <div
-                        role="radiogroup"
-                        aria-label="¿A qué partidas aplica?"
-                        className={`inline-flex rounded-md border p-0.5 ${falsaAlcance ? 'border-peligro' : 'border-borde'}`}
-                      >
-                        {(
-                          [
-                            ['todas', 'Todas las partidas'],
-                            ['diferentes', `Sólo otro proveedor (${diferentes.length})`],
-                          ] as const
-                        ).map(([id, nombre]) => (
-                          <button
-                            key={id}
-                            type="button"
-                            role="radio"
-                            aria-checked={alcance === id}
-                            disabled={!editable}
-                            onClick={() => setAlcance(id)}
-                            className={`h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors ${
-                              alcance === id ? 'bg-aviso text-white' : 'text-texto-suave hover:text-texto'
-                            }`}
-                          >
-                            {nombre}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </CampoParametro>
-              )}
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Avisos: una sola franja; cada partida señalada salta a su fila. */}
-      {avisos.length > 0 && avisosAbiertos && (
-        <div
-          role="note"
-          className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-aviso/30 bg-aviso-suave/60 px-3 py-1.5"
-        >
-          {avisos.map((a) => (
-            <div
-              key={a.id}
-              title={a.detalle}
-              className={`flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border bg-superficie py-1 pr-1.5 pl-2 text-xs ${
-                a.tono === 'peligro' ? 'border-peligro/30 text-peligro' : 'border-aviso/40 text-aviso'
-              }`}
-            >
-              <Icon name="campana" size={13} className="shrink-0" />
-              <strong className="font-bold">{a.titulo}</strong>
-              <span className="sr-only">{a.detalle}</span>
-              {a.filas?.map((x) => (
-                <button
-                  key={x.id}
-                  type="button"
-                  onClick={() => irAFila(x.id)}
-                  title={`Ir a ${x.ref}: ${x.descripcion}`}
-                  className={`inline-flex h-6 cursor-pointer items-center rounded-sm border px-1.5 text-[11px] font-bold tabular transition-colors hover:bg-superficie-2 ${
-                    x.tipo === 'cargo'
-                      ? 'border-aviso/40 text-aviso'
-                      : x.tipo === 'incluida' || x.tipo === 'visible'
-                        ? 'border-info/40 text-info'
-                        : 'border-borde text-texto'
-                  }`}
-                >
-                  {x.ref}
-                </button>
-              ))}
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setAvisosAbiertos(false)}
-            aria-label="Ocultar avisos"
-            title="Ocultar avisos (quedan como un contador arriba)"
-            className="ml-auto inline-flex size-7 cursor-pointer items-center justify-center rounded-sm text-aviso hover:bg-superficie"
-          >
-            <Icon name="cerrar" size={14} />
-          </button>
-        </div>
-      )}
 
       {/* Mensajes: flotan sobre la hoja en lugar de empujarla. */}
       {mensaje && (
@@ -1436,32 +1355,47 @@ export function CorridaAutorizacion({
                   const valida = porcentaje.safeParse(valor).success;
                   const personalizada = editable && valor !== '' && valor !== utilidadBase;
                   // Fondo opaco para las columnas fijas; tinte suave para el resto de la fila.
+                  const aviso = avisoDeFila.get(f.p.id);
                   const fijo =
                     resaltada === f.p.id
                       ? 'bg-acento-suave'
-                      : f.tipo === 'cargo'
+                      : aviso
                         ? 'bg-aviso-suave'
-                        : f.tipo === 'partida'
-                          ? 'bg-superficie group-hover:bg-superficie-2'
-                          : 'bg-info-suave';
+                        : f.tipo === 'cargo'
+                          ? 'bg-aviso-suave'
+                          : f.tipo === 'partida'
+                            ? 'bg-superficie group-hover:bg-superficie-2'
+                            : 'bg-info-suave';
                   const tinte =
                     resaltada === f.p.id
                       ? 'bg-acento-suave'
-                      : f.tipo === 'cargo'
+                      : aviso
                         ? 'bg-aviso-suave/50'
-                        : f.tipo === 'partida'
-                          ? ''
-                          : 'bg-info-suave/40';
+                        : f.tipo === 'cargo'
+                          ? 'bg-aviso-suave/50'
+                          : f.tipo === 'partida'
+                            ? ''
+                            : 'bg-info-suave/40';
                   return (
                     <tr key={f.p.id} id={`fila-${f.p.id}`} className="group h-10 transition-colors">
                       <td
-                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold text-texto-suave`}
+                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold ${
+                          aviso ? 'text-aviso' : 'text-texto-suave'
+                        }`}
                       >
-                        {f.ref}
+                        {aviso ? (
+                          <span className="inline-flex items-center gap-1" title={aviso}>
+                            <Icon name="campana" size={12} strokeWidth={2.4} />
+                            {f.ref}
+                          </span>
+                        ) : (
+                          f.ref
+                        )}
                       </td>
                       <td className={`${fija2} ${borde} ${fijo} px-3`}>
                         <Descripcion
                           f={f}
+                          aviso={aviso}
                           extra={
                             f.tipo === 'cargo'
                               ? `Se reparte entre ${f.p.prorrateos.map((x) => refDe.get(x.destino_id) ?? '?').join(', ')}${
@@ -1698,6 +1632,44 @@ export function CorridaAutorizacion({
                 </>
               )}
             </dl>
+            {avisos.length > 0 && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-[13px] font-bold">Confirma que revisaste los avisos</legend>
+                {avisos.map((a) => (
+                  <label
+                    key={a.id}
+                    className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 text-[13px] ${
+                      confirmados.has(a.id)
+                        ? 'border-exito/40 bg-exito-suave/40'
+                        : 'border-borde hover:bg-superficie-2'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={confirmados.has(a.id)}
+                      onChange={(e) =>
+                        setConfirmados((xs) => {
+                          const n = new Set(xs);
+                          if (e.target.checked) n.add(a.id);
+                          else n.delete(a.id);
+                          return n;
+                        })
+                      }
+                      className="mt-0.5 size-4 shrink-0 accent-[var(--c-acento)]"
+                    />
+                    <Icon
+                      name="campana"
+                      size={15}
+                      className={`mt-0.5 shrink-0 ${a.tono === 'peligro' ? 'text-peligro' : 'text-aviso'}`}
+                    />
+                    <span>
+                      <strong>{a.titulo}</strong>
+                      <span className="block text-xs text-texto-suave">{a.detalle}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
             <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
               Nota para el ejecutivo (opcional)
               <textarea
@@ -1713,7 +1685,13 @@ export function CorridaAutorizacion({
             </p>
             {mensaje?.error && <p className="text-[13px] font-semibold text-peligro">{mensaje.texto}</p>}
             <div className="flex flex-wrap gap-2.5">
-              <Boton type="submit" variante="primario" icono="candado" disabled={pendiente}>
+              <Boton
+                type="submit"
+                variante="primario"
+                icono="candado"
+                disabled={pendiente || avisos.some((a) => !confirmados.has(a.id))}
+                title={avisos.some((a) => !confirmados.has(a.id)) ? 'Confirma primero cada aviso' : undefined}
+              >
                 {pendiente ? 'Autorizando…' : 'Autorizar y bloquear'}
               </Boton>
               <Boton variante="fantasma" onClick={() => setDialogo(null)}>
@@ -1802,37 +1780,31 @@ const HORAS = Array.from({ length: 25 }, (_, i) => {
 });
 
 const controlParametro =
-  'h-9 rounded-sm border border-texto/20 bg-superficie px-2 text-[13px] text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
+  'h-10 rounded-sm border border-texto/20 bg-superficie px-2 text-[13px] text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
 
-/** Parámetro de la autorización en el panel flotante: punto de color, etiqueta, control y ayuda. */
-function CampoParametro({
-  punto,
+/** Tarjeta de un parámetro, siempre visible y editable (propuesta C, 2026-10-08). */
+function Tarjeta2({
+  borde,
   etiqueta,
   ayuda,
   error,
-  ancho,
   children,
 }: {
-  punto: string;
+  borde: string;
   etiqueta: string;
   ayuda?: string;
   error?: boolean;
-  /** Ocupa las dos columnas del panel. */
-  ancho?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`flex flex-col gap-1.5 ${ancho ? 'sm:col-span-2' : ''}`}>
-      <span className="text-[13px] font-semibold text-texto">
-        <span className={`mr-2 inline-block size-2 rounded-full align-middle ${punto}`} aria-hidden="true" />
+    <div
+      className={`flex flex-col justify-center gap-1 rounded-md border-2 bg-superficie px-2.5 py-1.5 ${borde}`}
+    >
+      <span className="flex items-baseline gap-2 text-[11px] font-bold text-texto-suave">
         {etiqueta}
+        {ayuda && <span className={`font-semibold ${error ? 'text-peligro' : ''}`}>· {ayuda}</span>}
       </span>
-      {children}
-      {ayuda && (
-        <span className={`text-xs ${error ? 'font-semibold text-peligro' : 'text-texto-suave'}`}>
-          {ayuda}
-        </span>
-      )}
+      <div className="flex items-center gap-1.5">{children}</div>
     </div>
   );
 }
@@ -1902,7 +1874,7 @@ function Dato({
 }
 
 /** Descripción en una sola línea (fila baja, como en Excel); un clic la despliega completa. */
-function Descripcion({ f, extra }: { f: FilaCorrida; extra?: string }) {
+function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; aviso?: string }) {
   const [abierta, setAbierta] = useState(false);
   const etiqueta = {
     partida: null,
@@ -1922,6 +1894,11 @@ function Descripcion({ f, extra }: { f: FilaCorrida; extra?: string }) {
       {etiqueta && (
         <span className={`mt-px shrink-0 rounded-sm px-1.5 text-[11px] font-bold ${etiqueta.clase}`}>
           {etiqueta.texto}
+        </span>
+      )}
+      {aviso && (
+        <span className="mt-px shrink-0 rounded-sm bg-aviso px-1.5 text-[11px] font-bold text-white">
+          {aviso}
         </span>
       )}
       {f.p.se_suma && (

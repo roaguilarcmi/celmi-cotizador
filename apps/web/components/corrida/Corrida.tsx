@@ -226,6 +226,7 @@ export function useColumnasOcultas() {
 /** Precio anterior tachado y la mejora obtenida, debajo del costo actual. */
 export function PrecioAnterior({ anterior, actual }: { anterior: string; actual: string }) {
   const m = mejoraDePrecio(anterior, actual);
+  if (m.ahorro === 0n) return null;
   const mejoro = m.ahorro > 0n;
   return (
     <div className="mt-1.5 flex flex-col items-end gap-0.5 text-[11px] leading-tight">
