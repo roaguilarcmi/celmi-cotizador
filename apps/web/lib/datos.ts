@@ -327,7 +327,7 @@ export interface PartidaFila {
   id: string;
   orden: number;
   sku: string;
-  marca_id: string | null;
+  marca: string;
   descripcion: string;
   descripcion_contenido: unknown;
   entrega: string;
@@ -382,12 +382,15 @@ export interface RevisionDetalle {
   enviada_en: string | null;
   autorizada_en: string | null;
   revision_anterior_id: string | null;
+  /** Retiro para corregir (0027): motivo, cuándo y quién (quien autoriza). */
+  motivo_retiro: string;
+  retirada_en: string | null;
+  retirador: { nombre: string } | null;
   propuestas: PropuestaFila[];
 }
 
 export interface CatalogosCotizacion {
-  mayoristas: { id: string; nombre: string }[];
-  marcas: { id: string; nombre: string }[];
+  mayoristas: { id: string; nombre: string; trabaja_arrendamiento: boolean }[];
   unidades: { id: string; nombre: string; abreviatura: string | null }[];
   monedas: { codigo: string; nombre: string }[];
 }
@@ -454,15 +457,13 @@ export async function obtenerRevision(id: string): Promise<RevisionDetalle | nul
 
 export async function listarCatalogosCotizacion(): Promise<CatalogosCotizacion> {
   const supabase = await clienteServidor();
-  const [mayoristas, marcas, unidades, monedas] = await Promise.all([
+  const [mayoristas, unidades, monedas] = await Promise.all([
     supabase.from('mayoristas').select(CONSULTAS.mayoristas).eq('activo', true).order('nombre'),
-    supabase.from('marcas').select(CONSULTAS.marcas).eq('activa', true).order('nombre'),
     supabase.from('unidades').select(CONSULTAS.unidades).eq('activa', true).order('nombre'),
     supabase.from('monedas').select(CONSULTAS.monedas).eq('activa', true).order('codigo'),
   ]);
   return {
     mayoristas: (exigir(mayoristas, 'los mayoristas') ?? []) as unknown as CatalogosCotizacion['mayoristas'],
-    marcas: (exigir(marcas, 'las marcas') ?? []) as unknown as CatalogosCotizacion['marcas'],
     unidades: (exigir(unidades, 'las unidades') ?? []) as unknown as CatalogosCotizacion['unidades'],
     monedas: (exigir(monedas, 'las monedas') ?? []) as unknown as CatalogosCotizacion['monedas'],
   };
@@ -624,7 +625,7 @@ export interface RevisionBandeja {
       cantidad: number;
       partida_padre_id: string | null;
       presentacion: 'linea' | 'incluida' | 'prorrateada';
-      costo: { costo_unitario: number | string; tipo_cambio: number | string } | null;
+      costo: { costo_unitario: number | string; moneda: string } | null;
     }[];
   }[];
 }
@@ -670,6 +671,28 @@ export async function listarBandeja(): Promise<{
 }
 
 /** Revisiones que esperan autorización (contador del menú). */
+/** Aviso dentro de la app (0027): p. ej. una cotización retirada para corregir. */
+export interface Notificacion {
+  id: string;
+  tipo: string;
+  titulo: string;
+  cuerpo: string;
+  enlace: string;
+  creado_en: string;
+  leida_en: string | null;
+}
+
+/** Los avisos más recientes de quien inició sesión (RLS: sólo los suyos). */
+export async function listarNotificaciones(): Promise<Notificacion[]> {
+  const supabase = await clienteServidor();
+  const r = await supabase
+    .from('notificaciones')
+    .select(CONSULTAS.notificaciones)
+    .order('creado_en', { ascending: false })
+    .limit(20);
+  return (exigir(r, 'los avisos') ?? []) as unknown as Notificacion[];
+}
+
 export async function contarPorAutorizar(): Promise<number> {
   const supabase = await clienteServidor();
   const { count } = await supabase

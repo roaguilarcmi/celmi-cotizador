@@ -1,9 +1,10 @@
-import { costoPartida, etiquetaRevision, formatearMXN } from '@celmi/core';
+import { costoPartida, etiquetaRevision } from '@celmi/core';
 import Link from 'next/link';
 import { EnConstruccion } from '@/components/EnConstruccion';
 import { Icon } from '@/components/Icon';
 import { clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { decimal } from '@/lib/corrida';
+import { textoPorMoneda } from '../cotizaciones/[id]/modelo';
 import { listarBandeja, type RevisionBandeja } from '@/lib/datos';
 import { FOLIO_EPOXEMEX } from '@/lib/epoxemex';
 import { haceCuanto } from '@/lib/presentacion';
@@ -13,22 +14,23 @@ import { ESTADOS } from '../cotizaciones/estados';
 export const metadata = { title: 'Autorizaciones' };
 export const dynamic = 'force-dynamic';
 
-/** Costo total de compra de la revisión (lo que se va a autorizar), con el mismo cálculo que la corrida. */
-function costoDe(r: RevisionBandeja): bigint | null {
+/**
+ * Costo total de compra de la revisión, por moneda (el T.C. de las extranjeras lo fija quien autoriza, 0027):
+ * «$10,000.00 + USD 1,200.00».
+ */
+function costoDe(r: RevisionBandeja): string | null {
   try {
-    return r.propuestas
-      .flatMap((p) => p.partidas)
-      .reduce((s, pa) => {
-        if (!pa.costo) throw new Error('Sin costo');
-        return (
-          s +
-          costoPartida({
-            costoUnitario: decimal(pa.costo.costo_unitario, 2),
-            tipoCambio: decimal(pa.costo.tipo_cambio, 5),
-            cantidad: pa.cantidad,
-          }).costoTotal
-        );
-      }, 0n);
+    const totales = new Map<string, bigint>();
+    for (const pa of r.propuestas.flatMap((p) => p.partidas)) {
+      if (!pa.costo) throw new Error('Sin costo');
+      const { costoTotal } = costoPartida({
+        costoUnitario: decimal(pa.costo.costo_unitario, 2),
+        tipoCambio: '1',
+        cantidad: pa.cantidad,
+      });
+      totales.set(pa.costo.moneda, (totales.get(pa.costo.moneda) ?? 0n) + costoTotal);
+    }
+    return textoPorMoneda(totales);
   } catch {
     return null;
   }
@@ -165,9 +167,7 @@ function Fila({ r, pendiente }: { r: RevisionBandeja; pendiente?: boolean }) {
         </span>
         {pendiente ? (
           <span className="text-right">
-            <span className="tabular block text-sm font-bold">
-              {costo !== null ? formatearMXN(costo) : '—'}
-            </span>
+            <span className="tabular block text-sm font-bold">{costo ?? '—'}</span>
             <span className="text-xs text-texto-suave">costo sin IVA</span>
           </span>
         ) : (

@@ -42,6 +42,13 @@ import { TablaPartidas } from './TablaPartidas';
  */
 export type Paso = 1 | 2 | 3 | 4;
 
+const fechaRetiro = new Intl.DateTimeFormat('es-MX', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  hourCycle: 'h23',
+  timeZone: 'America/Mexico_City',
+});
+
 export function EditorCotizacion({
   cotizacion,
   revision,
@@ -98,6 +105,8 @@ export function EditorCotizacion({
     | null
   >(null);
   const [guardando, iniciar] = useTransition();
+  /** Tras el aviso de un adicional, la partida se abre con el foco en su descripción. */
+  const [enfocarDescripcionAbierta, setEnfocarDescripcionAbierta] = useState(false);
 
   // Quien autoriza ve la corrida en cuanto la revisión se envía (y después, en sólo lectura).
   const verCorrida =
@@ -233,6 +242,23 @@ export function EditorCotizacion({
       <div className="mb-5">
         <PasosWizard actual={paso} disponibles={[1, 2, 3, 4]} alElegir={(p) => irA(p as Paso)} />
       </div>
+
+      {/* Retirada para corregir por quien autoriza (0027): el motivo queda a la vista hasta volver a enviarla. */}
+      {revision.estado === 'borrador' && revision.motivo_retiro && (paso === 1 || paso === 3) && (
+        <div
+          role="note"
+          className="mb-4 flex items-start gap-3 rounded-md border border-aviso/40 bg-aviso-suave px-4 py-3 text-[13px] text-aviso"
+        >
+          <Icon name="campana" size={18} className="mt-px shrink-0" />
+          <p>
+            <strong>
+              {revision.retirador?.nombre ?? 'Quien autoriza'} la retiró para corregir
+              {revision.retirada_en ? ` el ${fechaRetiro.format(new Date(revision.retirada_en))}` : ''}:
+            </strong>{' '}
+            «{revision.motivo_retiro}». Corrige y vuelve a enviarla a autorización.
+          </p>
+        </div>
+      )}
 
       {!editable && paso === 1 && (
         <p className="mb-4 flex items-center gap-2 rounded-md border border-borde bg-superficie-2 px-4 py-3 text-[13px] text-texto-suave">
@@ -379,6 +405,7 @@ export function EditorCotizacion({
           puedeAutorizar={autorizacion.puedeAutorizar}
           puedeRetirar={puedeEditar}
           solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
+          capturista={cotizacion.revisiones.find((r) => r.id === revision.id)?.autor?.nombre ?? null}
           estadoEntrega={cotizacion.oportunidad?.estado_entrega ?? null}
           ciudadEntrega={cotizacion.oportunidad?.ciudad_entrega ?? ''}
         />
@@ -490,6 +517,16 @@ export function EditorCotizacion({
 
       {propuesta && abierta && (abierta.clave === null || filaAbierta) && (
         <VentanaPartida
+          key={`${abierta.tipo}-${abierta.clave ?? 'nueva'}`}
+          enfocarAlAbrir={enfocarDescripcionAbierta}
+          onIrADescripcion={
+            abierta.tipo === 'adicional'
+              ? () => {
+                  setAbierta({ tipo: 'partida', clave: abierta.padre });
+                  setEnfocarDescripcionAbierta(true);
+                }
+              : undefined
+          }
           fila={filaAbierta ?? null}
           modo={abierta.tipo}
           numero={
@@ -503,8 +540,12 @@ export function EditorCotizacion({
           destinos={lineas.map((f) => ({ clave: f.clave, descripcion: f.descripcion }))}
           catalogos={catalogos}
           soloLectura={!editable}
-          onCerrar={() => setAbierta(null)}
+          onCerrar={() => {
+            setAbierta(null);
+            setEnfocarDescripcionAbierta(false);
+          }}
           onGuardar={(fila, otra) => {
+            setEnfocarDescripcionAbierta(false);
             if (abierta.tipo === 'adicional') {
               actualizarPropuesta(propuesta.clave, {
                 partidas: propuesta.partidas.map((p) =>

@@ -7,7 +7,14 @@ import { alClicLibre } from '@/components/tareas/clicLibre';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { mover } from '@/lib/reordenar';
 import { ChipPresentacion, PrecioAnterior } from './FormularioPartida';
-import { costoDeFila, erroresDeFila, nombreCatalogo, type Catalogos, type FilaEditable } from './modelo';
+import {
+  costoDeFila,
+  erroresDeFila,
+  formatearCosto,
+  nombreCatalogo,
+  type Catalogos,
+  type FilaEditable,
+} from './modelo';
 
 const fechaCorta = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const COLUMNAS = 'grid-cols-[32px_28px_minmax(0,1fr)_96px_180px_150px_130px_96px]';
@@ -277,7 +284,6 @@ function Fila({
   const costo = costoDeFila(f);
   const errores = erroresDeFila(f);
   const unidad = catalogos.unidades.find((u) => u.id === f.unidad_id);
-  const marca = nombreCatalogo(catalogos.marcas, f.marca_id);
   const mayorista = nombreCatalogo(catalogos.mayoristas, f.mayorista_id);
   return (
     <div
@@ -293,7 +299,7 @@ function Fila({
         <DescripcionCompacta f={f} adicional={adicional} />
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-texto-suave">
           {f.sku && <span className="font-mono">{f.sku}</span>}
-          {marca && <span className="font-semibold">{marca}</span>}
+          {f.marca && <span className="font-semibold">{f.marca}</span>}
           {f.entrega && (
             <span className="inline-flex items-center gap-1">
               <Icon name="reloj" size={11} />
@@ -318,7 +324,6 @@ function Fila({
         <div className="truncate">{mayorista || <span className="text-texto-suave">—</span>}</div>
         <div className="text-[11px] text-texto-suave">
           {f.moneda}
-          {` · T.C. ${f.moneda === 'MXN' ? '1' : f.tipo_cambio || '?'}`}
           {f.vigencia && ` · al ${fechaCorta.format(new Date(f.vigencia))}`}
         </div>
       </div>
@@ -338,7 +343,7 @@ function Fila({
       </div>
 
       <div className="pt-1 text-right text-[13px] font-semibold tabular">
-        {costo ? formatearMXN(costo.costoTotal) : <span className="text-texto-suave">—</span>}
+        {costo ? formatearCosto(costo.total, costo.moneda) : <span className="text-texto-suave">—</span>}
       </div>
 
       <div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

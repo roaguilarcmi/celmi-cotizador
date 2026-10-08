@@ -5,8 +5,10 @@ import { usePathname } from 'next/navigation';
 import { cerrarSesion } from '@/lib/acciones-sesion';
 import { SECCIONES } from '@/lib/navegacion';
 import { usePreferencia } from '@/lib/preferencias';
+import type { Notificacion } from '@/lib/datos';
 import { BotonTema } from './BotonTema';
 import { Icon } from './Icon';
+import { Notificaciones } from './Notificaciones';
 import { Avatar } from './ui';
 
 /**
@@ -19,9 +21,11 @@ interface Props {
   demo: boolean;
   /** Número a mostrar junto a una sección (p. ej. tareas por vencer). */
   contadores?: Record<string, number>;
+  /** Avisos dentro de la app (0027). */
+  notificaciones?: Notificacion[];
 }
 
-export function MenuLateral({ usuario, permisos, demo, contadores = {} }: Props) {
+export function MenuLateral({ usuario, permisos, demo, contadores = {}, notificaciones = [] }: Props) {
   const ruta = usePathname();
   const activo = (slug: string) => (slug === '' ? ruta === '/' : ruta.startsWith(`/${slug}`));
   const [menu, guardarMenu] = usePreferencia('celmi-menu');
@@ -39,11 +43,14 @@ export function MenuLateral({ usuario, permisos, demo, contadores = {} }: Props)
       aria-label="Principal"
       className="flex shrink-0 flex-col gap-4 bg-nav px-4 py-4 lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:gap-7 lg:py-6 lg:transition-[width,padding] lg:duration-200 lg:compacto:w-19 lg:compacto:px-3"
     >
-      <div className="flex items-center justify-between gap-2 px-2.5 lg:compacto:justify-center lg:compacto:px-0">
+      <div className="flex items-center justify-between gap-2 px-2.5 lg:compacto:flex-col lg:compacto:justify-center lg:compacto:px-0">
         <Link href="/" aria-label="CELMI Solutions, inicio" className="lg:compacto:hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-celmi-blanco.svg" alt="CELMI Solutions" width={150} height={27} />
         </Link>
+        <div className="ml-auto flex items-center gap-1 lg:compacto:ml-0">
+          {!demo && <Notificaciones avisos={notificaciones} />}
+        </div>
         <div className="flex items-center gap-1 lg:hidden">
           <BotonTema />
           {!demo && (

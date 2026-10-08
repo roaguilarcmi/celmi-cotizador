@@ -78,14 +78,8 @@ export async function guardarPartidas(
       error: e ? `${e.message}${e.path.length ? ` (${e.path.join(' › ')})` : ''}` : 'Revisa los datos.',
     };
   }
-  // En pesos el tipo de cambio siempre es 1.
-  const propuestas = leido.data.map((p) => ({
-    ...p,
-    partidas: p.partidas.map((pa) => ({
-      ...pa,
-      costo: pa.costo && pa.costo.moneda === 'MXN' ? { ...pa.costo, tipo_cambio: '1' } : pa.costo,
-    })),
-  }));
+  // El T.C. ya no viaja con la partida: lo fija quien autoriza (0027).
+  const propuestas = leido.data;
   const supabase = await clienteServidor();
   const { error } = await supabase.rpc('guardar_partidas', { revision: revisionId, propuestas });
   if (error) return { error: mensajeDe(error, 'No se pudieron guardar las partidas.') };
@@ -116,11 +110,9 @@ export async function cambiarEstadoRevision(
 export async function guardarCondicionesCotizacion(
   revisionId: string,
   cotizacionId: string,
-  vigencia: string,
   condiciones: unknown,
 ): Promise<Resultado> {
   await obtenerSesion();
-  if (vigencia && Number.isNaN(Date.parse(vigencia))) return { error: 'La vigencia no es válida.' };
   const lista = Array.isArray(condiciones)
     ? condiciones.map((c: { contenido?: unknown }) => ({
         ...c,
@@ -129,14 +121,8 @@ export async function guardarCondicionesCotizacion(
     : condiciones;
   const leido = condicionesRevisionSchema.safeParse(lista);
   if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa las condiciones.' };
+  // La vigencia ya no se captura aquí: la fija quien autoriza en la corrida (0027).
   const supabase = await clienteServidor();
-  const { data, error } = await supabase
-    .from('revisiones')
-    .update({ vigencia_hasta: vigencia ? new Date(vigencia).toISOString() : null })
-    .eq('id', revisionId)
-    .select('id');
-  if (error) return { error: mensajeDe(error, 'No se pudo guardar la vigencia.') };
-  if (!data?.length) return { error: 'Esta revisión ya no se puede modificar.' };
   const r = await supabase.rpc('guardar_condiciones', { revision: revisionId, condiciones: leido.data });
   if (r.error) return { error: mensajeDe(r.error, 'No se pudieron guardar las condiciones.') };
   refrescar(cotizacionId);
@@ -403,6 +389,26 @@ export async function rechazarRevision(
   if (!data?.length) return { error: 'Esta revisión ya no espera autorización.' };
   refrescarBandeja(cotizacionId);
   return { ok: 'Rechazada. El ejecutivo verá el motivo.' };
+}
+
+/**
+ * Retirar para corregir (0027): quien autoriza regresa la revisión a borrador con un motivo; la base avisa a quien la
+ * capturó y al ejecutivo de la oportunidad.
+ */
+export async function retirarParaCorregir(
+  revisionId: string,
+  cotizacionId: string,
+  motivo: string,
+): Promise<Resultado> {
+  await exigirPermiso('utilidad.autorizar');
+  const texto = typeof motivo === 'string' ? motivo.trim() : '';
+  if (texto.length < 5) return { error: 'Explica qué hay que corregir.' };
+  if (texto.length > 2000) return { error: 'El motivo es demasiado largo.' };
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('retirar_revision', { revision: revisionId, motivo: texto });
+  if (error) return { error: mensajeDe(error, 'No se pudo retirar.') };
+  refrescarBandeja(cotizacionId);
+  return { ok: 'Retirada. Se avisó al capturista y al ejecutivo.' };
 }
 
 // ───────────── Revisiones (Fase 3D) ─────────────

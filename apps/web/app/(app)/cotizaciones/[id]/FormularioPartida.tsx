@@ -3,14 +3,34 @@
 import { aEscalado, ESCALA_DINERO, formatearMXN, mejoraDePrecio } from '@celmi/core';
 import { textoPlano, type ContenidoEnriquecido } from '@celmi/validation';
 import type { JSONContent } from '@tiptap/core';
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { Icon } from '@/components/Icon';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { textoComoDocumento } from '@/lib/documento';
-import { costoDeFila, erroresDeFila, filaVacia, type Catalogos, type FilaEditable } from './modelo';
+import {
+  costoDeFila,
+  erroresDeFila,
+  filaVacia,
+  formatearCosto,
+  type Catalogos,
+  type FilaEditable,
+} from './modelo';
+
+/** Segundos que el aviso de un adicional se queda antes de dejar continuar (2026-10-07). */
+const ESPERA_AVISO = 10;
+
+/** Lleva el foco al editor de la descripción de un formulario y lo resalta un momento. */
+export function enfocarDescripcion(contenedor: ParentNode | null | undefined) {
+  const editor = contenedor?.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!editor) return;
+  editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  editor.focus();
+  editor.classList.add('ring-4', 'ring-aviso');
+  window.setTimeout(() => editor.classList.remove('ring-4', 'ring-aviso'), 2500);
+}
 
 /** partida: de primer nivel · adicional: de una partida · cargo: se prorratea entre partidas (reglas 2026-10-05). */
 export type ModoPartida = 'partida' | 'adicional' | 'cargo';
@@ -49,6 +69,8 @@ export function VentanaPartida({
   destinos = [],
   catalogos,
   soloLectura,
+  enfocarAlAbrir,
+  onIrADescripcion,
   onGuardar,
   onCerrar,
 }: {
@@ -65,6 +87,10 @@ export function VentanaPartida({
   destinos?: { clave: string; descripcion: string }[];
   catalogos: Catalogos;
   soloLectura: boolean;
+  /** Al abrir, lleva el foco a la descripción (viene del aviso de un adicional). */
+  enfocarAlAbrir?: boolean;
+  /** Adicional: tras guardarlo, ir a la descripción de su partida. */
+  onIrADescripcion?: () => void;
   /** `otra`: guardar y abrir una nueva en blanco. */
   onGuardar: (fila: FilaEditable, otra: boolean) => void;
   onCerrar: () => void;
@@ -105,6 +131,8 @@ export function VentanaPartida({
         destinos={destinos}
         catalogos={catalogos}
         soloLectura={soloLectura}
+        enfocarAlAbrir={enfocarAlAbrir}
+        onIrADescripcion={onIrADescripcion}
         onGuardar={(f, otra) => {
           onGuardar(f, otra);
           if (otra) setVersion((v) => v + 1);
@@ -123,6 +151,8 @@ function Formulario({
   destinos,
   catalogos,
   soloLectura,
+  enfocarAlAbrir,
+  onIrADescripcion,
   onGuardar,
 }: {
   inicial: FilaEditable;
@@ -133,9 +163,20 @@ function Formulario({
   destinos: { clave: string; descripcion: string }[];
   catalogos: Catalogos;
   soloLectura: boolean;
+  enfocarAlAbrir?: boolean;
+  onIrADescripcion?: () => void;
   onGuardar: (fila: FilaEditable, otra: boolean) => void;
 }) {
   const ventana = useVentana();
+  const formulario = useRef<HTMLFormElement>(null);
+  /** Adicional listo para guardarse, en espera de que se lea el aviso. */
+  const [aviso, setAviso] = useState<{ lista: FilaEditable; otra: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!enfocarAlAbrir) return;
+    const t = window.setTimeout(() => enfocarDescripcion(formulario.current), 150);
+    return () => window.clearTimeout(t);
+  }, [enfocarAlAbrir]);
   const id = useId();
   const [f, setF] = useState(inicial);
   const [intento, setIntento] = useState(false);
@@ -172,6 +213,12 @@ function Formulario({
       setF(lista);
       return;
     }
+    // Un adicional cambia lo que se entrega: antes de guardarlo se recuerda ajustar la descripción de la partida.
+    const sinFormato = (x: FilaEditable) => JSON.stringify({ ...x, descripcion_contenido: null });
+    if (modo === 'adicional' && (nueva || sinFormato(lista) !== sinFormato(inicial))) {
+      setAviso({ lista, otra });
+      return;
+    }
     onGuardar(lista, otra);
   };
 
@@ -182,6 +229,7 @@ function Formulario({
 
   return (
     <form
+      ref={formulario}
       onSubmit={(e) => {
         // El envío del formulario de un adicional (ventana anidada, en un portal) también llega aquí por el árbol de
         // React: sólo se atiende el propio.
@@ -272,20 +320,16 @@ function Formulario({
                 />
               </Campo>
               <Campo etiqueta="Marca" id={`${id}-marca`}>
-                <select
+                <input
                   id={`${id}-marca`}
-                  value={f.marca_id ?? ''}
+                  value={f.marca}
+                  maxLength={80}
+                  placeholder="Dell, Lenovo…"
+                  autoComplete="off"
                   disabled={soloLectura}
-                  onChange={(e) => cambiar({ marca_id: e.target.value || null })}
+                  onChange={(e) => cambiar({ marca: e.target.value })}
                   className={control}
-                >
-                  <option value="">—</option>
-                  {catalogos.marcas.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.nombre}
-                    </option>
-                  ))}
-                </select>
+                />
               </Campo>
               <Campo etiqueta="Tiempo de entrega" id={`${id}-entrega`}>
                 <input
@@ -367,12 +411,7 @@ function Formulario({
               id={`${id}-moneda`}
               value={f.moneda}
               disabled={soloLectura}
-              onChange={(e) =>
-                cambiar({
-                  moneda: e.target.value,
-                  tipo_cambio: e.target.value === 'MXN' ? '1' : f.tipo_cambio === '1' ? '' : f.tipo_cambio,
-                })
-              }
+              onChange={(e) => cambiar({ moneda: e.target.value })}
               className={control}
             >
               {catalogos.monedas.map((m) => (
@@ -408,40 +447,17 @@ function Formulario({
             />
             {f.costo_anterior && <PrecioAnterior anterior={f.costo_anterior} actual={f.costo_unitario} />}
           </Campo>
-          {f.moneda === 'MXN' ? (
-            // Pesos: el T.C. es 1 y no se modifica (decisión 2026-10-06).
-            <Campo etiqueta="Tipo de cambio" id={`${id}-tc`}>
-              <span
-                id={`${id}-tc`}
-                title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
-                className={`${control} flex items-center justify-between bg-superficie-2 text-texto-suave tabular`}
-              >
-                <Icon name="candado" size={14} />1
-              </span>
-            </Campo>
-          ) : (
-            <Campo
-              etiqueta="Tipo de cambio (5 decimales)"
-              id={`${id}-tc`}
-              error={intento ? errores.tipo_cambio : undefined}
-            >
-              <input
-                id={`${id}-tc`}
-                inputMode="decimal"
-                value={f.tipo_cambio}
-                placeholder="0.00000"
-                disabled={soloLectura}
-                onChange={(e) => cambiar({ tipo_cambio: e.target.value.replace(/[^\d.]/g, '') })}
-                className={`${control} text-right tabular ${mal('tipo_cambio')}`}
-              />
-            </Campo>
-          )}
-          <div className="flex flex-col justify-end rounded-md bg-superficie-2 px-3.5 py-2">
-            <span className="text-xs font-semibold text-texto-suave">Costo total en MXN</span>
-            <span className="text-lg font-bold tabular">{costo ? formatearMXN(costo.costoTotal) : '—'}</span>
-            {costo && f.moneda !== 'MXN' && (
-              <span className="text-[11px] text-texto-suave tabular">
-                {formatearMXN(costo.costoUnitarioMXN)} c/u
+          <div className="flex flex-col justify-end rounded-md bg-superficie-2 px-3.5 py-2 sm:col-span-2">
+            <span className="text-xs font-semibold text-texto-suave">
+              Costo total{f.moneda === 'MXN' ? '' : ` en ${f.moneda}`}
+            </span>
+            <span className="text-lg font-bold tabular">
+              {costo ? formatearCosto(costo.total, costo.moneda) : '—'}
+            </span>
+            {f.moneda !== 'MXN' && (
+              // El T.C. lo fija quien autoriza, en la corrida de precios (2026-10-07).
+              <span className="text-[11px] text-texto-suave">
+                El tipo de cambio lo fija quien autoriza, en la corrida de precios.
               </span>
             )}
           </div>
@@ -528,7 +544,7 @@ function Formulario({
                       <ChipPresentacion presentacion={c.presentacion} />
                     </span>
                     <span className="text-[13px] font-semibold tabular">
-                      {cc ? formatearMXN(cc.costoTotal) : 'Sin costo'}
+                      {cc ? formatearCosto(cc.total, cc.moneda) : 'Sin costo'}
                     </span>
                     <button
                       type="button"
@@ -582,6 +598,22 @@ function Formulario({
         </div>
       )}
 
+      {aviso && (
+        <AvisoAdicional
+          puedeIr={Boolean(onIrADescripcion)}
+          onIr={() => {
+            onGuardar(aviso.lista, false);
+            setAviso(null);
+            onIrADescripcion?.();
+          }}
+          onContinuar={() => {
+            onGuardar(aviso.lista, aviso.otra);
+            setAviso(null);
+          }}
+          onVolver={() => setAviso(null)}
+        />
+      )}
+
       {(adicional === 'nuevo' || componenteAbierto) && (
         <VentanaPartida
           fila={componenteAbierto ?? null}
@@ -590,6 +622,7 @@ function Formulario({
           descripcionPadre={f.descripcion || 'esta partida'}
           catalogos={catalogos}
           soloLectura={soloLectura}
+          onIrADescripcion={() => window.setTimeout(() => enfocarDescripcion(formulario.current), 150)}
           onCerrar={() => setAdicional(null)}
           onGuardar={(c, otra) => {
             const existe = f.componentes.some((x) => x.clave === c.clave);
@@ -603,6 +636,74 @@ function Formulario({
         />
       )}
     </form>
+  );
+}
+
+/**
+ * Aviso antes de guardar un adicional (2026-10-07): recuerda ajustar la descripción de la partida. «Continuar» se
+ * habilita tras ESPERA_AVISO segundos; «Ir a editar descripción» guarda el adicional y lleva a la descripción.
+ */
+function AvisoAdicional({
+  puedeIr,
+  onIr,
+  onContinuar,
+  onVolver,
+}: {
+  puedeIr: boolean;
+  onIr: () => void;
+  onContinuar: () => void;
+  onVolver: () => void;
+}) {
+  const [restante, setRestante] = useState(ESPERA_AVISO);
+  useEffect(() => {
+    if (restante <= 0) return;
+    const t = window.setTimeout(() => setRestante((r) => r - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [restante]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0E1F]/40 p-4 backdrop-blur-sm">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="aviso-adicional-titulo"
+        aria-describedby="aviso-adicional-detalle"
+        className="animar-entrada w-full max-w-[460px] rounded-lg border border-borde bg-superficie p-5 sombra"
+      >
+        <div className="flex items-start gap-3">
+          <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-aviso-suave text-aviso">
+            <Icon name="campana" size={22} />
+          </span>
+          <div>
+            <h3 id="aviso-adicional-titulo" className="text-[16px] font-bold">
+              ¿Ya ajustaste la descripción de la partida?
+            </h3>
+            <p id="aviso-adicional-detalle" className="mt-1.5 text-[13px] leading-relaxed text-texto-suave">
+              Este adicional cambia lo que recibe el cliente (más memoria, instalación…). No olvides
+              actualizar la descripción de la partida para que incluya lo que implica el adicional.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col gap-2">
+          {puedeIr && (
+            <Boton variante="primario" icono="herramienta" autoFocus onClick={onIr}>
+              Ir a editar descripción
+            </Boton>
+          )}
+          <Boton disabled={restante > 0} onClick={onContinuar}>
+            {restante > 0 ? `Continuar sin editar (${restante} s)` : 'Continuar sin editar'}
+          </Boton>
+          <Boton variante="fantasma" icono="izquierda" onClick={onVolver}>
+            Volver al adicional
+          </Boton>
+        </div>
+        <div className="mt-3 h-1 overflow-hidden rounded-pill bg-superficie-2" aria-hidden="true">
+          <div
+            className="h-full rounded-pill bg-aviso transition-[width] duration-1000 ease-linear"
+            style={{ width: `${((ESPERA_AVISO - restante) / ESPERA_AVISO) * 100}%` }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

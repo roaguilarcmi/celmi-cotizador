@@ -344,7 +344,12 @@ export default async function PaginaRevisiones({
                         </td>
                       </tr>
                       {filas.map((f, i) => (
-                        <FilaCambio key={f.despues?.id ?? f.antes?.id ?? i} f={f} veUtilidad={veUtilidad} />
+                        <FilaCambio
+                          key={f.despues?.id ?? f.antes?.id ?? i}
+                          f={f}
+                          veUtilidad={veUtilidad}
+                          columnas={veUtilidad ? 6 : 5}
+                        />
                       ))}
                     </tbody>
                   );
@@ -360,7 +365,12 @@ export default async function PaginaRevisiones({
                       </td>
                     </tr>
                     {huerfanas.map((f, i) => (
-                      <FilaCambio key={f.antes?.id ?? i} f={f} veUtilidad={veUtilidad} />
+                      <FilaCambio
+                        key={f.antes?.id ?? i}
+                        f={f}
+                        veUtilidad={veUtilidad}
+                        columnas={veUtilidad ? 6 : 5}
+                      />
                     ))}
                   </tbody>
                 )}

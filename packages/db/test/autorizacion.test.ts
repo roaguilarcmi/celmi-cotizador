@@ -291,7 +291,7 @@ describe('esquema por cotización, anticipo y transaccionalidad (0024)', () => {
     const op = await crearOportunidad(db, 'jorge');
     const [m] = await filas<{ id: string }>(
       db,
-      `insert into public.mayoristas (nombre) values ('Arrendamayorista') returning id`,
+      `insert into public.mayoristas (nombre, trabaja_arrendamiento) values ('Arrendamayorista', true) returning id`,
     );
     await db.query(`update public.revisiones set mayorista_arrendamiento_id = $2 where id = $1`, [
       op.revision,

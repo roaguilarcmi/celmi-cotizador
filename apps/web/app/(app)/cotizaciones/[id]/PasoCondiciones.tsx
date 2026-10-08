@@ -1,10 +1,10 @@
 'use client';
 
-import { ATAJOS_VIGENCIA, esFinDeSemana, HORA_VIGENCIA, vigenciaSugerida } from '@celmi/core';
 import type { JSONContent } from '@tiptap/core';
 import { useState, useTransition, type FormEvent } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
+import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import type { CondicionCatalogo, CondicionRevision, RevisionDetalle } from '@/lib/datos';
@@ -19,24 +19,11 @@ interface Elegida {
   contenido: unknown;
 }
 
-const dos = (n: number) => String(n).padStart(2, '0');
-/** Valor para <input type="datetime-local"> en la hora local del navegador. */
-const aLocal = (iso: string | null) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}T${dos(d.getHours())}:${dos(d.getMinutes())}`;
-};
-
-/** Hoy en el calendario del navegador («AAAA-MM-DD»). */
-const hoy = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
-};
 const fechaLarga = new Intl.DateTimeFormat('es-MX', { dateStyle: 'full', timeStyle: 'short', hour12: false });
 
 /**
- * Paso «Condiciones comerciales» (decisión 2026-10-05): vigencia y condiciones elegidas del catálogo, ajustables sólo
- * para esta cotización. Donde una condición diga {vigencia} se muestra la fecha capturada.
+ * Paso «Condiciones comerciales» (decisión 2026-10-05): condiciones elegidas del catálogo, ajustables sólo para esta
+ * cotización. Donde una condición diga {vigencia} se muestra la vigencia, que fija quien autoriza en la corrida (0027).
  */
 export function PasoCondiciones({
   revision,
@@ -54,32 +41,20 @@ export function PasoCondiciones({
   const desdeServidor = () =>
     elegidasIniciales.map((c) => ({ clave: c.id, condicion_id: c.condicion_id, contenido: c.contenido }));
   const [elegidas, setElegidas] = useState<Elegida[]>(desdeServidor);
-  const [vigencia, setVigencia] = useState(aLocal(revision.vigencia_hasta));
-  const [base, setBase] = useState(() => JSON.stringify([aLocal(revision.vigencia_hasta), desdeServidor()]));
+  const [base, setBase] = useState(() => JSON.stringify(desdeServidor()));
   const [previas, setPrevias] = useState(elegidasIniciales);
   if (elegidasIniciales !== previas) {
     setPrevias(elegidasIniciales);
     const nuevas = desdeServidor();
     setElegidas(nuevas);
-    setBase(JSON.stringify([aLocal(revision.vigencia_hasta), nuevas]));
+    setBase(JSON.stringify(nuevas));
   }
   const [ajustando, setAjustando] = useState<string | 'propia' | null>(null);
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
 
-  // Vigencia en dos partes (2026-10-07): fecha y hora; la hora siempre se propone a las 14:00, nunca la actual.
-  const fecha = vigencia.slice(0, 10);
-  const hora = vigencia.slice(11, 16) || HORA_VIGENCIA;
-  const cambiarFecha = (v: string) => setVigencia(v ? `${v}T${hora}` : '');
-  const cambiarHora = (v: string) => setVigencia(fecha ? `${fecha}T${v || HORA_VIGENCIA}` : '');
-  let finDeSemana = false;
-  try {
-    finDeSemana = Boolean(fecha) && esFinDeSemana(fecha);
-  } catch {
-    finDeSemana = false;
-  }
-  const sucio = editable && JSON.stringify([vigencia, elegidas]) !== base;
-  const vigenciaIso = vigencia ? new Date(vigencia).toISOString() : null;
+  const sucio = editable && JSON.stringify(elegidas) !== base;
+  const vigenciaIso = revision.vigencia_hasta;
   const delCatalogo = (id: string) => catalogo.find((c) => c.id === id);
   const elegida = (id: string) => elegidas.some((e) => e.condicion_id === id);
 
@@ -95,11 +70,10 @@ export function PasoCondiciones({
       const r = await guardarCondicionesCotizacion(
         revision.id,
         cotizacionId,
-        vigenciaIso ?? '',
         elegidas.map((e) => ({ condicion_id: e.condicion_id, contenido: e.contenido })),
       );
       setMensaje(r.error ? { texto: r.error, error: true } : { texto: r.ok ?? '' });
-      if (!r.error) setBase(JSON.stringify([vigencia, elegidas]));
+      if (!r.error) setBase(JSON.stringify(elegidas));
     });
 
   const abierta = elegidas.find((e) => e.clave === ajustando);
@@ -115,61 +89,19 @@ export function PasoCondiciones({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 border-b border-borde bg-superficie-2/50 px-6 py-4">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold text-texto-suave">Vigencia de la cotización</span>
-          {editable && (
-            <div className="flex flex-wrap gap-2">
-              {ATAJOS_VIGENCIA.map((a) => {
-                const propuesta = vigenciaSugerida(hoy(), a.dias);
-                return (
-                  <Boton
-                    key={a.dias}
-                    tamano="chico"
-                    variante={fecha === propuesta && hora === HORA_VIGENCIA ? 'primario' : 'secundario'}
-                    onClick={() => setVigencia(`${propuesta}T${HORA_VIGENCIA}`)}
-                    title={`Vence el ${fechaLarga.format(new Date(`${propuesta}T${HORA_VIGENCIA}`))} h`}
-                  >
-                    {a.etiqueta}
-                  </Boton>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
-          Fecha
-          <input
-            type="date"
-            value={fecha}
-            disabled={!editable}
-            onChange={(e) => cambiarFecha(e.target.value)}
-            aria-invalid={finDeSemana}
-            className={`h-10 rounded-md border-2 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2 ${
-              finDeSemana ? 'border-peligro' : 'border-texto/20'
-            }`}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave">
-          Hora
-          <input
-            type="time"
-            value={hora}
-            disabled={!editable || !fecha}
-            onChange={(e) => cambiarHora(e.target.value)}
-            className="h-10 w-32 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento focus:ring-4 focus:ring-acento-suave disabled:bg-superficie-2"
-          />
-        </label>
-        <p
-          className={`pb-2.5 text-[13px] ${finDeSemana ? 'font-semibold text-peligro' : 'text-texto-suave'}`}
-        >
-          {finDeSemana
-            ? 'La vigencia no puede caer en sábado ni domingo.'
-            : vigencia
-              ? `Vence el ${fechaLarga.format(new Date(vigencia))} h`
-              : 'Sin vigencia definida.'}
-        </p>
-      </div>
+      {/* La vigencia la fija quien autoriza en la corrida de precios (2026-10-07). */}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-borde bg-superficie-2/50 px-6 py-3 text-[13px] text-texto-suave">
+        <Icon name="reloj" size={16} />
+        <span>
+          <strong className="text-texto">Vigencia:</strong>{' '}
+          {vigenciaIso
+            ? `${fechaLarga.format(new Date(vigenciaIso))} h`
+            : 'la fija quien autoriza, en la corrida de precios.'}
+        </span>
+        {vigenciaIso && (
+          <span>· La fija quien autoriza; aparece donde una condición diga {MARCADOR_VIGENCIA}.</span>
+        )}
+      </p>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* Catálogo */}
@@ -312,7 +244,7 @@ export function PasoCondiciones({
             variante="primario"
             tamano="chico"
             icono="guardado"
-            disabled={pendiente || !sucio || finDeSemana}
+            disabled={pendiente || !sucio}
             onClick={guardar}
           >
             {pendiente ? 'Guardando…' : 'Guardar condiciones'}

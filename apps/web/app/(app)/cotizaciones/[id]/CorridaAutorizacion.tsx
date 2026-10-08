@@ -3,7 +3,11 @@
 import {
   aEscalado,
   anticipoDe,
+  ATAJOS_VIGENCIA,
   calcularPartida,
+  esFinDeSemana,
+  HORA_VIGENCIA,
+  vigenciaSugerida,
   dividirRedondeando,
   ESCALA_PORCENTAJE,
   centavosADecimal,
@@ -41,7 +45,14 @@ import {
 } from '@/lib/corrida';
 import type { PartidaFila, RevisionDetalle } from '@/lib/datos';
 import { usePreferencia } from '@/lib/preferencias';
-import { autorizarRevision, cambiarEstadoRevision, guardarUtilidades, rechazarRevision } from '../acciones';
+import { aLocal, hoyLocal, textoVigencia } from '@/lib/vigencia';
+import {
+  autorizarRevision,
+  cambiarEstadoRevision,
+  guardarUtilidades,
+  rechazarRevision,
+  retirarParaCorregir,
+} from '../acciones';
 import { nombreCatalogo, type Catalogos } from './modelo';
 
 const pesos = (c: bigint) => formatearMXN(c);
@@ -99,21 +110,9 @@ function filasDe(partidas: PartidaFila[], numero: number): FilaCorrida[] {
   return filas;
 }
 
-/** T.C. inicial por moneda: el ya guardado o, si todas las partidas de esa moneda traen el mismo, ése. */
+/** T.C. inicial por moneda: el ya guardado (o el de la Rev anterior); si no hay, lo captura quien autoriza (0027). */
 function tiposCambioIniciales(revision: RevisionDetalle, guardados: Record<string, string>) {
-  return Object.fromEntries(
-    monedasExtranjeras(revision).map((m) => {
-      if (guardados[m]) return [m, guardados[m]];
-      const capturados = new Set(
-        revision.propuestas.flatMap((p) =>
-          p.partidas
-            .filter((pa) => pa.costo?.moneda === m)
-            .map((pa) => decimal(pa.costo?.tipo_cambio ?? 0, 5)),
-        ),
-      );
-      return [m, capturados.size === 1 ? ([...capturados][0] ?? '') : ''];
-    }),
-  );
+  return Object.fromEntries(monedasExtranjeras(revision).map((m) => [m, guardados[m] ?? '']));
 }
 
 /**
@@ -133,6 +132,7 @@ export function CorridaAutorizacion({
   puedeAutorizar,
   puedeRetirar,
   solicitante,
+  capturista,
   estadoEntrega,
   ciudadEntrega,
 }: {
@@ -146,6 +146,8 @@ export function CorridaAutorizacion({
   /** Quien preparó la cotización puede retirarla mientras espera. */
   puedeRetirar: boolean;
   solicitante: string | null;
+  /** Quien creó la revisión (recibe el aviso si se retira para corregir). */
+  capturista: string | null;
   /** Estado de entrega de la oportunidad (0024); fuera de la zona habitual se avisa. */
   estadoEntrega: string | null;
   /** Texto libre anterior a 0024, sólo como referencia si aún no hay estado. */
@@ -171,12 +173,48 @@ export function CorridaAutorizacion({
   const [ocultas, cambiarOcultas] = useColumnasOcultas();
   const [completaGuardada, guardarCompleta] = usePreferencia('celmi-corrida-completa');
   const completa = completaGuardada === '1';
-  const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | null>(null);
+  const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | 'retirar' | null>(null);
+  // Menos saturación (2026-10-07): los parámetros van en un panel flotante y los avisos se pliegan a un contador.
+  const [parametrosAbiertos, setParametrosAbiertos] = useState(false);
+  const [avisosAbiertos, setAvisosAbiertos] = useState(true);
+  const [devolver, setDevolver] = useState(false);
   /** Fila resaltada un momento al saltar a ella desde el aviso de revisión. */
   const [resaltada, setResaltada] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
   const area = useRef<HTMLDivElement>(null);
+  const menuDevolver = useRef<HTMLDivElement>(null);
+  const barraParametros = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!parametrosAbiertos) return;
+    const fuera = (e: MouseEvent) => {
+      if (!barraParametros.current?.contains(e.target as Node)) setParametrosAbiertos(false);
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setParametrosAbiertos(false);
+    };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('keydown', tecla);
+    return () => {
+      document.removeEventListener('mousedown', fuera);
+      document.removeEventListener('keydown', tecla);
+    };
+  }, [parametrosAbiertos]);
+  useEffect(() => {
+    if (!devolver) return;
+    const fuera = (e: MouseEvent) => {
+      if (!menuDevolver.current?.contains(e.target as Node)) setDevolver(false);
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDevolver(false);
+    };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('keydown', tecla);
+    return () => {
+      document.removeEventListener('mousedown', fuera);
+      document.removeEventListener('keydown', tecla);
+    };
+  }, [devolver]);
   const hoja = useRef<HTMLDivElement>(null);
 
   const todas = revision.propuestas.flatMap((p) => p.partidas);
@@ -194,11 +232,24 @@ export function CorridaAutorizacion({
   const [anticipo, setAnticipo] = useState(texto(revision.anticipo_pct));
   const [transaccion, setTransaccion] = useState(texto(revision.transaccion_pct));
   const [alcance, setAlcance] = useState<'todas' | 'diferentes' | null>(revision.transaccion_alcance);
+  // Vigencia de la cotización: la fija quien autoriza (0027); fecha y hora, 14:00 por omisión, nunca en fin de semana.
+  const [vigencia, setVigencia] = useState(aLocal(revision.vigencia_hasta));
+  const fechaVigencia = vigencia.slice(0, 10);
+  const horaVigencia = vigencia.slice(11, 16) || HORA_VIGENCIA;
+  let vigenciaEnFinDeSemana = false;
+  try {
+    vigenciaEnFinDeSemana = Boolean(fechaVigencia) && esFinDeSemana(fechaVigencia);
+  } catch {
+    vigenciaEnFinDeSemana = false;
+  }
+  const vigenciaIso = vigencia && !Number.isNaN(Date.parse(vigencia)) ? new Date(vigencia).toISOString() : '';
+  const vigenciaValida = Boolean(vigenciaIso) && !vigenciaEnFinDeSemana;
   const [datosBase] = useState(() =>
     JSON.stringify([
       texto(revision.anticipo_pct),
       texto(revision.transaccion_pct),
       revision.transaccion_alcance,
+      aLocal(revision.vigencia_hasta),
     ]),
   );
   const esAdquisicion = revision.esquema === 'adquisicion';
@@ -215,12 +266,13 @@ export function CorridaAutorizacion({
     anticipo_pct: esAdquisicion ? anticipo : '',
     transaccion_pct: revision.esquema === 'arrendamiento' ? transaccion : '',
     transaccion_alcance: Number(transaccion) > 0 ? alcance : null,
+    vigencia_hasta: vigenciaIso,
   };
   const sucio =
     editable &&
     (JSON.stringify([porPartida, tcs]) !== base ||
       general !== '' ||
-      JSON.stringify([anticipo, transaccion, alcance]) !== datosBase);
+      JSON.stringify([anticipo, transaccion, alcance, vigencia]) !== datosBase);
 
   // Un solo scroll: la hoja ocupa exactamente el alto que queda en la ventana (en pantallas grandes); en celular la
   // página crece y es la página la que se desplaza.
@@ -261,7 +313,14 @@ export function CorridaAutorizacion({
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && completa && !document.querySelector('dialog[open]')) guardarCompleta(null);
+      if (
+        e.key === 'Escape' &&
+        completa &&
+        !devolver &&
+        !parametrosAbiertos &&
+        !document.querySelector('dialog[open]')
+      )
+        guardarCompleta(null);
     };
     const salir = (e: BeforeUnloadEvent) => {
       if (sucio) e.preventDefault();
@@ -272,7 +331,7 @@ export function CorridaAutorizacion({
       window.removeEventListener('keydown', tecla);
       window.removeEventListener('beforeunload', salir);
     };
-  }, [completa, sucio, guardarCompleta]);
+  }, [completa, sucio, guardarCompleta, devolver, parametrosAbiertos]);
 
   // Costo (no depende de la utilidad) y resultado de cada partida por separado: un dato inválido sólo marca su fila.
   let entrada: ReturnType<typeof entradaCorrida> | null = null;
@@ -454,13 +513,26 @@ export function CorridaAutorizacion({
     return { monto, porcentaje: pct(monto, costoProp) };
   };
 
-  const resultado = (r: { error?: string; ok?: string }) => {
+  /**
+   * `cierra`: la decisión termina la revisión en esta pantalla (autorizar, rechazar, retirar). Se sale de pantalla
+   * completa: la revisión pasa a sólo lectura y la capa a pantalla completa se quedaba trabada (2026-10-07).
+   */
+  const resultado = (r: { error?: string; ok?: string }, cierra = false) => {
     setMensaje(r.error ? { texto: r.error, error: true } : { texto: r.ok ?? '' });
     if (!r.error) {
       setGeneral('');
       setDialogo(null);
+      setDevolver(false);
+      if (cierra) guardarCompleta(null);
     }
   };
+
+  // El aviso de éxito se va solo; los errores se quedan hasta cerrarlos.
+  useEffect(() => {
+    if (!mensaje || mensaje.error) return;
+    const t = window.setTimeout(() => setMensaje(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [mensaje]);
 
   const guardarAvance = () =>
     iniciar(async () =>
@@ -474,6 +546,7 @@ export function CorridaAutorizacion({
             anticipo_pct: anticipoValido ? datosAutorizacion.anticipo_pct : '',
             transaccion_pct: transaccionValida ? datosAutorizacion.transaccion_pct : '',
             transaccion_alcance: transaccionValida ? datosAutorizacion.transaccion_alcance : null,
+            vigencia_hasta: vigenciaValida ? vigenciaIso : '',
           },
         ),
       ),
@@ -484,7 +557,10 @@ export function CorridaAutorizacion({
     if (e.target !== e.currentTarget) return;
     const nota = String(new FormData(e.currentTarget).get('nota') ?? '');
     iniciar(async () =>
-      resultado(await autorizarRevision(revision.id, cotizacionId, efectivas, tcs, nota, datosAutorizacion)),
+      resultado(
+        await autorizarRevision(revision.id, cotizacionId, efectivas, tcs, nota, datosAutorizacion),
+        true,
+      ),
     );
   };
 
@@ -492,7 +568,14 @@ export function CorridaAutorizacion({
     e.preventDefault();
     if (e.target !== e.currentTarget) return;
     const motivo = String(new FormData(e.currentTarget).get('motivo') ?? '');
-    iniciar(async () => resultado(await rechazarRevision(revision.id, cotizacionId, motivo)));
+    iniciar(async () => resultado(await rechazarRevision(revision.id, cotizacionId, motivo), true));
+  };
+
+  const retirar = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (e.target !== e.currentTarget) return;
+    const motivo = String(new FormData(e.currentTarget).get('motivo') ?? '');
+    iniciar(async () => resultado(await retirarParaCorregir(revision.id, cotizacionId, motivo), true));
   };
 
   const celda = (col: Columna, f: FilaCorrida): ReactNode => {
@@ -503,7 +586,7 @@ export function CorridaAutorizacion({
       c === undefined ? <span className="text-texto-suave">—</span> : pesos(c);
     switch (col.id) {
       case 'marca':
-        return nombreCatalogo(catalogos.marcas, p.marca_id) || '—';
+        return p.marca || '—';
       case 'mayorista':
         return nombreCatalogo(catalogos.mayoristas, p.costo?.mayorista_id ?? null) || '—';
       case 'modelo':
@@ -663,10 +746,82 @@ export function CorridaAutorizacion({
       <Pill tono="aviso">Pendiente de autorización</Pill>
     );
 
+  // Avisos para quien autoriza en una sola franja plegable (antes eran tres bandas; 2026-10-07).
+  const mayoristaArrendamiento =
+    catalogos.mayoristas.find((m) => m.id === revision.mayorista_arrendamiento_id)?.nombre ??
+    'el mayorista del arrendamiento';
+  const avisos: {
+    id: string;
+    tono: 'peligro' | 'aviso';
+    titulo: string;
+    detalle: string;
+    filas?: { id: string; ref: string; descripcion: string; tipo?: FilaCorrida['tipo'] }[];
+  }[] = [];
+  if (fueraDeZona(estadoEntrega))
+    avisos.push({
+      id: 'zona',
+      tono: 'peligro',
+      titulo: estadoEntrega ? `Entrega en ${estadoEntrega}` : 'Sin estado de entrega',
+      detalle: estadoEntrega
+        ? `Fuera de la zona habitual (${ZONA_ENTREGA.join(', ')}): considera fletes, viáticos o costos adicionales.`
+        : `${ciudadEntrega ? `Dato anterior: «${ciudadEntrega}». ` : ''}Revisa si la entrega es fuera de ${ZONA_ENTREGA.join(', ')}.`,
+    });
+  if (diferentes.length > 0)
+    avisos.push({
+      id: 'proveedor',
+      tono: 'aviso',
+      titulo: `Otro proveedor que ${mayoristaArrendamiento}`,
+      detalle: `El arrendamiento es con ${mayoristaArrendamiento}; ${diferentes.length} ${diferentes.length === 1 ? 'partida es' : 'partidas son'} de otro proveedor. Considera el % de transaccionalidad.`,
+      filas: diferentes.map((pa) => ({
+        id: pa.id,
+        ref: refDe.get(pa.id) ?? pa.sku,
+        descripcion: pa.descripcion,
+      })),
+    });
+  if (especiales.length > 0)
+    avisos.push({
+      id: 'especiales',
+      tono: 'aviso',
+      titulo: 'Revisa a detalle',
+      detalle: `Esta cotización tiene ${resumenEspeciales}.`,
+      filas: especiales.map((f) => ({ id: f.p.id, ref: f.ref, descripcion: f.p.descripcion, tipo: f.tipo })),
+    });
+
+  // Resumen de los parámetros cuando su panel está plegado (lo que falta, en rojo).
+  const resumenParametros: { texto: string; falta?: boolean }[] = [
+    {
+      texto: vigenciaValida ? `Vigencia ${textoVigencia(vigenciaIso)}` : 'Falta la vigencia',
+      falta: !vigenciaValida,
+    },
+    ...monedas.map((m) =>
+      tipoCambioSchema.safeParse(tcs[m] ?? '').success
+        ? { texto: `T.C. ${m} ${tcs[m]}` }
+        : { texto: `Falta el T.C. ${m}`, falta: true },
+    ),
+    ...(esAdquisicion
+      ? [
+          anticipoValido && anticipo
+            ? { texto: `Anticipo ${anticipo} %` }
+            : { texto: 'Falta el anticipo', falta: true },
+        ]
+      : []),
+    ...(conTransaccion && Number(transaccion) > 0
+      ? [
+          {
+            texto: `Transaccionalidad ${transaccion} % · ${alcance === 'todas' ? 'todas' : alcance === 'diferentes' ? 'otro proveedor' : '¿a cuáles?'}`,
+            falta: falsaAlcance,
+          },
+        ]
+      : []),
+  ];
+
+  const faltanParametros = resumenParametros.some((x) => x.falta);
+  const atajos = ATAJOS_VIGENCIA.map((a) => ({ ...a, fecha: vigenciaSugerida(hoyLocal(), a.dias) }));
+
   const contenido = (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-borde bg-superficie">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-borde bg-superficie">
       {/* Barra 1: estado, cifras clave y decisión. */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-borde px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-borde px-4 py-2.5">
         <div className="mr-auto min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
@@ -677,7 +832,7 @@ export function CorridaAutorizacion({
               <>
                 <strong className="text-texto">{solicitante ?? 'El ejecutivo'}</strong> solicitó autorización
                 {revision.enviada_en ? ` el ${fechaHora.format(new Date(revision.enviada_en))}` : ''}
-                {puedeRetirar && (
+                {puedeRetirar && !puedeAutorizar && (
                   <>
                     {' · '}
                     <button
@@ -685,7 +840,7 @@ export function CorridaAutorizacion({
                       disabled={pendiente}
                       onClick={() =>
                         iniciar(async () =>
-                          resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador')),
+                          resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador'), true),
                         )
                       }
                       className="cursor-pointer font-semibold text-acento-texto hover:underline"
@@ -702,6 +857,7 @@ export function CorridaAutorizacion({
                 {revision.autorizada_en
                   ? `Autorizada el ${fechaHora.format(new Date(revision.autorizada_en))}`
                   : ''}
+                {revision.vigencia_hasta ? ` · Vigencia ${textoVigencia(revision.vigencia_hasta)}` : ''}
                 {revision.comentario_autorizacion ? ` · Nota: «${revision.comentario_autorizacion}»` : ''}
               </>
             )}
@@ -733,27 +889,83 @@ export function CorridaAutorizacion({
             <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
               Guardar avance
             </Boton>
-            <Boton
-              tamano="chico"
-              icono="cerrar"
-              variante="peligro"
-              disabled={pendiente}
-              onClick={() => setDialogo('rechazar')}
-            >
-              Rechazar
-            </Boton>
+            {/* Retirar y rechazar en un solo menú: menos botones a la vista (2026-10-07). */}
+            <div ref={menuDevolver} className="relative">
+              <Boton
+                tamano="chico"
+                variante="peligro"
+                icono="izquierda"
+                iconoFinal="abajo"
+                disabled={pendiente}
+                aria-expanded={devolver}
+                aria-haspopup="menu"
+                onClick={() => setDevolver((x) => !x)}
+              >
+                Devolver
+              </Boton>
+              {devolver && (
+                <div
+                  role="menu"
+                  className="animar-entrada absolute top-full right-0 z-40 mt-1.5 w-80 rounded-lg border border-borde bg-superficie p-1.5 sombra"
+                >
+                  {(
+                    [
+                      {
+                        id: 'retirar',
+                        titulo: 'Retirar para corregir',
+                        detalle: `Regresa a borrador. Se avisa a ${[capturista, solicitante].filter(Boolean).join(' y ') || 'quien la preparó'}.`,
+                        icono: 'izquierda',
+                      },
+                      {
+                        id: 'rechazar',
+                        titulo: 'Rechazar',
+                        detalle: 'Queda rechazada con el motivo que escribas.',
+                        icono: 'cerrar',
+                      },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDevolver(false);
+                        setDialogo(o.id);
+                      }}
+                      className="flex w-full cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-superficie-2"
+                    >
+                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-peligro-suave text-peligro">
+                        <Icon name={o.icono} size={14} />
+                      </span>
+                      <span>
+                        <span className="block text-[13px] font-semibold">{o.titulo}</span>
+                        <span className="block text-xs text-texto-suave">{o.detalle}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Boton
               tamano="chico"
               icono="candado"
               variante="primario"
               disabled={
-                pendiente || !validas || !tcsValidos || !anticipoValido || !transaccionValida || falsaAlcance
+                pendiente ||
+                !validas ||
+                !tcsValidos ||
+                !anticipoValido ||
+                !transaccionValida ||
+                falsaAlcance ||
+                !vigenciaValida
               }
               onClick={() => setDialogo('autorizar')}
               title={
-                validas && tcsValidos
-                  ? undefined
-                  : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
+                !vigenciaValida
+                  ? 'Define la vigencia de la cotización'
+                  : validas && tcsValidos
+                    ? undefined
+                    : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
               }
             >
               Autorizar
@@ -762,141 +974,68 @@ export function CorridaAutorizacion({
         )}
       </div>
 
-      {/* Barra 2: parámetros de la autorización. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-borde bg-superficie-2/60 px-4 py-2.5">
-        <span
-          title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
-          className="inline-flex h-10 items-center gap-1.5 rounded-md border border-borde bg-superficie px-3 text-xs font-semibold text-texto-suave"
+      {/*
+        Barra 2, siempre en un renglón (2026-10-07): el resumen de los parámetros (lo que falta, en rojo) abre un
+        panel flotante sobre la hoja para capturarlos; así la hoja no pierde alto.
+      */}
+      <div
+        ref={barraParametros}
+        className="relative flex items-center gap-2 border-b border-borde bg-superficie-2/60 px-3 py-1.5"
+      >
+        <button
+          type="button"
+          onClick={() => setParametrosAbiertos((x) => !x)}
+          aria-expanded={parametrosAbiertos}
+          aria-controls="panel-parametros"
+          className={`inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-bold transition-colors ${
+            parametrosAbiertos
+              ? 'border-acento bg-acento-suave text-acento-texto'
+              : faltanParametros && editable
+                ? 'border-peligro/40 bg-peligro-suave text-peligro'
+                : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+          }`}
         >
-          <Icon name="candado" size={12} />
-          T.C. MXN <strong className="text-texto">1</strong>
-        </span>
-        {monedas.map((m) => {
-          const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
-          return (
-            <label
-              key={m}
-              className="flex items-center gap-2 rounded-md border-2 border-aviso/50 bg-aviso-suave py-1 pr-1 pl-2.5"
+          <Icon name="herramienta" size={14} />
+          Parámetros
+          <Icon name={parametrosAbiertos ? 'arriba' : 'abajo'} size={12} strokeWidth={2.6} />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+          {resumenParametros.map((x) => (
+            <button
+              key={x.texto}
+              type="button"
+              onClick={() => setParametrosAbiertos(true)}
+              title={x.texto}
+              className={`inline-flex h-7 shrink-0 cursor-pointer items-center rounded-pill border px-2.5 text-xs font-semibold whitespace-nowrap ${
+                x.falta
+                  ? 'border-peligro/40 bg-peligro-suave text-peligro'
+                  : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+              }`}
             >
-              <span className="text-xs leading-tight font-bold text-aviso">
-                T.C. {m}
-                <span className="block text-[10px] font-semibold opacity-80">5 decimales</span>
-              </span>
-              <input
-                value={tcs[m] ?? ''}
-                disabled={!editable}
-                inputMode="decimal"
-                placeholder="0.00000"
-                aria-invalid={!valido}
-                onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
-                className={`tabular h-9 w-28 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-aviso disabled:opacity-80 ${
-                  valido ? 'border-aviso/40' : 'border-peligro'
-                }`}
-              />
-            </label>
-          );
-        })}
-        {editable && (
-          <div className="flex items-center gap-2 rounded-md border-2 border-exito/40 bg-exito-suave py-1 pr-1 pl-2.5">
-            <label htmlFor="utilidad-general" className="text-xs leading-tight font-bold text-exito">
-              Utilidad general
-              <span className="block text-[10px] font-semibold opacity-80">% sobre el costo</span>
-            </label>
-            <input
-              id="utilidad-general"
-              value={general}
-              onChange={(e) => setGeneral(e.target.value.trim())}
-              inputMode="decimal"
-              placeholder="13.5"
-              aria-invalid={!generalValida}
-              className={`tabular h-9 w-20 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-exito ${
-                generalValida ? 'border-exito/40' : 'border-peligro'
-              }`}
-            />
-            <Boton
-              tamano="chico"
-              variante="primario"
-              onClick={() => setPorPartida({})}
-              disabled={!general || !generalValida}
+              {x.texto}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {avisos.length > 0 && !avisosAbiertos && (
+            <button
+              type="button"
+              onClick={() => setAvisosAbiertos(true)}
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-pill bg-aviso-suave px-3 text-xs font-bold text-aviso hover:brightness-95"
             >
-              Aplicar a todas
-            </Boton>
-          </div>
-        )}
-        {esAdquisicion && (
-          <label className="flex items-center gap-2 rounded-md border-2 border-info/40 bg-info-suave py-1 pr-1 pl-2.5">
-            <span className="text-xs leading-tight font-bold text-info">
-              Anticipo
-              <span className="block text-[10px] font-semibold opacity-80">% del total con IVA</span>
-            </span>
-            <input
-              value={anticipo}
-              disabled={!editable}
-              inputMode="decimal"
-              placeholder="50"
-              aria-invalid={!anticipoValido}
-              onChange={(e) => setAnticipo(e.target.value.replace(/[^\d.]/g, ''))}
-              className={`tabular h-9 w-20 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-info disabled:opacity-80 ${
-                anticipoValido ? 'border-info/40' : 'border-peligro'
-              }`}
-            />
-          </label>
-        )}
-        {conTransaccion && (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border-2 border-aviso/50 bg-aviso-suave py-1 pr-1 pl-2.5">
-            <label htmlFor="transaccionalidad" className="text-xs leading-tight font-bold text-aviso">
-              Transaccionalidad
-              <span className="block text-[10px] font-semibold opacity-80">% que se suma a la utilidad</span>
-            </label>
-            <input
-              id="transaccionalidad"
-              value={transaccion}
-              disabled={!editable}
-              inputMode="decimal"
-              placeholder="3"
-              aria-invalid={!transaccionValida}
-              onChange={(e) => setTransaccion(e.target.value.replace(/[^\d.]/g, ''))}
-              className={`tabular h-9 w-16 rounded-sm border bg-superficie px-2 text-center text-sm font-bold text-texto outline-none focus:ring-2 focus:ring-aviso disabled:opacity-80 ${
-                transaccionValida ? 'border-aviso/40' : 'border-peligro'
-              }`}
-            />
-            {Number(transaccion) > 0 && (
-              <div role="radiogroup" aria-label="¿A qué partidas aplica?" className="flex items-center gap-1">
-                <span className="px-1 text-[11px] font-semibold text-aviso">¿A cuáles?</span>
-                {(
-                  [
-                    ['todas', 'Todas las partidas'],
-                    ['diferentes', `Sólo otro proveedor (${diferentes.length})`],
-                  ] as const
-                ).map(([id, nombre]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={alcance === id}
-                    disabled={!editable}
-                    onClick={() => setAlcance(id)}
-                    className={`min-h-9 cursor-pointer rounded-sm border px-2.5 text-xs font-semibold ${
-                      alcance === id
-                        ? 'border-aviso bg-aviso text-white'
-                        : falsaAlcance
-                          ? 'border-peligro bg-superficie text-peligro'
-                          : 'border-aviso/40 bg-superficie text-aviso'
-                    }`}
-                  >
-                    {nombre}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        <p className="text-[11px] leading-tight text-texto-suave">
-          Precio = costo × T.C. + utilidad (% sobre el costo),
-          <br />
-          unitario redondeado a 2 decimales.
-        </p>
-        <div className="ml-auto flex items-center gap-2">
+              <Icon name="campana" size={13} />
+              {avisos.length} {avisos.length === 1 ? 'aviso' : 'avisos'}
+            </button>
+          )}
+          <span
+            tabIndex={0}
+            title="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
+            aria-label="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
+            className="inline-flex size-8 cursor-help items-center justify-center rounded-full text-[13px] font-bold text-texto-suave italic hover:bg-superficie hover:text-texto"
+          >
+            ƒ
+          </span>
           <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
           <Boton
             tamano="chico"
@@ -908,79 +1047,297 @@ export function CorridaAutorizacion({
             {completa ? 'Salir de pantalla completa' : 'Pantalla completa'}
           </Boton>
         </div>
+
+        {parametrosAbiertos && (
+          <div
+            id="panel-parametros"
+            role="dialog"
+            aria-label="Parámetros de la autorización"
+            className="animar-entrada absolute top-full left-3 z-30 mt-1.5 w-[min(820px,calc(100%-1.5rem))] rounded-lg border border-borde bg-superficie p-4 sombra"
+          >
+            <div className="mb-3 flex items-center gap-3">
+              <span className="mr-auto text-sm font-bold">Parámetros de la autorización</span>
+              <Boton
+                tamano="chico"
+                variante={faltanParametros ? 'fantasma' : 'primario'}
+                icono={faltanParametros ? 'cerrar' : 'palomita'}
+                onClick={() => setParametrosAbiertos(false)}
+              >
+                {faltanParametros ? 'Cerrar' : 'Listo'}
+              </Boton>
+            </div>
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              <CampoParametro
+                punto="bg-acento"
+                etiqueta="Vigencia de la cotización"
+                ayuda={
+                  vigenciaEnFinDeSemana
+                    ? 'No puede caer en sábado ni domingo.'
+                    : vigenciaValida
+                      ? `Vence el ${textoVigencia(vigenciaIso)}`
+                      : '14:00 h por omisión; nunca en sábado ni domingo.'
+                }
+                error={vigenciaEnFinDeSemana}
+                ancho
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    aria-label="Fecha de vigencia"
+                    value={fechaVigencia}
+                    disabled={!editable}
+                    autoComplete="off"
+                    aria-invalid={!vigenciaValida}
+                    onChange={(e) => setVigencia(e.target.value ? `${e.target.value}T${horaVigencia}` : '')}
+                    className={`${controlParametro} w-[150px] ${vigenciaValida ? '' : 'border-peligro'}`}
+                  />
+                  {/* Hora en 24 h (el control nativo la mostraba como «02:00» sin a. m./p. m.). */}
+                  <select
+                    aria-label="Hora de vigencia"
+                    value={horaVigencia}
+                    disabled={!editable || !fechaVigencia}
+                    onChange={(e) => setVigencia(fechaVigencia ? `${fechaVigencia}T${e.target.value}` : '')}
+                    className={`${controlParametro} tabular w-[92px] cursor-pointer`}
+                  >
+                    {(HORAS.includes(horaVigencia) ? HORAS : [...HORAS, horaVigencia].sort()).map((h) => (
+                      <option key={h} value={h}>
+                        {h} h
+                      </option>
+                    ))}
+                  </select>
+                  {editable && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {atajos.map((a) => (
+                        <button
+                          key={a.dias}
+                          type="button"
+                          onClick={() => setVigencia(`${a.fecha}T${HORA_VIGENCIA}`)}
+                          aria-pressed={fechaVigencia === a.fecha}
+                          className={`h-9 cursor-pointer rounded-pill border px-3 text-xs font-semibold transition-colors ${
+                            fechaVigencia === a.fecha
+                              ? 'border-acento bg-acento-suave text-acento-texto'
+                              : 'border-borde text-texto hover:bg-superficie-2'
+                          }`}
+                        >
+                          {a.etiqueta}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CampoParametro>
+
+              <CampoParametro
+                punto="bg-aviso"
+                etiqueta="Tipo de cambio"
+                ayuda="5 decimales; en pesos es 1 y no cambia."
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-borde bg-superficie-2 px-2.5 text-xs font-semibold text-texto-suave"
+                  >
+                    <Icon name="candado" size={12} />
+                    MXN <strong className="text-texto">1</strong>
+                  </span>
+                  {monedas.map((m) => {
+                    const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
+                    return (
+                      <label
+                        key={m}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-aviso"
+                      >
+                        {m}
+                        <input
+                          value={tcs[m] ?? ''}
+                          disabled={!editable}
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder="0.00000"
+                          aria-label={`Tipo de cambio ${m}`}
+                          aria-invalid={!valido}
+                          onChange={(e) =>
+                            setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))
+                          }
+                          className={`${controlParametro} tabular w-28 text-center font-bold ${valido ? '' : 'border-peligro'}`}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </CampoParametro>
+
+              {editable && (
+                <CampoParametro
+                  punto="bg-exito"
+                  etiqueta="Utilidad general"
+                  ayuda="% sobre el costo; «Aplicar a todas» reemplaza la de cada partida."
+                >
+                  <div className="flex items-center gap-2">
+                    <CampoPorcentaje
+                      valor={general}
+                      onCambio={(v) => setGeneral(v.trim())}
+                      valido={generalValida}
+                      placeholder="13.5"
+                      etiqueta="Utilidad general"
+                      ancho="w-24"
+                    />
+                    <Boton
+                      tamano="chico"
+                      variante="exito"
+                      onClick={() => setPorPartida({})}
+                      disabled={!general || !generalValida}
+                    >
+                      Aplicar a todas
+                    </Boton>
+                  </div>
+                </CampoParametro>
+              )}
+
+              {esAdquisicion && (
+                <CampoParametro
+                  punto="bg-info"
+                  etiqueta="Anticipo"
+                  ayuda="% del total con IVA de cada propuesta."
+                >
+                  <CampoPorcentaje
+                    valor={anticipo}
+                    onCambio={(v) => setAnticipo(v.replace(/[^\d.]/g, ''))}
+                    valido={anticipoValido}
+                    placeholder="50"
+                    etiqueta="Anticipo"
+                    deshabilitado={!editable}
+                    ancho="w-24"
+                  />
+                </CampoParametro>
+              )}
+
+              {conTransaccion && (
+                <CampoParametro
+                  punto="bg-aviso"
+                  etiqueta="Transaccionalidad"
+                  ayuda="% que se suma a la utilidad."
+                  error={falsaAlcance}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CampoPorcentaje
+                      valor={transaccion}
+                      onCambio={(v) => setTransaccion(v.replace(/[^\d.]/g, ''))}
+                      valido={transaccionValida}
+                      placeholder="3"
+                      etiqueta="Transaccionalidad"
+                      deshabilitado={!editable}
+                      ancho="w-24"
+                    />
+                    {Number(transaccion) > 0 && (
+                      <div
+                        role="radiogroup"
+                        aria-label="¿A qué partidas aplica?"
+                        className={`inline-flex rounded-md border p-0.5 ${falsaAlcance ? 'border-peligro' : 'border-borde'}`}
+                      >
+                        {(
+                          [
+                            ['todas', 'Todas las partidas'],
+                            ['diferentes', `Sólo otro proveedor (${diferentes.length})`],
+                          ] as const
+                        ).map(([id, nombre]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            role="radio"
+                            aria-checked={alcance === id}
+                            disabled={!editable}
+                            onClick={() => setAlcance(id)}
+                            className={`h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors ${
+                              alcance === id ? 'bg-aviso text-white' : 'text-texto-suave hover:text-texto'
+                            }`}
+                          >
+                            {nombre}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CampoParametro>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {mensaje && (
-        <p
-          role="status"
-          className={`border-b border-borde px-3 py-1.5 text-xs font-semibold ${mensaje.error ? 'bg-peligro-suave text-peligro' : 'bg-exito-suave text-exito'}`}
+      {/* Avisos: una sola franja; cada partida señalada salta a su fila. */}
+      {avisos.length > 0 && avisosAbiertos && (
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-aviso/30 bg-aviso-suave/60 px-3 py-1.5"
         >
-          {mensaje.texto}
-        </p>
+          {avisos.map((a) => (
+            <div
+              key={a.id}
+              title={a.detalle}
+              className={`flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border bg-superficie py-1 pr-1.5 pl-2 text-xs ${
+                a.tono === 'peligro' ? 'border-peligro/30 text-peligro' : 'border-aviso/40 text-aviso'
+              }`}
+            >
+              <Icon name="campana" size={13} className="shrink-0" />
+              <strong className="font-bold">{a.titulo}</strong>
+              <span className="sr-only">{a.detalle}</span>
+              {a.filas?.map((x) => (
+                <button
+                  key={x.id}
+                  type="button"
+                  onClick={() => irAFila(x.id)}
+                  title={`Ir a ${x.ref}: ${x.descripcion}`}
+                  className={`inline-flex h-6 cursor-pointer items-center rounded-sm border px-1.5 text-[11px] font-bold tabular transition-colors hover:bg-superficie-2 ${
+                    x.tipo === 'cargo'
+                      ? 'border-aviso/40 text-aviso'
+                      : x.tipo === 'incluida' || x.tipo === 'visible'
+                        ? 'border-info/40 text-info'
+                        : 'border-borde text-texto'
+                  }`}
+                >
+                  {x.ref}
+                </button>
+              ))}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setAvisosAbiertos(false)}
+            aria-label="Ocultar avisos"
+            title="Ocultar avisos (quedan como un contador arriba)"
+            className="ml-auto inline-flex size-7 cursor-pointer items-center justify-center rounded-sm text-aviso hover:bg-superficie"
+          >
+            <Icon name="cerrar" size={14} />
+          </button>
+        </div>
       )}
 
-      {fueraDeZona(estadoEntrega) && (
+      {/* Mensajes: flotan sobre la hoja en lugar de empujarla. */}
+      {mensaje && (
         <div
-          role="note"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-peligro/30 bg-peligro-suave px-4 py-2 text-[13px] text-peligro"
+          role="status"
+          className={`animar-entrada absolute right-4 bottom-4 z-30 flex max-w-[480px] items-start gap-2 rounded-lg border px-4 py-3 text-[13px] font-semibold sombra ${
+            mensaje.error
+              ? 'border-peligro/30 bg-peligro-suave text-peligro'
+              : 'border-exito/30 bg-exito-suave text-exito'
+          }`}
         >
-          <Icon name="campana" size={18} className="shrink-0" />
-          {estadoEntrega ? (
-            <span>
-              <strong>Entrega fuera de la zona habitual:</strong> {estadoEntrega}. Considera fletes, viáticos
-              o costos adicionales ({ZONA_ENTREGA.join(', ')} son la zona habitual).
-            </span>
-          ) : (
-            <span>
-              <strong>Sin estado de entrega capturado</strong>
-              {ciudadEntrega ? ` (dato anterior: «${ciudadEntrega}»)` : ''}. Revisa si la entrega es fuera de{' '}
-              {ZONA_ENTREGA.join(', ')}.
-            </span>
-          )}
-        </div>
-      )}
-      {diferentes.length > 0 && (
-        <div
-          role="note"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-aviso/30 bg-aviso-suave px-4 py-2 text-[13px] text-aviso"
-        >
-          <Icon name="campana" size={18} className="shrink-0" />
-          <span>
-            <strong>
-              Arrendamiento con{' '}
-              {catalogos.mayoristas.find((m) => m.id === revision.mayorista_arrendamiento_id)?.nombre ??
-                'el mayorista del arrendamiento'}
-              :
-            </strong>{' '}
-            {diferentes.length} {diferentes.length === 1 ? 'partida es' : 'partidas son'} de otro proveedor (
-            {diferentes.map((pa) => refDe.get(pa.id) ?? pa.sku).join(', ')}). Considera el % de
-            transaccionalidad.
-          </span>
-        </div>
-      )}
-      {especiales.length > 0 && (
-        <div
-          role="note"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-aviso/30 bg-aviso-suave px-4 py-2"
-        >
-          <Icon name="campana" size={18} className="shrink-0 text-aviso" />
-          <p className="text-[13px] text-aviso">
-            <strong>Revisa a detalle:</strong> esta cotización tiene {resumenEspeciales}.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {especiales.map((f) => (
-              <Boton
-                key={f.p.id}
-                tamano="chico"
-                onClick={() => irAFila(f.p.id)}
-                title={`Ir a ${f.ref}: ${f.p.descripcion}`}
-                className="max-w-60"
-              >
-                <span className="font-bold">{f.ref}</span>
-                <span className="truncate font-normal">{f.p.descripcion}</span>
-              </Boton>
-            ))}
-          </div>
+          <Icon
+            name={mensaje.error ? 'cerrar' : 'palomita'}
+            size={16}
+            strokeWidth={2.4}
+            className="mt-px shrink-0"
+          />
+          <span className="flex-1">{mensaje.texto}</span>
+          <button
+            type="button"
+            onClick={() => setMensaje(null)}
+            aria-label="Cerrar mensaje"
+            className="-my-1 -mr-2 inline-flex size-7 cursor-pointer items-center justify-center rounded-sm hover:bg-superficie/60"
+          >
+            <Icon name="cerrar" size={13} />
+          </button>
         </div>
       )}
 
@@ -1020,7 +1377,7 @@ export function CorridaAutorizacion({
                   scope="col"
                   className={`${borde} ${i === 0 ? 'border-l border-l-texto/25' : inicioGrupo(i)} ${
                     c.id === 'utilidadPct'
-                      ? 'w-20 max-w-20 min-w-20 bg-exito-suave px-2'
+                      ? 'w-[86px] max-w-[86px] min-w-[86px] bg-exito-suave px-2'
                       : 'max-w-32 min-w-20 bg-superficie-2 px-3'
                   } py-2 align-middle leading-tight ${
                     CENTRADAS.has(c.id) ? 'text-center' : c.numero ? 'text-right' : 'text-left'
@@ -1123,7 +1480,7 @@ export function CorridaAutorizacion({
                             <td
                               key={c.id}
                               title={personalizada ? 'Utilidad personalizada de esta partida' : undefined}
-                              className={`${clases} relative w-20 max-w-20 min-w-20 px-2 text-center ${
+                              className={`${clases} relative w-[86px] max-w-[86px] min-w-[86px] px-2 text-center ${
                                 editable ? (valida ? 'bg-exito-suave/60' : 'bg-peligro-suave') : ''
                               }`}
                             >
@@ -1134,19 +1491,27 @@ export function CorridaAutorizacion({
                                 />
                               )}
                               {editable ? (
-                                <input
-                                  value={valor}
-                                  inputMode="decimal"
-                                  placeholder="%"
-                                  aria-label={`Utilidad en porcentaje, partida ${f.ref}`}
-                                  aria-invalid={!valida}
-                                  onChange={(e) =>
-                                    setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
-                                  }
-                                  className={`tabular mx-auto block h-7 w-16 rounded-sm border bg-superficie px-1 text-center text-[13px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
-                                    valida ? 'border-exito/50 text-texto' : 'border-peligro text-peligro'
-                                  }`}
-                                />
+                                <span className="relative mx-auto block w-[70px]">
+                                  <input
+                                    value={valor}
+                                    inputMode="decimal"
+                                    autoComplete="off"
+                                    aria-label={`Utilidad en porcentaje, partida ${f.ref}`}
+                                    aria-invalid={!valida}
+                                    onChange={(e) =>
+                                      setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
+                                    }
+                                    className={`tabular block h-7 w-full rounded-sm border bg-superficie pr-5 pl-1 text-right text-[13px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
+                                      valida ? 'border-exito/50 text-texto' : 'border-peligro text-peligro'
+                                    }`}
+                                  />
+                                  <span
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs font-semibold text-texto-suave"
+                                  >
+                                    %
+                                  </span>
+                                </span>
                               ) : (
                                 <span className="font-bold">{valor ? `${valor} %` : '—'}</span>
                               )}
@@ -1307,6 +1672,8 @@ export function CorridaAutorizacion({
                   <dd className="text-right font-bold text-aviso">{tcs[m]}</dd>
                 </div>
               ))}
+              <dt className="text-texto-suave">Vigencia</dt>
+              <dd className="text-right font-bold">{textoVigencia(vigenciaIso || null)}</dd>
               <dt className="text-texto-suave">Costo sin IVA</dt>
               <dd className="text-right">{pesos(costo)}</dd>
               <dt className="text-texto-suave">Utilidad sin IVA</dt>
@@ -1357,6 +1724,43 @@ export function CorridaAutorizacion({
         </VentanaFlotante>
       )}
 
+      {dialogo === 'retirar' && (
+        <VentanaFlotante titulo="Retirar para corregir" onCerrar={() => setDialogo(null)}>
+          <form onSubmit={retirar} className="flex flex-col gap-4">
+            <p className="text-sm text-texto-suave">
+              La cotización regresa a borrador para que la corrijan y la vuelvan a enviar. Se avisará a{' '}
+              <strong className="text-texto">
+                {[capturista, solicitante].filter((x, i, xs) => x && xs.indexOf(x) === i).join(' y ') ||
+                  'quien la preparó'}
+              </strong>{' '}
+              con este motivo.
+            </p>
+            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
+              ¿Qué hay que corregir?
+              <textarea
+                name="motivo"
+                required
+                minLength={5}
+                maxLength={2000}
+                rows={4}
+                autoComplete="off"
+                placeholder="Ej. Falta el costo del flete a Guadalajara; confirma el SKU del monitor."
+                className="rounded-md border border-borde bg-superficie px-3 py-2 text-sm font-normal text-texto outline-none focus:border-acento"
+              />
+            </label>
+            {mensaje?.error && <p className="text-[13px] font-semibold text-peligro">{mensaje.texto}</p>}
+            <div className="flex flex-wrap gap-2.5">
+              <Boton type="submit" variante="peligroFuerte" icono="izquierda" disabled={pendiente}>
+                {pendiente ? 'Retirando…' : 'Retirar y avisar'}
+              </Boton>
+              <Boton variante="fantasma" onClick={() => setDialogo(null)}>
+                Cancelar
+              </Boton>
+            </div>
+          </form>
+        </VentanaFlotante>
+      )}
+
       {dialogo === 'rechazar' && (
         <VentanaFlotante titulo="Rechazar la cotización" onCerrar={() => setDialogo(null)}>
           <form onSubmit={rechazar} className="flex flex-col gap-4">
@@ -1388,6 +1792,89 @@ export function CorridaAutorizacion({
         </VentanaFlotante>
       )}
     </>
+  );
+}
+
+/** Horas para la vigencia, cada media hora de 08:00 a 20:00 (14:00 por omisión). */
+const HORAS = Array.from({ length: 25 }, (_, i) => {
+  const minutos = 8 * 60 + i * 30;
+  return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${minutos % 60 ? '30' : '00'}`;
+});
+
+const controlParametro =
+  'h-9 rounded-sm border border-texto/20 bg-superficie px-2 text-[13px] text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
+
+/** Parámetro de la autorización en el panel flotante: punto de color, etiqueta, control y ayuda. */
+function CampoParametro({
+  punto,
+  etiqueta,
+  ayuda,
+  error,
+  ancho,
+  children,
+}: {
+  punto: string;
+  etiqueta: string;
+  ayuda?: string;
+  error?: boolean;
+  /** Ocupa las dos columnas del panel. */
+  ancho?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${ancho ? 'sm:col-span-2' : ''}`}>
+      <span className="text-[13px] font-semibold text-texto">
+        <span className={`mr-2 inline-block size-2 rounded-full align-middle ${punto}`} aria-hidden="true" />
+        {etiqueta}
+      </span>
+      {children}
+      {ayuda && (
+        <span className={`text-xs ${error ? 'font-semibold text-peligro' : 'text-texto-suave'}`}>
+          {ayuda}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Porcentaje con el símbolo «%» siempre visible después del número (2026-10-07). */
+function CampoPorcentaje({
+  valor,
+  onCambio,
+  valido,
+  placeholder,
+  etiqueta,
+  deshabilitado,
+  ancho = 'w-20',
+}: {
+  valor: string;
+  onCambio: (v: string) => void;
+  valido: boolean;
+  placeholder?: string;
+  etiqueta: string;
+  deshabilitado?: boolean;
+  ancho?: string;
+}) {
+  return (
+    <span className={`relative inline-block ${ancho}`}>
+      <input
+        value={valor}
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder={placeholder}
+        aria-label={`${etiqueta} en porcentaje`}
+        aria-invalid={!valido}
+        disabled={deshabilitado}
+        onChange={(e) => onCambio(e.target.value)}
+        className={`${controlParametro} tabular w-full pr-6 text-right font-bold ${valido ? '' : 'border-peligro'}`}
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs font-semibold text-texto-suave"
+      >
+        %
+      </span>
+    </span>
   );
 }
 

@@ -14,7 +14,8 @@ export interface FilaEditable {
   clave: string;
   id?: string;
   sku: string;
-  marca_id: string | null;
+  /** Se escribe en cada partida (ya no es catálogo, 0027). */
+  marca: string;
   descripcion: string;
   descripcion_contenido: unknown;
   entrega: string;
@@ -25,7 +26,6 @@ export interface FilaEditable {
   mayorista_id: string | null;
   moneda: string;
   costo_unitario: string;
-  tipo_cambio: string;
   vigencia: string;
   /** «Precio anterior» de una mejora de precio (sólo lectura). */
   costo_anterior: string | null;
@@ -54,7 +54,7 @@ export const filaVacia = (
 ): FilaEditable => ({
   clave: claveNueva('partida'),
   sku: '',
-  marca_id: null,
+  marca: '',
   descripcion: '',
   descripcion_contenido: null,
   entrega: '',
@@ -65,21 +65,17 @@ export const filaVacia = (
   mayorista_id: null,
   moneda: 'MXN',
   costo_unitario: '',
-  tipo_cambio: '1',
   vigencia: '',
   costo_anterior: null,
   componentes: [],
   prorratear_entre: [],
 });
 
-/** Quita ceros sobrantes de un decimal de la base («18.50000» → «18.5»). */
-const limpiar = (v: string) => (v.includes('.') ? v.replace(/0+$/, '').replace(/\.$/, '') : v);
-
 const desdeFila = (pa: PartidaFila, componentes: FilaEditable[] = []): FilaEditable => ({
   clave: pa.id,
   id: pa.id,
   sku: pa.sku,
-  marca_id: pa.marca_id,
+  marca: pa.marca ?? '',
   descripcion: pa.descripcion,
   descripcion_contenido: pa.descripcion_contenido,
   entrega: pa.entrega,
@@ -90,7 +86,6 @@ const desdeFila = (pa: PartidaFila, componentes: FilaEditable[] = []): FilaEdita
   mayorista_id: pa.costo?.mayorista_id ?? null,
   moneda: pa.costo?.moneda ?? 'MXN',
   costo_unitario: pa.costo ? Number(pa.costo.costo_unitario).toFixed(2) : '',
-  tipo_cambio: pa.costo ? limpiar(String(pa.costo.tipo_cambio)) : '1',
   vigencia: pa.costo?.vigencia ?? '',
   costo_anterior: pa.costo?.costo_anterior != null ? Number(pa.costo.costo_anterior).toFixed(2) : null,
   componentes,
@@ -121,7 +116,6 @@ const costoPayload = (f: FilaEditable) =>
         mayorista_id: f.mayorista_id,
         moneda: f.moneda,
         costo_unitario: f.costo_unitario.trim().replaceAll(',', ''),
-        tipo_cambio: f.moneda === 'MXN' ? '1' : f.tipo_cambio.trim(),
         vigencia: f.vigencia,
       }
     : null;
@@ -132,7 +126,7 @@ const camposPayload = (f: FilaEditable, esAdicional: boolean) => ({
   ...(f.id ? { id: f.id } : {}),
   clave: f.clave,
   sku: f.sku.trim(),
-  marca_id: f.marca_id,
+  marca: f.marca.trim(),
   descripcion: f.descripcion.trim(),
   descripcion_contenido: (f.descripcion_contenido ?? null) as ContenidoPayload,
   entrega: f.entrega.trim(),
@@ -171,8 +165,7 @@ export function aPayload(propuestas: PropuestaEditable[]): PropuestaCotizacion[]
   }));
 }
 
-export type CampoConError =
-  'descripcion' | 'cantidad' | 'costo_unitario' | 'tipo_cambio' | 'prorratear_entre';
+export type CampoConError = 'descripcion' | 'cantidad' | 'costo_unitario' | 'prorratear_entre';
 
 /** Problemas de una fila, para marcarla antes de guardar (la base vuelve a validar). */
 export function erroresDeFila(f: FilaEditable): Partial<Record<CampoConError, string>> {
@@ -182,49 +175,61 @@ export function erroresDeFila(f: FilaEditable): Partial<Record<CampoConError, st
     e.cantidad = 'Cantidad entera mayor que cero';
   const costo = f.costo_unitario.trim().replaceAll(',', '');
   if (costo && !/^\d+(\.\d{1,2})?$/.test(costo)) e.costo_unitario = 'Importe con máximo 2 decimales';
-  if (f.moneda !== 'MXN' && !/^\d+(\.\d{1,5})?$/.test(f.tipo_cambio.trim()))
-    e.tipo_cambio = 'Tipo de cambio con máximo 5 decimales';
-  else if (f.moneda !== 'MXN' && Number(f.tipo_cambio) <= 0) e.tipo_cambio = 'Debe ser mayor que cero';
   if (f.presentacion === 'prorrateada' && f.prorratear_entre.length === 0)
     e.prorratear_entre = 'Elige entre qué partidas se reparte';
   return e;
 }
 
-/** Costo en MXN de una fila (unitario y total), o null si aún no se puede calcular. */
+/**
+ * Costo de una fila en su propia moneda (unitario y total), o null si aún no se puede calcular. El T.C. lo fija
+ * quien autoriza (0027), así que aquí no se convierte a pesos.
+ */
 export function costoDeFila(f: FilaEditable) {
   const errores = Object.keys(erroresDeFila(f));
-  if (
-    errores.some((k) => k === 'cantidad' || k === 'costo_unitario' || k === 'tipo_cambio') ||
-    !f.costo_unitario.trim()
-  )
+  if (errores.some((k) => k === 'cantidad' || k === 'costo_unitario') || !f.costo_unitario.trim())
     return null;
   try {
-    return costoPartida({
+    const c = costoPartida({
       costoUnitario: f.costo_unitario.trim().replaceAll(',', ''),
-      tipoCambio: f.moneda === 'MXN' ? '1' : f.tipo_cambio.trim(),
+      tipoCambio: '1',
       cantidad: Number(f.cantidad),
     });
+    return { moneda: f.moneda, unitario: c.costoUnitarioMXN, total: c.costoTotal };
   } catch {
     return null;
   }
+}
+
+/** «$1,234.50» en pesos; «USD 1,234.50» en otra moneda. */
+export const formatearCosto = (centavos: bigint, moneda: string) =>
+  moneda === 'MXN' ? formatearMXN(centavos) : `${moneda} ${formatearMXN(centavos).replace('$', '')}`;
+
+/** Suma por moneda, pesos primero: «$10,000.00 + USD 1,200.00». */
+export function textoPorMoneda(totales: Map<string, bigint>) {
+  const monedas = [...totales.keys()].sort((a, b) =>
+    a === 'MXN' ? -1 : b === 'MXN' ? 1 : a.localeCompare(b),
+  );
+  return monedas.length
+    ? monedas.map((m) => formatearCosto(totales.get(m) ?? 0n, m)).join(' + ')
+    : formatearMXN(0n);
 }
 
 /** Todas las filas (partidas, sus adicionales y cargos) de una propuesta. */
 export const todasLasFilas = (p: PropuestaEditable) => p.partidas.flatMap((f) => [f, ...f.componentes]);
 
 export function resumenPropuesta(p: PropuestaEditable) {
-  let costo = 0n;
+  const costos = new Map<string, bigint>();
   let sinCosto = 0;
   let piezas = 0;
   for (const f of todasLasFilas(p)) {
     const c = costoDeFila(f);
-    if (c) costo += c.costoTotal;
+    if (c) costos.set(c.moneda, (costos.get(c.moneda) ?? 0n) + c.total);
     else sinCosto += 1;
   }
   for (const f of p.partidas) if (f.presentacion !== 'prorrateada') piezas += Number(f.cantidad) || 0;
   const partidas = p.partidas.filter((f) => f.presentacion !== 'prorrateada').length;
   const cargos = p.partidas.length - partidas;
-  return { partidas, cargos, piezas, costo, sinCosto, costoTexto: formatearMXN(costo) };
+  return { partidas, cargos, piezas, sinCosto, costoTexto: textoPorMoneda(costos) };
 }
 
 export const nombreCatalogo = (lista: { id: string; nombre: string }[], id: string | null) =>

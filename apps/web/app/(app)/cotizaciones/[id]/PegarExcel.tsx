@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { leerTablaHtml } from '@/lib/pegado-html';
-import { claveNueva, type Catalogos, type FilaEditable } from './modelo';
+import { claveNueva, formatearCosto, type Catalogos, type FilaEditable } from './modelo';
 
 /** Empata la unidad por nombre, clave o abreviatura («PIEZA», «pieza», «PZA»). */
 function empatarUnidad(texto: string, unidades: Catalogos['unidades']) {
@@ -23,7 +23,6 @@ function empatarUnidad(texto: string, unidades: Catalogos['unidades']) {
 interface FilaRevisada {
   original: FilaPegada;
   mayorista: { id: string; nombre: string } | null;
-  marca: { id: string; nombre: string } | null;
   unidad: Catalogos['unidades'][number] | null;
   monedaValida: boolean;
   avisos: string[];
@@ -31,16 +30,13 @@ interface FilaRevisada {
 
 function revisar(f: FilaPegada, cat: Catalogos, errores: Map<number, string[]>): FilaRevisada {
   const mayorista = empatarCatalogo(f.mayorista, cat.mayoristas);
-  const marca = empatarCatalogo(f.marca, cat.marcas);
   const unidad = empatarUnidad(f.unidad, cat.unidades);
   const monedaValida = cat.monedas.some((m) => m.codigo === f.moneda);
   const avisos = [...(errores.get(f.fila) ?? [])];
   if (f.mayorista && !mayorista) avisos.push(`Mayorista «${f.mayorista}» no está en el catálogo`);
-  if (f.marca && !marca) avisos.push(`Marca «${f.marca}» no está en el catálogo`);
   if (f.unidad && !unidad) avisos.push(`Unidad «${f.unidad}» no está en el catálogo`);
   if (!monedaValida) avisos.push(`Moneda «${f.moneda}» no está en el catálogo`);
-  if (f.moneda !== 'MXN' && !f.tipoCambio) avisos.push('Falta el tipo de cambio');
-  return { original: f, mayorista, marca, unidad, monedaValida, avisos };
+  return { original: f, mayorista, unidad, monedaValida, avisos };
 }
 
 function aFila(r: FilaRevisada, unidadPorOmision: string | null, contenido: unknown): FilaEditable {
@@ -48,7 +44,7 @@ function aFila(r: FilaRevisada, unidadPorOmision: string | null, contenido: unkn
   return {
     clave: claveNueva('partida'),
     sku: f.sku,
-    marca_id: r.marca?.id ?? null,
+    marca: f.marca.trim().slice(0, 80),
     descripcion: f.descripcion,
     // Formato de origen de la celda (negritas, cursivas…), si lo traía.
     descripcion_contenido: contenido ?? null,
@@ -62,7 +58,6 @@ function aFila(r: FilaRevisada, unidadPorOmision: string | null, contenido: unkn
     mayorista_id: r.mayorista?.id ?? null,
     moneda: r.monedaValida ? f.moneda : 'MXN',
     costo_unitario: f.costo ?? '',
-    tipo_cambio: f.moneda === 'MXN' ? '1' : (f.tipoCambio ?? ''),
     vigencia: f.vigencia,
     costo_anterior: null,
   };
@@ -223,12 +218,10 @@ function Contenido({
                   let total = '';
                   try {
                     if (f.costo && f.cantidad)
-                      total = formatearMXN(
-                        costoPartida({
-                          costoUnitario: f.costo,
-                          tipoCambio: f.moneda === 'MXN' ? '1' : (f.tipoCambio ?? '1'),
-                          cantidad: f.cantidad,
-                        }).costoTotal,
+                      total = formatearCosto(
+                        costoPartida({ costoUnitario: f.costo, tipoCambio: '1', cantidad: f.cantidad })
+                          .costoTotal,
+                        f.moneda,
                       );
                   } catch {
                     total = '';
@@ -261,7 +254,7 @@ function Contenido({
                         )}
                       </td>
                       <td className="px-2.5 py-2">
-                        {r.marca?.nombre ?? <span className="text-texto-suave">{f.marca || '—'}</span>}
+                        {f.marca || <span className="text-texto-suave">—</span>}
                       </td>
                       <td className="px-2.5 py-2 tabular">
                         {f.cantidad ?? <span className="text-peligro">?</span>}

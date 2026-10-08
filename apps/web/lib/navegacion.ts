@@ -54,7 +54,7 @@ export const SECCIONES: Seccion[] = [
     titulo: 'Catálogos',
     icono: 'catalogos',
     fase: 2,
-    descripcion: 'Mayoristas, marcas, monedas, unidades y condiciones comerciales.',
+    descripcion: 'Mayoristas, monedas, unidades, financieras y condiciones comerciales.',
   },
   {
     slug: 'auditoria',

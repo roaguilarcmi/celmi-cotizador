@@ -16,7 +16,6 @@ export const costoCotizacionSchema = z.object({
   mayorista_id: opcionalUuid,
   moneda: z.string().regex(/^[A-Z]{3}$/, 'Moneda no válida'),
   costo_unitario: dinero,
-  tipo_cambio: tipoCambio,
   vigencia: z.union([z.iso.date(), z.literal('')]).default(''),
 });
 
@@ -26,7 +25,8 @@ const camposPartida = {
   /** Clave local (para referirse a partidas aún sin id, p. ej. en un prorrateo). */
   clave: z.string().max(80).default(''),
   sku: z.string().trim().max(60).default(''),
-  marca_id: opcionalUuid,
+  /** Marca escrita (0027; ya no es catálogo). */
+  marca: z.string().trim().max(80).default(''),
   descripcion: z.string().trim().min(1, 'Cada partida necesita descripción').max(2000),
   descripcion_contenido: contenidoEnriquecidoSchema.nullable().default(null),
   entrega: z.string().trim().max(60).default(''),
@@ -164,6 +164,8 @@ export const datosAutorizacionSchema = z.object({
     'La transaccionalidad es de 0 a 100 %',
   ),
   transaccion_alcance: z.enum(['todas', 'diferentes']).nullable().default(null),
+  /** Vigencia de la cotización (la fija quien autoriza, 0027); '' la deja sin definir. */
+  vigencia_hasta: z.union([z.iso.datetime({ offset: true }), z.literal('')]).optional(),
 });
 export type DatosAutorizacion = z.infer<typeof datosAutorizacionSchema>;
 

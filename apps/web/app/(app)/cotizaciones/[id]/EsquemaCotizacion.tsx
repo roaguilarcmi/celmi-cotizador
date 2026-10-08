@@ -22,7 +22,7 @@ export function EsquemaCotizacion({
   revision: RevisionDetalle;
   cotizacionId: string;
   editable: boolean;
-  mayoristas: { id: string; nombre: string }[];
+  mayoristas: { id: string; nombre: string; trabaja_arrendamiento: boolean }[];
 }) {
   const [esquema, setEsquema] = useState<TipoOportunidad>(revision.esquema);
   const [mayorista, setMayorista] = useState(revision.mayorista_arrendamiento_id ?? '');
@@ -94,11 +94,14 @@ export function EsquemaCotizacion({
               }`}
             >
               <option value="">Elige…</option>
-              {mayoristas.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre}
-                </option>
-              ))}
+              {/* Sólo los mayoristas con los que se trabajan arrendamientos (catálogo, 0027). */}
+              {mayoristas
+                .filter((m) => m.trabaja_arrendamiento || m.id === mayorista)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nombre}
+                  </option>
+                ))}
             </select>
           </label>
         )}

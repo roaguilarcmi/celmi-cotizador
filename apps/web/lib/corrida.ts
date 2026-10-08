@@ -44,12 +44,7 @@ export function entradaCorrida(
         seSuma: pa.se_suma,
         prorratearEntre: pa.prorrateos.map((x) => x.destino_id),
         costoUnitario: decimal(pa.costo.costo_unitario, 2),
-        tipoCambio:
-          pa.costo.moneda === 'MXN'
-            ? '1'
-            : pa.costo.moneda in tiposCambio
-              ? (tiposCambio[pa.costo.moneda] ?? '')
-              : decimal(pa.costo.tipo_cambio, 5),
+        tipoCambio: pa.costo.moneda === 'MXN' ? '1' : (tiposCambio[pa.costo.moneda] ?? ''),
         utilidadPct: utilidadDe(pa.id),
         ...(transacciones[pa.id] ? { transaccionPct: transacciones[pa.id] } : {}),
       };

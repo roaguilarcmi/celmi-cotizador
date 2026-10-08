@@ -15,13 +15,7 @@ export interface CampoCatalogo {
 
 export interface DefinicionCatalogo {
   tabla:
-    | 'estados_oportunidad'
-    | 'mayoristas'
-    | 'marcas'
-    | 'unidades'
-    | 'monedas'
-    | 'esquemas_adquisicion'
-    | 'financieras';
+    'estados_oportunidad' | 'mayoristas' | 'unidades' | 'monedas' | 'esquemas_adquisicion' | 'financieras';
   titulo: string;
   descripcion: string;
   /** Cómo se genera la clave de un registro nuevo. */
@@ -52,16 +46,16 @@ export const CATALOGOS: DefinicionCatalogo[] = [
     clave: { campo: 'id', tipo: 'uuid' },
     campoActivo: 'activo',
     orden: 'nombre',
-    campos: [{ id: 'nombre', etiqueta: 'Nombre', tipo: 'texto', requerido: true }],
-  },
-  {
-    tabla: 'marcas',
-    titulo: 'Marcas',
-    descripcion: 'Fabricantes de los productos cotizados.',
-    clave: { campo: 'id', tipo: 'uuid' },
-    campoActivo: 'activa',
-    orden: 'nombre',
-    campos: [{ id: 'nombre', etiqueta: 'Nombre', tipo: 'texto', requerido: true }],
+    campos: [
+      { id: 'nombre', etiqueta: 'Nombre', tipo: 'texto', requerido: true },
+      // 0027: sólo estos pueden ser el mayorista del arrendamiento de una cotización.
+      {
+        id: 'trabaja_arrendamiento',
+        etiqueta: 'Arrendamiento',
+        tipo: 'si_no',
+        ayuda: 'Trabajamos arrendamientos con él',
+      },
+    ],
   },
   {
     tabla: 'unidades',

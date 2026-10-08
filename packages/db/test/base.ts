@@ -80,13 +80,13 @@ export async function crearOportunidad(db: PGlite, ejecutivo: Usuario) {
   );
   const [rev] = await filas<{ id: string }>(
     db,
-    `insert into public.revisiones (cotizacion_id, numero) values ($1, 0) returning id`,
+    `insert into public.revisiones (cotizacion_id, numero, vigencia_hasta) values ($1, 0, now() + interval '7 days') returning id`,
     [cot!.id],
   );
   // 0024: un arrendamiento se envía a autorización sólo con el mayorista del arrendamiento.
   const [mayorista] = await filas<{ id: string }>(
     db,
-    `insert into public.mayoristas (nombre) values ('Mayorista ' || gen_random_uuid()) returning id`,
+    `insert into public.mayoristas (nombre, trabaja_arrendamiento) values ('Mayorista ' || gen_random_uuid(), true) returning id`,
   );
   await db.query(`update public.revisiones set mayorista_arrendamiento_id = $2 where id = $1`, [
     rev!.id,

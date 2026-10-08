@@ -63,16 +63,23 @@ const ESENCIALES = new Set([
   'utilidadUnit',
   'utilidadTotal',
   'pvUnit',
+  'pvCliente',
   'venta',
 ]);
 
-const VISTAS: { nombre: string; ocultas: string[] }[] = [
-  { nombre: 'Como la corrida', ocultas: [] },
-  { nombre: 'Sin IVA', ocultas: COLUMNAS.filter((c) => c.iva).map((c) => c.id) },
-  { nombre: 'Esencial', ocultas: COLUMNAS.filter((c) => !ESENCIALES.has(c.id)).map((c) => c.id) },
+/**
+ * Vistas rápidas sobre las columnas que ofrece la pantalla: «Esencial» oculta también las agregadas por la corrida
+ * real (transaccionalidad, referencias de la Rev anterior), 2026-10-07.
+ */
+const vistasDe = (columnas: Columna[]) => [
+  { nombre: 'Como la corrida', ocultas: [] as string[] },
+  { nombre: 'Sin IVA', ocultas: columnas.filter((c) => c.iva).map((c) => c.id) },
+  { nombre: 'Esencial', ocultas: columnas.filter((c) => !ESENCIALES.has(c.id)).map((c) => c.id) },
 ];
 
-const mismaSeleccion = (a: Set<string>, b: string[]) => a.size === b.length && b.every((x) => a.has(x));
+/** Misma selección, considerando sólo las columnas que hay en pantalla. */
+const mismaSeleccion = (a: Set<string>, b: string[], columnas: Columna[]) =>
+  columnas.every((c) => a.has(c.id) === b.includes(c.id));
 
 /** Menú para elegir qué columnas de la corrida se ven; la elección se recuerda en este navegador. */
 export function MenuColumnas({
@@ -106,8 +113,8 @@ export function MenuColumnas({
           {columnas.filter((c) => !ocultas.has(c.id)).length}/{columnas.length}
         </span>
       </summary>
-      <div className="absolute right-0 z-40 mt-2 w-[min(600px,calc(100vw-2rem))] rounded-lg border border-borde bg-superficie p-5 sombra">
-        {/* Cerrar arriba (2026-10-07), además de «Listo» abajo. */}
+      <div className="absolute right-0 z-40 mt-2 max-h-[calc(100dvh-10rem)] w-[min(600px,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-borde bg-superficie p-5 sombra">
+        {/* Sólo «Cerrar» arriba: abajo quedaba fuera de la vista (2026-10-07). */}
         <div className="mb-3 flex items-center gap-3 border-b border-borde pb-3">
           <span className="mr-auto text-sm font-bold">Columnas visibles</span>
           <Boton
@@ -121,8 +128,8 @@ export function MenuColumnas({
         </div>
         <div className="text-xs font-semibold text-texto-suave">Vistas rápidas</div>
         <div className="mt-2 flex flex-wrap gap-2">
-          {VISTAS.map((v) => {
-            const activa = mismaSeleccion(ocultas, v.ocultas);
+          {vistasDe(columnas).map((v) => {
+            const activa = mismaSeleccion(ocultas, v.ocultas, columnas);
             return (
               <button
                 key={v.nombre}
@@ -171,12 +178,9 @@ export function MenuColumnas({
             </fieldset>
           ))}
         </div>
-        <div className="mt-4 flex justify-between gap-3 border-t border-borde pt-4">
-          <p className="text-xs text-texto-suave">Tu elección se recuerda en este navegador.</p>
-          <Boton variante="primario" onClick={() => ref.current?.removeAttribute('open')}>
-            Listo
-          </Boton>
-        </div>
+        <p className="mt-4 border-t border-borde pt-3 text-xs text-texto-suave">
+          Tu elección se recuerda en este navegador.
+        </p>
       </div>
     </details>
   );
