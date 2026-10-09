@@ -10,6 +10,7 @@ import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { textoComoDocumento } from '@/lib/documento';
+import { hoyLocal } from '@/lib/vigencia';
 import {
   costoDeFila,
   erroresDeFila,
@@ -421,14 +422,17 @@ function Formulario({
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Vigencia del precio" id={`${id}-vigencia`}>
+          {/* Un precio vencido se avisa al momento, no sólo al guardar (2026-10-09). */}
+          <Campo etiqueta="Vigencia del precio" id={`${id}-vigencia`} error={errores.vigencia}>
             <input
               id={`${id}-vigencia`}
               type="date"
               value={f.vigencia}
+              min={soloLectura ? undefined : hoyLocal()}
               disabled={soloLectura}
+              aria-invalid={Boolean(errores.vigencia)}
               onChange={(e) => cambiar({ vigencia: e.target.value })}
-              className={control}
+              className={`${control} ${errores.vigencia ? 'border-peligro bg-peligro-suave/40' : ''}`}
             />
           </Campo>
           <Campo

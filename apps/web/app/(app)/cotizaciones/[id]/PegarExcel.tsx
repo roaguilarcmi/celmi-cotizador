@@ -7,6 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Boton } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { leerTablaHtml } from '@/lib/pegado-html';
+import { hoyLocal } from '@/lib/vigencia';
 import { claveNueva, formatearCosto, type Catalogos, type FilaEditable } from './modelo';
 
 /** Empata la unidad por nombre, clave o abreviatura («PIEZA», «pieza», «PZA»). */
@@ -36,6 +37,7 @@ function revisar(f: FilaPegada, cat: Catalogos, errores: Map<number, string[]>):
   if (f.mayorista && !mayorista) avisos.push(`Mayorista «${f.mayorista}» no está en el catálogo`);
   if (f.unidad && !unidad) avisos.push(`Unidad «${f.unidad}» no está en el catálogo`);
   if (!monedaValida) avisos.push(`Moneda «${f.moneda}» no está en el catálogo`);
+  if (f.vigencia && f.vigencia < hoyLocal()) avisos.push('Precio del mayorista vencido');
   return { original: f, mayorista, unidad, monedaValida, avisos };
 }
 

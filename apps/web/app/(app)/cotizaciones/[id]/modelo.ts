@@ -1,6 +1,7 @@
 import { costoPartida, formatearMXN } from '@celmi/core';
 import type { PropuestaCotizacion } from '@celmi/validation';
 import type { CatalogosCotizacion, PartidaFila, PropuestaFila, RevisionDetalle } from '@/lib/datos';
+import { hoyLocal } from '@/lib/vigencia';
 
 /**
  * linea: partida visible (o adicional en línea propia) · incluida: adicional dentro del precio de su partida ·
@@ -165,7 +166,11 @@ export function aPayload(propuestas: PropuestaEditable[]): PropuestaCotizacion[]
   }));
 }
 
-export type CampoConError = 'descripcion' | 'cantidad' | 'costo_unitario' | 'prorratear_entre';
+export type CampoConError = 'descripcion' | 'cantidad' | 'costo_unitario' | 'vigencia' | 'prorratear_entre';
+
+/** El precio del mayorista ya venció (2026-10-09: no se captura ni se avanza con uno vencido). */
+export const precioVencido = (f: Pick<FilaEditable, 'vigencia'>) =>
+  Boolean(f.vigencia) && f.vigencia < hoyLocal();
 
 /** Problemas de una fila, para marcarla antes de guardar (la base vuelve a validar). */
 export function erroresDeFila(f: FilaEditable): Partial<Record<CampoConError, string>> {
@@ -175,6 +180,8 @@ export function erroresDeFila(f: FilaEditable): Partial<Record<CampoConError, st
     e.cantidad = 'Cantidad entera mayor que cero';
   const costo = f.costo_unitario.trim().replaceAll(',', '');
   if (costo && !/^\d+(\.\d{1,2})?$/.test(costo)) e.costo_unitario = 'Importe con máximo 2 decimales';
+  if (precioVencido(f))
+    e.vigencia = 'El precio del mayorista ya venció: pide uno vigente o actualiza la fecha';
   if (f.presentacion === 'prorrateada' && f.prorratear_entre.length === 0)
     e.prorratear_entre = 'Elige entre qué partidas se reparte';
   return e;

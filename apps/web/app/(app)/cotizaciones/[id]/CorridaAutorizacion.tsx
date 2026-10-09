@@ -191,6 +191,9 @@ export function CorridaAutorizacion({
   const [ocultas, cambiarOcultas] = useColumnasOcultas();
   const [completaGuardada, guardarCompleta] = usePreferencia('celmi-corrida-completa');
   const completa = completaGuardada === '1';
+  // Parámetros y cifras plegables para dar más alto a la hoja (2026-10-09); se recuerda en este navegador.
+  const [plegadoGuardado, guardarPlegado] = usePreferencia('celmi-corrida-plegada');
+  const plegado = plegadoGuardado === '1';
   const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | 'retirar' | null>(null);
   // Avisos (2026-10-08): contador rojo que parpadea hasta abrirlo, filas marcadas y confirmación al autorizar.
   const [verAvisos, setVerAvisos] = useState(false);
@@ -940,7 +943,9 @@ export function CorridaAutorizacion({
             Cifras en dos renglones, junto a la decisión (2026-10-08). La transaccionalidad va aparte: no entra en la
             utilidad (ni en monto ni en %).
           */}
-          <div className="grid shrink-0 grid-flow-col grid-rows-2 gap-x-4 gap-y-1 border-l border-borde pl-3">
+          <div
+            className={`grid shrink-0 grid-flow-col grid-rows-2 gap-x-4 gap-y-1 border-l border-borde pl-3 ${plegado ? 'hidden' : ''}`}
+          >
             <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
             <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
             <Dato
@@ -1066,7 +1071,9 @@ export function CorridaAutorizacion({
         Renglón 2 (propuesta C, 2026-10-08): tarjetas de parámetros siempre visibles y editables, y las cifras a la
         derecha en el mismo bloque.
       */}
-      <div className="flex flex-wrap items-stretch gap-2 border-b border-borde bg-superficie-2/60 px-3 py-2.5">
+      <div
+        className={`flex flex-wrap items-stretch gap-2 border-b border-borde bg-superficie-2/60 px-3 py-2.5 ${plegado ? 'hidden' : ''}`}
+      >
         <Tarjeta2
           borde={vigenciaValida ? 'border-acento/40' : 'border-peligro/60'}
           etiqueta="Vigencia"
@@ -1259,7 +1266,55 @@ export function CorridaAutorizacion({
       )}
 
       <div className="flex items-center gap-2 border-b border-borde px-3 py-1.5">
-        <p className="min-w-0 truncate text-xs text-texto-suave">
+        <button
+          type="button"
+          onClick={() => guardarPlegado(plegado ? null : '1')}
+          aria-expanded={!plegado}
+          title={plegado ? 'Mostrar parámetros y cifras' : 'Plegar parámetros y cifras para ver más filas'}
+          className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-borde bg-superficie px-2.5 text-xs font-semibold text-texto hover:bg-superficie-2"
+        >
+          <Icon name={plegado ? 'abajo' : 'arriba'} size={13} strokeWidth={2.6} />
+          {plegado ? 'Mostrar parámetros' : 'Plegar'}
+        </button>
+        {plegado && (
+          // Resumen en una línea: lo que falta, en rojo, y las cifras clave.
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+            {[
+              vigenciaValida
+                ? { t: `Vigencia ${textoVigencia(vigenciaIso)}` }
+                : { t: 'Falta la vigencia', falta: true },
+              ...monedas.map((m) =>
+                tipoCambioSchema.safeParse(tcs[m] ?? '').success
+                  ? { t: `T.C. ${m} ${tcs[m]}` }
+                  : { t: `Falta el T.C. ${m}`, falta: true },
+              ),
+              ...(esAdquisicion && !(anticipoValido && anticipo)
+                ? [{ t: 'Falta el anticipo', falta: true }]
+                : []),
+              {
+                t: `Utilidad ${validas ? `${pesos(utilidad)} · ${pct(utilidad, costo)} %` : '—'}`,
+                exito: true,
+              },
+              ...(conTransaccion ? [{ t: `Transacc. ${pesos(transaccionTotal)}` }] : []),
+            ].map((x: { t: string; falta?: boolean; exito?: boolean }) => (
+              <button
+                key={x.t}
+                type="button"
+                onClick={() => guardarPlegado(null)}
+                className={`inline-flex h-7 shrink-0 cursor-pointer items-center rounded-pill border px-2.5 text-xs font-semibold whitespace-nowrap ${
+                  x.falta
+                    ? 'border-peligro/40 bg-peligro-suave text-peligro'
+                    : x.exito
+                      ? 'border-exito/30 bg-exito-suave text-exito'
+                      : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+                }`}
+              >
+                {x.t}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className={`min-w-0 truncate text-xs text-texto-suave ${plegado ? 'hidden 2xl:block' : ''}`}>
           {revision.estado === 'pendiente_autorizacion' ? (
             <>
               <strong className="text-texto">{solicitante ?? 'El ejecutivo'}</strong> solicitó autorización
@@ -1980,11 +2035,6 @@ function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; avis
           {etiqueta.texto}
         </span>
       )}
-      {aviso && (
-        <span className="mt-px shrink-0 rounded-sm bg-aviso px-1.5 text-[11px] font-bold text-white">
-          {aviso}
-        </span>
-      )}
       {f.p.se_suma && (
         <span className="mt-px shrink-0 rounded-sm bg-info-suave px-1.5 text-[11px] font-bold text-info">
           Se suma
@@ -2000,6 +2050,13 @@ function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; avis
             <span className="font-semibold">{f.p.descripcion}</span>
           )}
         </span>
+        {/* Avisos de la fila debajo de la descripción para no taparla (2026-10-09). */}
+        {aviso && (
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] font-bold text-aviso">
+            <Icon name="campana" size={11} strokeWidth={2.6} />
+            {aviso}
+          </span>
+        )}
         {extra && <span className="mt-0.5 block text-[11px] font-semibold text-aviso">{extra}</span>}
       </span>
     </button>

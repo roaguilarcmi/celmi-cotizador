@@ -203,3 +203,21 @@ describe('marca escrita y mayoristas con arrendamiento (0027)', () => {
     ).rejects.toThrow(/no se trabajan arrendamientos/);
   });
 });
+
+describe('precios vencidos (0028)', () => {
+  it('no se envía a autorización con el precio del mayorista vencido', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    await db.query(`update public.partida_costos set vigencia = current_date - 1 where partida_id = $1`, [
+      op.partida,
+    ]);
+    await expect(
+      db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [op.revision]),
+    ).rejects.toThrow(/precio del mayorista vencido/);
+    await db.query(`update public.partida_costos set vigencia = current_date + 30 where partida_id = $1`, [
+      op.partida,
+    ]);
+    await db.query(`update public.revisiones set estado = 'pendiente_autorizacion' where id = $1`, [
+      op.revision,
+    ]);
+  });
+});

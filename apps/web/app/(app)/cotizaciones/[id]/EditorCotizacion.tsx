@@ -21,7 +21,9 @@ import {
   aPayload,
   claveNueva,
   desdeRevision,
+  precioVencido,
   resumenPropuesta,
+  todasLasFilas,
   type Catalogos,
   type PropuestaEditable,
 } from './modelo';
@@ -140,7 +142,16 @@ export function EditorCotizacion({
     };
   });
 
+  // Con precios de mayorista vencidos no se pasa al paso siguiente (2026-10-09).
+  const vencidas = editable ? propuestas.flatMap(todasLasFilas).filter(precioVencido).length : 0;
   const irA = (nuevo: Paso) => {
+    if (vencidas > 0 && nuevo > 1) {
+      setMensaje({
+        texto: `${vencidas} ${vencidas === 1 ? 'partida tiene' : 'partidas tienen'} el precio del mayorista vencido. Actualiza el costo o su vigencia para continuar.`,
+        error: true,
+      });
+      return;
+    }
     // Al salir de Partidas con cambios, primero se guardan.
     if (sucio && nuevo > 1) guardar(() => setPaso(nuevo));
     else setPaso(nuevo);

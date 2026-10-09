@@ -307,7 +307,10 @@ function Fila({
             </span>
           )}
           {extra}
-          {Object.keys(errores).some((k) => k !== 'prorratear_entre') && (
+          {errores.vigencia && (
+            <span className="rounded-sm bg-peligro px-1.5 font-bold text-white">Precio vencido</span>
+          )}
+          {Object.keys(errores).some((k) => k !== 'prorratear_entre' && k !== 'vigencia') && (
             <span className="font-semibold text-peligro">Revisar datos</span>
           )}
         </div>
