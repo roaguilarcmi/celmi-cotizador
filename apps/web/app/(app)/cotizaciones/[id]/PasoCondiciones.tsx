@@ -1,7 +1,7 @@
 'use client';
 
 import type { JSONContent } from '@tiptap/core';
-import { useState, useTransition, type FormEvent } from 'react';
+import { useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import { EditorEnriquecido } from '@/components/EditorEnriquecido';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
 import { Icon } from '@/components/Icon';
@@ -9,7 +9,7 @@ import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import type { CondicionCatalogo, CondicionRevision, RevisionDetalle } from '@/lib/datos';
 import { mover } from '@/lib/reordenar';
-import { conVigencia, MARCADOR_VIGENCIA } from '@/lib/vigencia';
+import { conVigencia } from '@/lib/vigencia';
 import { guardarCondicionesCotizacion } from '../acciones';
 import { claveNueva } from './modelo';
 
@@ -19,11 +19,10 @@ interface Elegida {
   contenido: unknown;
 }
 
-const fechaLarga = new Intl.DateTimeFormat('es-MX', { dateStyle: 'full', timeStyle: 'short', hour12: false });
-
 /**
  * Paso «Condiciones comerciales» (decisión 2026-10-05): condiciones elegidas del catálogo, ajustables sólo para esta
- * cotización. Donde una condición diga {vigencia} se muestra la vigencia, que fija quien autoriza en la corrida (0027).
+ * cotización. Compacto (propuesta B, 2026-10-10): catálogo como etiquetas y sólo lo elegido, en su orden. La vigencia
+ * no se menciona aquí: la fija quien autoriza (su marcador se ve como un espacio en blanco).
  */
 export function PasoCondiciones({
   revision,
@@ -50,11 +49,19 @@ export function PasoCondiciones({
     setBase(JSON.stringify(nuevas));
   }
   const [ajustando, setAjustando] = useState<string | 'propia' | null>(null);
+  /** Condiciones elegidas que se ven completas (por omisión, en una línea). */
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const alternarVista = (clave: string) =>
+    setAbiertas((xs) => {
+      const n = new Set(xs);
+      if (n.has(clave)) n.delete(clave);
+      else n.add(clave);
+      return n;
+    });
   const [mensaje, setMensaje] = useState<{ texto: string; error?: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
 
   const sucio = editable && JSON.stringify(elegidas) !== base;
-  const vigenciaIso = revision.vigencia_hasta;
   const delCatalogo = (id: string) => catalogo.find((c) => c.id === id);
   const elegida = (id: string) => elegidas.some((e) => e.condicion_id === id);
 
@@ -77,191 +84,174 @@ export function PasoCondiciones({
     });
 
   const abierta = elegidas.find((e) => e.clave === ajustando);
+  /** Texto para mostrar: el marcador de la vigencia queda como un espacio en blanco (lo llena quien autoriza). */
+  const mostrar = (contenido: unknown) => conVigencia(contenido, null, '____');
 
   return (
     <Tarjeta className="overflow-hidden">
-      <div className="flex flex-wrap items-end gap-4 border-b border-borde px-6 py-4">
-        <div className="mr-auto">
-          <Titulo2>Condiciones comerciales</Titulo2>
-          <p className="mt-0.5 text-[13px] text-texto-suave">
-            Elige del catálogo las que aplican; puedes ajustarlas sólo para esta cotización.
-          </p>
-        </div>
-      </div>
-
-      {/* La vigencia la fija quien autoriza en la corrida de precios (2026-10-07). */}
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-borde bg-superficie-2/50 px-6 py-3 text-[13px] text-texto-suave">
-        <Icon name="reloj" size={16} />
-        <span>
-          <strong className="text-texto">Vigencia:</strong>{' '}
-          {vigenciaIso
-            ? `${fechaLarga.format(new Date(vigenciaIso))} h`
-            : 'la fija quien autoriza, en la corrida de precios.'}
+      {/* Propuesta B (2026-10-10): encabezado en una línea, catálogo como etiquetas y sólo lo elegido debajo. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde px-5 py-3">
+        <Titulo2>Condiciones comerciales</Titulo2>
+        <span className="text-[13px] text-texto-suave">
+          {elegidas.length} {elegidas.length === 1 ? 'elegida' : 'elegidas'}
         </span>
-        {vigenciaIso && (
-          <span>· La fija quien autoriza; aparece donde una condición diga {MARCADOR_VIGENCIA}.</span>
-        )}
-      </p>
-
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        {/* Catálogo */}
-        <section
-          aria-label="Catálogo de condiciones"
-          className="border-b border-borde lg:border-r lg:border-b-0"
-        >
-          <h3 className="px-6 pt-4 pb-2 text-[11px] font-bold tracking-wide text-texto-suave uppercase">
-            Catálogo ({catalogo.length})
-          </h3>
-          {catalogo.length === 0 ? (
-            <p className="px-6 pb-6 text-[13px] text-texto-suave">
-              Aún no hay condiciones en el catálogo. Un administrador las agrega en Catálogos.
-            </p>
-          ) : (
-            <ul className="pb-2">
-              {catalogo.map((c) => (
-                <li key={c.id}>
-                  <label
-                    className={`flex cursor-pointer items-start gap-3 px-6 py-2.5 hover:bg-superficie-2/70 ${editable ? '' : 'pointer-events-none'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={elegida(c.id)}
-                      disabled={!editable}
-                      onChange={() => alternar(c)}
-                      className="mt-1 size-4 shrink-0 accent-acento"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-semibold">{c.nombre}</span>
-                      <span className="mt-0.5 line-clamp-2 text-texto-suave [&_.texto-enriquecido]:text-xs [&_p]:inline">
-                        <TextoEnriquecido contenido={c.contenido} respaldo="" />
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Elegidas */}
-        <section aria-label="Condiciones de esta cotización">
-          <div className="flex items-center gap-2 px-6 pt-4 pb-2">
-            <h3 className="mr-auto text-[11px] font-bold tracking-wide text-texto-suave uppercase">
-              En esta cotización ({elegidas.length})
-            </h3>
-            {editable && (
-              <Boton tamano="chico" icono="mas" onClick={() => setAjustando('propia')}>
-                Condición propia
-              </Boton>
+        {editable && (
+          <div className="ml-auto flex items-center gap-2">
+            {sucio ? (
+              <span className="text-xs font-semibold text-aviso">Sin guardar</span>
+            ) : (
+              mensaje && (
+                <span className={`text-xs font-semibold ${mensaje.error ? 'text-peligro' : 'text-exito'}`}>
+                  {mensaje.texto}
+                </span>
+              )
             )}
+            <Boton
+              tamano="chico"
+              variante="primario"
+              icono="guardado"
+              disabled={pendiente || !sucio}
+              onClick={guardar}
+            >
+              {pendiente ? 'Guardando…' : 'Guardar'}
+            </Boton>
           </div>
-          {elegidas.length === 0 ? (
-            <p className="px-6 pb-6 text-[13px] text-texto-suave">
-              Marca en el catálogo las condiciones que aplican.
-            </p>
-          ) : (
-            <ol className="flex flex-col gap-2 px-4 pb-4">
-              {elegidas.map((e, i) => {
-                const original = e.condicion_id ? delCatalogo(e.condicion_id) : undefined;
-                const ajustada =
-                  !original || JSON.stringify(original.contenido) !== JSON.stringify(e.contenido);
-                return (
-                  <li key={e.clave} className="rounded-md border border-borde bg-superficie">
-                    <div className="flex flex-wrap items-center gap-2 border-b border-borde/70 bg-superficie-2/50 py-1.5 pr-1.5 pl-3">
-                      <span className="text-[13px] font-bold tabular">{i + 1}.</span>
-                      <span className="min-w-0 truncate text-[13px] font-semibold">
-                        {original?.nombre ?? 'Condición propia'}
-                      </span>
-                      {original && ajustada && (
-                        <span className="rounded-pill bg-aviso-suave px-2 text-[11px] font-semibold text-aviso">
-                          Ajustada
-                        </span>
-                      )}
-                      {editable && (
-                        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                          <Boton
-                            tamano="chico"
-                            variante="fantasma"
-                            icono="arriba"
-                            aria-label={`Subir la condición ${i + 1}`}
-                            title="Subir"
-                            disabled={i === 0}
-                            onClick={() => setElegidas((xs) => mover(xs, i, i - 1))}
-                          />
-                          <Boton
-                            tamano="chico"
-                            variante="fantasma"
-                            icono="abajo"
-                            aria-label={`Bajar la condición ${i + 1}`}
-                            title="Bajar"
-                            disabled={i === elegidas.length - 1}
-                            onClick={() => setElegidas((xs) => mover(xs, i, i + 1))}
-                          />
-                          <Boton tamano="chico" icono="herramienta" onClick={() => setAjustando(e.clave)}>
-                            Ajustar
-                          </Boton>
-                          {original && ajustada && (
-                            <Boton
-                              tamano="chico"
-                              icono="restablecer"
-                              title="Volver al texto del catálogo"
-                              onClick={() =>
-                                setElegidas((xs) =>
-                                  xs.map((x) =>
-                                    x.clave === e.clave ? { ...x, contenido: original.contenido } : x,
-                                  ),
-                                )
-                              }
-                            >
-                              Restablecer
-                            </Boton>
-                          )}
-                          <Boton
-                            tamano="chico"
-                            variante="peligro"
-                            icono="cerrar"
-                            onClick={() => setElegidas((xs) => xs.filter((x) => x.clave !== e.clave))}
-                          >
-                            Quitar
-                          </Boton>
-                        </div>
-                      )}
-                    </div>
-                    <div className="px-3 py-2 text-[13px] leading-snug [&_.texto-enriquecido]:text-[13px] [&_.texto-enriquecido]:leading-snug">
-                      <TextoEnriquecido contenido={conVigencia(e.contenido, vigenciaIso)} respaldo="" />
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </section>
+        )}
       </div>
 
       {editable && (
-        <div className="flex flex-wrap items-center gap-3 border-t border-borde bg-superficie-2/60 px-6 py-3">
-          <Boton
-            variante="primario"
-            tamano="chico"
-            icono="guardado"
-            disabled={pendiente || !sucio}
-            onClick={guardar}
-          >
-            {pendiente ? 'Guardando…' : 'Guardar condiciones'}
-          </Boton>
-          {sucio && <span className="text-xs font-semibold text-aviso">Cambios sin guardar</span>}
-          {mensaje && (
-            <span className={`text-xs font-semibold ${mensaje.error ? 'text-peligro' : 'text-exito'}`}>
-              {mensaje.texto}
-            </span>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-borde bg-superficie-2/50 px-5 py-2.5">
+          <span className="mr-1 text-xs font-semibold text-texto-suave">Catálogo:</span>
+          {catalogo.length === 0 && (
+            <span className="text-xs text-texto-suave">vacío; un administrador lo llena en Catálogos.</span>
           )}
+          {catalogo.map((c) => {
+            const on = elegida(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => alternar(c)}
+                title={on ? 'Quitar de esta cotización' : 'Agregar a esta cotización'}
+                className={`inline-flex h-8 cursor-pointer items-center gap-1 rounded-pill border px-3 text-xs font-semibold transition-colors ${
+                  on
+                    ? 'border-acento bg-acento-suave text-acento-texto'
+                    : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+                }`}
+              >
+                <Icon name={on ? 'palomita' : 'mas'} size={12} strokeWidth={on ? 3 : 2.4} />
+                {c.nombre}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setAjustando('propia')}
+            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-pill border border-dashed border-texto/30 px-3 text-xs font-semibold text-texto-suave hover:bg-superficie-2 hover:text-texto"
+          >
+            <Icon name="mas" size={12} /> Propia
+          </button>
         </div>
+      )}
+
+      {elegidas.length === 0 ? (
+        <p className="px-5 py-5 text-[13px] text-texto-suave">
+          {editable
+            ? 'Elige del catálogo las condiciones que aplican.'
+            : 'Esta cotización no tiene condiciones.'}
+        </p>
+      ) : (
+        <ol aria-label="Condiciones de esta cotización" className="divide-y divide-borde">
+          {elegidas.map((e, i) => {
+            const original = e.condicion_id ? delCatalogo(e.condicion_id) : undefined;
+            const ajustada = !original || JSON.stringify(original.contenido) !== JSON.stringify(e.contenido);
+            const expandida = abiertas.has(e.clave);
+            return (
+              <li
+                key={e.clave}
+                className="group flex items-center gap-3 px-5 py-1.5 hover:bg-superficie-2/50"
+              >
+                <button
+                  type="button"
+                  onClick={() => alternarVista(e.clave)}
+                  aria-expanded={expandida}
+                  title={expandida ? 'Ver en una línea' : 'Ver completa'}
+                  className={`flex min-w-0 flex-1 cursor-pointer gap-3 text-left ${expandida ? 'items-start' : 'items-center'}`}
+                >
+                  <span className="w-5 shrink-0 text-[13px] font-bold text-texto-suave tabular">
+                    {i + 1}.
+                  </span>
+                  <span className="shrink-0 text-[13px] font-semibold">
+                    {original?.nombre ?? 'Condición propia'}
+                  </span>
+                  {original && ajustada && (
+                    <span className="shrink-0 rounded-pill bg-aviso-suave px-2 text-[11px] font-semibold text-aviso">
+                      Ajustada
+                    </span>
+                  )}
+                  <span
+                    className={`min-w-0 flex-1 text-texto-suave [&_.texto-enriquecido]:text-xs [&_.texto-enriquecido]:leading-snug ${
+                      expandida ? '' : 'line-clamp-1 [&_p]:inline'
+                    }`}
+                  >
+                    <TextoEnriquecido contenido={mostrar(e.contenido)} respaldo="" />
+                  </span>
+                </button>
+                {editable && (
+                  <div className="flex shrink-0 items-center opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <Accion
+                      etiqueta="Subir"
+                      disabled={i === 0}
+                      onClick={() => setElegidas((xs) => mover(xs, i, i - 1))}
+                    >
+                      <Icon name="arriba" size={15} />
+                    </Accion>
+                    <Accion
+                      etiqueta="Bajar"
+                      disabled={i === elegidas.length - 1}
+                      onClick={() => setElegidas((xs) => mover(xs, i, i + 1))}
+                    >
+                      <Icon name="abajo" size={15} />
+                    </Accion>
+                    <Accion
+                      etiqueta="Ajustar el texto sólo para esta cotización"
+                      onClick={() => setAjustando(e.clave)}
+                    >
+                      <Icon name="herramienta" size={15} />
+                    </Accion>
+                    {original && ajustada && (
+                      <Accion
+                        etiqueta="Volver al texto del catálogo"
+                        onClick={() =>
+                          setElegidas((xs) =>
+                            xs.map((x) =>
+                              x.clave === e.clave ? { ...x, contenido: original.contenido } : x,
+                            ),
+                          )
+                        }
+                      >
+                        <Icon name="restablecer" size={15} />
+                      </Accion>
+                    )}
+                    <Accion
+                      etiqueta="Quitar"
+                      onClick={() => setElegidas((xs) => xs.filter((x) => x.clave !== e.clave))}
+                    >
+                      <Icon name="cerrar" size={15} />
+                    </Accion>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       )}
 
       {(ajustando === 'propia' || abierta) && (
         <VentanaFlotante
           titulo={abierta ? 'Ajustar condición' : 'Condición propia'}
-          detalle={`Sólo para esta cotización; el catálogo no cambia. ${MARCADOR_VIGENCIA} se sustituye por la vigencia.`}
+          detalle="Sólo para esta cotización; el catálogo no cambia."
           esEdicion={Boolean(abierta)}
           onCerrar={() => setAjustando(null)}
         >
@@ -281,6 +271,32 @@ export function PasoCondiciones({
         </VentanaFlotante>
       )}
     </Tarjeta>
+  );
+}
+
+/** Botón de sólo ícono (área de 32 px) para las acciones de cada condición. */
+function Accion({
+  etiqueta,
+  disabled,
+  onClick,
+  children,
+}: {
+  etiqueta: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={etiqueta}
+      title={etiqueta}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex size-8 cursor-pointer items-center justify-center rounded-sm text-texto-suave hover:bg-superficie-2 hover:text-texto disabled:cursor-default disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
 

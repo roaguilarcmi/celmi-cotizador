@@ -31,9 +31,9 @@ export const hoyLocal = () => {
   return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
 };
 
-/** Copia del documento con el marcador sustituido en todos los textos. */
-export function conVigencia<T>(doc: T, iso: string | null): T {
-  const texto = textoVigencia(iso);
+/** Copia del documento con el marcador sustituido en todos los textos (por la vigencia o por `reemplazo`). */
+export function conVigencia<T>(doc: T, iso: string | null, reemplazo?: string): T {
+  const texto = reemplazo ?? textoVigencia(iso);
   const recorrer = (n: unknown): unknown => {
     if (Array.isArray(n)) return n.map(recorrer);
     if (n && typeof n === 'object') {
