@@ -5,9 +5,13 @@
  * Reconoce las columnas por su encabezado (con o sin acentos, en cualquier orden). Si no hay encabezado, asume el
  * orden de la «Solicitud de precios» de CELMI: PARTIDA, SKU, MAYORISTA, MARCA, TIEMPO DE ENTREGA, DESCRIPCIÓN,
  * UNIDAD DE MEDIDA, CANTIDAD, MONEDA, COSTO UNITARIO ANTES DE IVA, VIGENCIA DE PRECIO.
+ *
+ * Estructura (2026-10-10): una partida numerada con un decimal («1.1», «1.2», «2.1»…) es adicional de la partida con
+ * ese entero («1», «2»…); y una columna «PROPUESTA» (antes de «PARTIDA») reparte las filas en varias propuestas.
  */
 
 export type CampoPegado =
+  | 'propuesta'
   | 'partida'
   | 'sku'
   | 'mayorista'
@@ -24,6 +28,10 @@ export type CampoPegado =
 export interface FilaPegada {
   /** Número de fila en lo pegado (1 = primera fila de datos), para señalar errores. */
   fila: number;
+  /** Número de partida tal como venía («1», «1.1»…); define si es adicional de otra. */
+  partida: string;
+  /** Propuesta a la que pertenece ('' si no hay columna «Propuesta»); una celda vacía hereda la de arriba. */
+  propuesta: string;
   sku: string;
   /** Texto tal como venía; la pantalla lo empata con el catálogo (p. ej. «INGRAM» → «Ingram Micro»). */
   mayorista: string;
@@ -55,6 +63,8 @@ export interface ResultadoPegado {
   ignoradas: string[];
   /** Campo de cada columna (para leer el formato de esa misma celda en la versión HTML de lo copiado). */
   columnas: (CampoPegado | null)[];
+  /** Si venía una columna «Propuesta» (varias propuestas en lo pegado). */
+  conPropuestas: boolean;
 }
 
 const ORDEN_SOLICITUD: CampoPegado[] = [
@@ -72,6 +82,7 @@ const ORDEN_SOLICITUD: CampoPegado[] = [
 ];
 
 const SINONIMOS: Record<CampoPegado, string[]> = {
+  propuesta: ['propuesta', 'opcion', 'alternativa', 'no. propuesta', 'propuesta no.'],
   partida: ['partida', '#', 'no', 'no.', 'num', 'numero', 'renglon'],
   sku: ['sku', 'numero de parte', 'no. de parte', 'no de parte', 'np', 'modelo', 'codigo', 'clave'],
   mayorista: ['mayorista', 'proveedor', 'distribuidor'],
@@ -192,7 +203,8 @@ function valida(a: number, mes: number, d: number): string | null {
 export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
   const celdas = separarCeldas(texto);
   const errores: ErrorPegado[] = [];
-  if (!celdas.length) return { filas: [], errores, conEncabezado: false, ignoradas: [], columnas: [] };
+  if (!celdas.length)
+    return { filas: [], errores, conEncabezado: false, ignoradas: [], columnas: [], conPropuestas: false };
 
   const [primera = []] = celdas;
   const encabezado = primera.map(campoDeEncabezado);
@@ -203,6 +215,8 @@ export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
     : [];
   const datos = conEncabezado ? celdas.slice(1) : celdas;
 
+  // Excel deja vacías las celdas combinadas salvo la primera: la propuesta se hereda de la fila de arriba.
+  let propuestaAnterior = '';
   const filas = datos.map((fila, i): FilaPegada => {
     const n = i + 1;
     const valor = (campo: CampoPegado) => {
@@ -236,8 +250,11 @@ export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
     if (textoTc && (tipoCambio === null || !/^\d+(\.\d{1,5})?$/.test(tipoCambio)))
       error('tipoCambio', 'El tipo de cambio admite máximo 5 decimales');
 
+    propuestaAnterior = valor('propuesta') || propuestaAnterior;
     return {
       fila: n,
+      partida: valor('partida'),
+      propuesta: propuestaAnterior,
       sku: valor('sku'),
       mayorista: valor('mayorista'),
       marca: valor('marca'),
@@ -251,7 +268,64 @@ export function leerPegado(texto: string, hoy = new Date()): ResultadoPegado {
       tipoCambio,
     };
   });
-  return { filas, errores, conEncabezado, ignoradas, columnas };
+  return {
+    filas,
+    errores,
+    conEncabezado,
+    ignoradas,
+    columnas,
+    conPropuestas: columnas.includes('propuesta'),
+  };
+}
+
+export interface PartidaEstructurada {
+  fila: FilaPegada;
+  adicionales: FilaPegada[];
+}
+export interface PropuestaPegada {
+  /** null si no venía columna «Propuesta» (todo va a la propuesta que se elija). */
+  nombre: string | null;
+  partidas: PartidaEstructurada[];
+}
+
+/** «1» → «Propuesta 1»; un nombre propio («Opción A») se respeta. */
+const nombrePropuesta = (texto: string) =>
+  /^\d+$/.test(texto.trim()) ? `Propuesta ${texto.trim()}` : texto.trim();
+
+/**
+ * Agrupa lo pegado en propuestas y, dentro de cada una, cada adicional («1.1», «1.2»…) bajo la partida con su entero
+ * («1»). Un adicional sin su partida queda como partida, con un aviso; nada se descarta.
+ */
+export function estructurarPegado(filas: FilaPegada[], conPropuestas: boolean) {
+  const avisos = new Map<number, string[]>();
+  const avisar = (fila: number, texto: string) => avisos.set(fila, [...(avisos.get(fila) ?? []), texto]);
+  const propuestas: PropuestaPegada[] = [];
+  const porNombre = new Map<string, PropuestaPegada>();
+  for (const f of filas) {
+    const nombre = conPropuestas ? nombrePropuesta(f.propuesta) || 'Propuesta' : null;
+    const clave = normalizar(nombre ?? '');
+    let p = porNombre.get(clave);
+    if (!p) {
+      p = { nombre, partidas: [] };
+      porNombre.set(clave, p);
+      propuestas.push(p);
+    }
+    const sub = f.partida.trim().match(/^(\d+)\.(\d+)$/);
+    if (sub && !/^0+$/.test(sub[2] ?? '')) {
+      // La última partida de esta propuesta con ese número (si se repite, la más cercana hacia arriba).
+      const padre = [...p.partidas].reverse().find((x) => x.fila.partida.trim() === sub[1]);
+      if (padre) {
+        padre.adicionales.push(f);
+        continue;
+      }
+      avisar(
+        f.fila,
+        `No hay partida ${sub[1]} para el adicional ${f.partida.trim()}: se agrega como partida`,
+      );
+    }
+    p.partidas.push({ fila: f, adicionales: [] });
+  }
+  return { propuestas, avisos };
 }
 
 /**

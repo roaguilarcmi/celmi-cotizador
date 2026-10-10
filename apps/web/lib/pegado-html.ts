@@ -189,7 +189,29 @@ export function leerTablaHtml(html: string): CeldaHtml[][] {
   if (!html.includes('<t')) return [];
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const reglas = reglasDeClase(doc);
-  return [...doc.querySelectorAll('tr')]
-    .map((tr) => [...tr.querySelectorAll('td, th')].map((c) => leerCelda(c, reglas)))
-    .filter((fila) => fila.some((c) => c.texto.trim() !== ''));
+  // Celdas combinadas (p. ej. la columna «Propuesta», 2026-10-10): en el texto copiado ocupan su lugar como celdas
+  // vacías; aquí se rellenan igual para que cada celda conserve su columna.
+  const vacia = (): CeldaHtml => ({ texto: '', contenido: null });
+  const ocupadas = new Map<number, number>(); // columna → filas que aún ocupa una celda de arriba
+  const filas = [...doc.querySelectorAll('tr')].map((tr) => {
+    const fila: CeldaHtml[] = [];
+    const llenarOcupadas = () => {
+      while ((ocupadas.get(fila.length) ?? 0) > 0) {
+        ocupadas.set(fila.length, (ocupadas.get(fila.length) ?? 0) - 1);
+        fila.push(vacia());
+      }
+    };
+    for (const c of tr.querySelectorAll('td, th')) {
+      llenarOcupadas();
+      const columnas = Math.max(1, Number(c.getAttribute('colspan')) || 1);
+      const renglones = Math.max(1, Number(c.getAttribute('rowspan')) || 1);
+      for (let k = 0; k < columnas; k++) {
+        if (renglones > 1) ocupadas.set(fila.length, renglones - 1);
+        fila.push(k === 0 ? leerCelda(c, reglas) : vacia());
+      }
+    }
+    llenarOcupadas();
+    return fila;
+  });
+  return filas.filter((fila) => fila.some((c) => c.texto.trim() !== ''));
 }

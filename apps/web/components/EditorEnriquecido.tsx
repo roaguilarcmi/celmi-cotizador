@@ -93,7 +93,10 @@ export function EditorEnriquecido({
   const colores = paleta === 'resaltado' ? COLORES_RESALTADO : COLORES_TEXTO;
 
   return (
-    <div className="rounded-md border-2 border-texto/20 bg-superficie transition-colors focus-within:border-acento focus-within:ring-4 focus-within:ring-acento-suave">
+    <div
+      data-editor-marco
+      className="rounded-md border-2 border-texto/20 bg-superficie transition-colors focus-within:border-acento focus-within:ring-4 focus-within:ring-acento-suave"
+    >
       <div
         role="toolbar"
         aria-label={`Formato de ${etiqueta.toLowerCase()}`}

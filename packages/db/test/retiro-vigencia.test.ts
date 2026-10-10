@@ -250,6 +250,15 @@ describe('convertir una partida en adicional (2026-10-10)', () => {
                   id: op.partida,
                   clave: op.partida,
                   descripcion: 'Laptop Dell Pro 14 Essential',
+                  descripcion_contenido: {
+                    type: 'doc',
+                    content: [
+                      {
+                        type: 'paragraph',
+                        content: [{ type: 'text', marks: [{ type: 'bold' }], text: 'Laptop' }],
+                      },
+                    ],
+                  },
                   cantidad: 2,
                   presentacion: 'incluida',
                   costo: { moneda: 'MXN', costo_unitario: '14533.46' },
@@ -268,5 +277,12 @@ describe('convertir una partida en adicional (2026-10-10)', () => {
       [op.partida],
     );
     expect(pa).toMatchObject({ presentacion: 'incluida', padre_desc: 'Laptop con 32 GB' });
+    // El formato de la descripción se conserva al pasar a ser adicional.
+    const [c] = await filas<{ contenido: unknown }>(
+      db,
+      'select descripcion_contenido as contenido from public.partidas where id = $1',
+      [op.partida],
+    );
+    expect(JSON.stringify(c!.contenido)).toContain('bold');
   });
 });

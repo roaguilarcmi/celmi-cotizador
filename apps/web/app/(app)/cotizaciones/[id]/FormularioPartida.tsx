@@ -29,8 +29,12 @@ export function enfocarDescripcion(contenedor: ParentNode | null | undefined) {
   if (!editor) return;
   editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
   editor.focus();
-  editor.classList.add('ring-4', 'ring-aviso');
-  window.setTimeout(() => editor.classList.remove('ring-4', 'ring-aviso'), 2500);
+  // El resaltado va en el marco, nunca en el área editable: cambiar sus clases hace que el editor relea su
+  // contenido y podía perder el formato (2026-10-10).
+  const marco = editor.closest<HTMLElement>('[data-editor-marco]');
+  if (!marco) return;
+  marco.classList.add('ring-4', 'ring-aviso');
+  window.setTimeout(() => marco.classList.remove('ring-4', 'ring-aviso'), 2500);
 }
 
 /** partida: de primer nivel · adicional: de una partida · cargo: se prorratea entre partidas (reglas 2026-10-05). */

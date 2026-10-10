@@ -1,7 +1,13 @@
 'use client';
 
 import { aEscalado, costoPartida, ESCALA_DINERO, formatearMXN } from '@celmi/core';
-import { empatarCatalogo, leerPegado, normalizar, type FilaPegada } from '@celmi/validation';
+import {
+  empatarCatalogo,
+  estructurarPegado,
+  leerPegado,
+  normalizar,
+  type FilaPegada,
+} from '@celmi/validation';
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { Boton } from '@/components/ui';
@@ -65,6 +71,12 @@ function aFila(r: FilaRevisada, unidadPorOmision: string | null, contenido: unkn
   };
 }
 
+/** Lo que se agrega: por propuesta (nombre null = a la propuesta elegida), partidas con sus adicionales. */
+export interface GrupoPegado {
+  nombre: string | null;
+  filas: FilaEditable[];
+}
+
 /**
  * «Pegar desde Excel»: se copian las celdas de la Solicitud de precios (o cualquier hoja con encabezados reconocibles)
  * y se pegan aquí. Se muestra qué se reconoció antes de agregarlo; lo dudoso se marca, no se inventa.
@@ -84,7 +96,8 @@ export function PegarExcel({
   catalogos: Catalogos;
   propuestas: { clave: string; nombre: string }[];
   propuestaActual: string;
-  onAgregar: (filas: FilaEditable[], destino: string | 'nueva') => void;
+  /** `destino` sólo aplica si lo pegado no trae columna «Propuesta». */
+  onAgregar: (grupos: GrupoPegado[], destino: string | 'nueva') => void;
   onCerrar: () => void;
 }) {
   return (
@@ -130,8 +143,46 @@ function Contenido({
     const formatos = r.filas.map((_, i) =>
       columna >= 0 ? (tabla[desde + i]?.[columna]?.contenido ?? null) : null,
     );
-    return { ...r, formatos, revisadas: r.filas.map((f) => revisar(f, catalogos, errores)) };
-  }, [texto, html, catalogos]);
+    // Adicionales («1.1» bajo «1») y propuestas (columna «Propuesta»), 2026-10-10.
+    const estructura = estructurarPegado(r.filas, r.conPropuestas);
+    for (const [fila, avisos] of estructura.avisos)
+      errores.set(fila, [...(errores.get(fila) ?? []), ...avisos]);
+    const revisadas = r.filas.map((f) => revisar(f, catalogos, errores));
+    const porFila = new Map(
+      revisadas.map((x, i) => [x.original.fila, { r: x, formato: formatos[i] ?? null }]),
+    );
+    const grupos: GrupoPegado[] = estructura.propuestas.map((p) => ({
+      nombre: p.nombre,
+      filas: p.partidas.flatMap(({ fila, adicionales }) => {
+        const e = porFila.get(fila.fila);
+        if (!e) return [];
+        const partida = aFila(e.r, unidadPorOmision, e.formato);
+        partida.componentes = adicionales.flatMap((a) => {
+          const ea = porFila.get(a.fila);
+          if (!ea) return [];
+          const c = aFila(ea.r, unidadPorOmision, ea.formato);
+          // Incluido en el precio si lleva la misma cantidad que su partida; si no, como línea visible.
+          return [
+            { ...c, presentacion: c.cantidad === partida.cantidad ? 'incluida' : 'linea' } as FilaEditable,
+          ];
+        });
+        return [partida];
+      }),
+    }));
+    const numAdicionales = estructura.propuestas.reduce(
+      (s, p) => s + p.partidas.reduce((t, x) => t + x.adicionales.length, 0),
+      0,
+    );
+    // Filas en el orden en que quedan: partida y debajo sus adicionales, agrupadas por propuesta.
+    const vista = estructura.propuestas.flatMap((p) => [
+      ...(p.nombre ? [{ tipo: 'propuesta' as const, nombre: p.nombre }] : []),
+      ...p.partidas.flatMap((x) => [
+        { tipo: 'partida' as const, r: porFila.get(x.fila.fila)!.r },
+        ...x.adicionales.map((a) => ({ tipo: 'adicional' as const, r: porFila.get(a.fila)!.r })),
+      ]),
+    ]);
+    return { ...r, formatos, revisadas, grupos, numAdicionales, vista };
+  }, [texto, html, catalogos, unidadPorOmision]);
   const conFormato = lectura.formatos.filter(Boolean).length;
   const conAvisos = lectura.revisadas.filter((r) => r.avisos.length).length;
 
@@ -139,11 +190,7 @@ function Contenido({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (lectura.revisadas.length)
-          onAgregar(
-            lectura.revisadas.map((r, i) => aFila(r, unidadPorOmision, lectura.formatos[i])),
-            destino,
-          );
+        if (lectura.revisadas.length) onAgregar(lectura.grupos, destino);
       }}
       className="flex flex-col gap-4"
     >
@@ -172,9 +219,16 @@ function Contenido({
           <div className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="inline-flex items-center gap-1.5 rounded-pill bg-exito-suave px-2.5 py-1 font-semibold text-exito">
               <Icon name="palomita" size={14} strokeWidth={2.6} />
-              {lectura.revisadas.length}{' '}
-              {lectura.revisadas.length === 1 ? 'partida reconocida' : 'partidas reconocidas'}
+              {lectura.revisadas.length - lectura.numAdicionales}{' '}
+              {lectura.revisadas.length - lectura.numAdicionales === 1 ? 'partida' : 'partidas'}
+              {lectura.numAdicionales > 0 &&
+                ` + ${lectura.numAdicionales} ${lectura.numAdicionales === 1 ? 'adicional' : 'adicionales'}`}
             </span>
+            {lectura.conPropuestas && (
+              <span className="inline-flex items-center gap-1.5 rounded-pill bg-acento-suave px-2.5 py-1 font-semibold text-acento-texto">
+                {lectura.grupos.length} {lectura.grupos.length === 1 ? 'propuesta' : 'propuestas'}
+              </span>
+            )}
             {conFormato > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-pill bg-acento-suave px-2.5 py-1 font-semibold text-acento-texto">
                 <span className="font-bold">Aa</span>
@@ -200,6 +254,7 @@ function Contenido({
                 <tr>
                   {[
                     '#',
+                    'Partida',
                     'Descripción',
                     'Mayorista',
                     'Marca',
@@ -215,7 +270,16 @@ function Contenido({
                 </tr>
               </thead>
               <tbody>
-                {lectura.revisadas.map((r) => {
+                {lectura.vista.map((v) => {
+                  if (v.tipo === 'propuesta')
+                    return (
+                      <tr key={`p-${v.nombre}`} className="border-t border-borde bg-acento-suave/50">
+                        <td colSpan={9} className="px-2.5 py-1.5 text-xs font-bold text-acento-texto">
+                          {v.nombre}
+                        </td>
+                      </tr>
+                    );
+                  const { r } = v;
                   const f = r.original;
                   let total = '';
                   try {
@@ -234,7 +298,15 @@ function Contenido({
                       className={`border-t border-borde ${r.avisos.length ? 'bg-aviso-suave/40' : ''}`}
                     >
                       <td className="px-2.5 py-2 text-texto-suave tabular">{f.fila}</td>
-                      <td className="max-w-[260px] px-2.5 py-2">
+                      <td className="px-2.5 py-2 font-semibold whitespace-nowrap tabular">
+                        {f.partida || '—'}
+                      </td>
+                      <td className={`max-w-[260px] px-2.5 py-2 ${v.tipo === 'adicional' ? 'pl-6' : ''}`}>
+                        {v.tipo === 'adicional' && (
+                          <span className="mb-0.5 block text-[10px] font-bold tracking-wide text-acento-texto uppercase">
+                            ↳ Adicional
+                          </span>
+                        )}
                         <div className="truncate font-semibold" title={f.descripcion}>
                           {f.descripcion || <span className="text-peligro">Sin descripción</span>}
                         </div>
@@ -278,27 +350,35 @@ function Contenido({
             </table>
           </div>
 
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave sm:flex-row sm:items-center sm:gap-3">
-            Agregar a
-            <select
-              value={destino}
-              onChange={(e) => setDestino(e.target.value)}
-              className="h-10 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento"
-            >
-              {propuestas.map((p) => (
-                <option key={p.clave} value={p.clave}>
-                  {p.nombre}
-                </option>
-              ))}
-              <option value="nueva">Una propuesta nueva</option>
-            </select>
-          </label>
+          {lectura.conPropuestas ? (
+            <p className="text-xs text-texto-suave">
+              Se agregan a{' '}
+              <strong className="text-texto">{lectura.grupos.map((g) => g.nombre).join(', ')}</strong>: las
+              que ya existen con ese nombre se completan; las demás se crean.
+            </p>
+          ) : (
+            <label className="flex flex-col gap-1.5 text-xs font-semibold text-texto-suave sm:flex-row sm:items-center sm:gap-3">
+              Agregar a
+              <select
+                value={destino}
+                onChange={(e) => setDestino(e.target.value)}
+                className="h-10 rounded-md border-2 border-texto/20 bg-superficie px-3 text-sm text-texto outline-none focus:border-acento"
+              >
+                {propuestas.map((p) => (
+                  <option key={p.clave} value={p.clave}>
+                    {p.nombre}
+                  </option>
+                ))}
+                <option value="nueva">Una propuesta nueva</option>
+              </select>
+            </label>
+          )}
         </>
       )}
 
       <div className="flex flex-wrap items-center gap-2.5">
         <Boton type="submit" variante="primario" icono="mas" disabled={!lectura.revisadas.length}>
-          {lectura.revisadas.length ? `Agregar ${lectura.revisadas.length} partidas` : 'Agregar partidas'}
+          {lectura.revisadas.length ? `Agregar ${lectura.revisadas.length} renglones` : 'Agregar partidas'}
         </Boton>
         {ventana && (
           <Boton variante="fantasma" onClick={ventana.intentarCerrar}>

@@ -566,7 +566,53 @@ export function EditorCotizacion({
           propuestas={propuestas.map((p) => ({ clave: p.clave, nombre: p.nombre }))}
           propuestaActual={propuesta.clave}
           onCerrar={() => setPegado(null)}
-          onAgregar={(filas, destino) => {
+          onAgregar={(grupos, destino) => {
+            const filas = grupos.flatMap((g) => g.filas);
+            const renglones = filas.reduce((s, f) => s + 1 + f.componentes.length, 0);
+            if (grupos.some((g) => g.nombre !== null)) {
+              // Varias propuestas (columna «Propuesta»): se completan las que existen con ese nombre; la primera
+              // propuesta vacía toma el primer nombre nuevo; las demás se crean (2026-10-10).
+              const lista = [...propuestas];
+              let primera: string | null = null;
+              for (const g of grupos) {
+                const nombre = g.nombre ?? 'Propuesta';
+                let i = lista.findIndex(
+                  (p) => !p.es_adicional && p.nombre.trim().toLowerCase() === nombre.toLowerCase(),
+                );
+                if (i < 0) {
+                  i = lista.findIndex(
+                    (p) =>
+                      !p.es_adicional &&
+                      p.partidas.length === 0 &&
+                      !grupos.some((x) => x.nombre === p.nombre),
+                  );
+                  if (i >= 0) lista[i] = { ...lista[i]!, nombre };
+                }
+                if (i >= 0) lista[i] = { ...lista[i]!, partidas: [...lista[i]!.partidas, ...g.filas] };
+                else {
+                  lista.push({
+                    clave: claveNueva('propuesta'),
+                    nombre,
+                    tipo: '',
+                    es_adicional: false,
+                    partidas: g.filas,
+                  });
+                  i = lista.length - 1;
+                }
+                primera ??= lista[i]!.clave;
+              }
+              // Las propuestas de adicionales siguen al final.
+              setPropuestas([
+                ...lista.filter((p) => !p.es_adicional),
+                ...lista.filter((p) => p.es_adicional),
+              ]);
+              if (primera) setActiva(primera);
+              setPegado(null);
+              setMensaje({
+                texto: `${renglones} renglones agregados en ${grupos.length} propuestas. Revisa y guarda.`,
+              });
+              return;
+            }
             if (destino === 'nueva') {
               const nueva: PropuestaEditable = {
                 clave: claveNueva('propuesta'),
@@ -584,7 +630,7 @@ export function EditorCotizacion({
               setActiva(destino);
             }
             setPegado(null);
-            setMensaje({ texto: `${filas.length} partidas agregadas. Revisa y guarda.` });
+            setMensaje({ texto: `${renglones} renglones agregados. Revisa y guarda.` });
           }}
         />
       )}
