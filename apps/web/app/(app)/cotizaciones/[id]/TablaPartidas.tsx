@@ -89,7 +89,7 @@ export function TablaPartidas({
           <span className="text-right">Cantidad</span>
           <span>Proveedor</span>
           <span className="text-right">Costo unitario</span>
-          <span className="text-right">Costo total MXN</span>
+          <span className="text-right">Costo total</span>
           <span />
         </div>
         <ol ref={lista} aria-label="Partidas">

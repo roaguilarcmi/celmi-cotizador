@@ -92,9 +92,14 @@ export function EditorCotizacion({
   const [previa, setPrevia] = useState(revision);
   if (revision !== previa) {
     setPrevia(revision);
+    // Sólo se reemplaza lo capturado si cambiaron las partidas guardadas. Guardar otro dato de la revisión (esquema,
+    // mayorista del arrendamiento, condiciones…) recarga la revisión y antes borraba lo no guardado (2026-10-10).
     const nuevas = desdeRevision(revision);
-    setPropuestas(nuevas);
-    setBase(JSON.stringify(aPayload(nuevas)));
+    const nuevaBase = JSON.stringify(aPayload(nuevas));
+    if (nuevaBase !== base) {
+      setPropuestas(nuevas);
+      setBase(nuevaBase);
+    }
   }
   const [activa, setActiva] = useState(() => propuestas[0]?.clave ?? '');
   const [paso, setPaso] = useState<Paso>(pasoInicial);
