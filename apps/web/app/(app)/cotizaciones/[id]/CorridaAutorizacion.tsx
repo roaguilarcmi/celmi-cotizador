@@ -191,13 +191,8 @@ export function CorridaAutorizacion({
   const [ocultas, cambiarOcultas] = useColumnasOcultas();
   const [completaGuardada, guardarCompleta] = usePreferencia('celmi-corrida-completa');
   const completa = completaGuardada === '1';
-  // Parámetros y cifras plegables para dar más alto a la hoja (2026-10-09); se recuerda en este navegador.
-  const [plegadoGuardado, guardarPlegado] = usePreferencia('celmi-corrida-plegada');
-  const plegado = plegadoGuardado === '1';
   const [dialogo, setDialogo] = useState<'autorizar' | 'rechazar' | 'retirar' | null>(null);
-  // Avisos (2026-10-08): contador rojo que parpadea hasta abrirlo, filas marcadas y confirmación al autorizar.
-  const [verAvisos, setVerAvisos] = useState(false);
-  const [avisosVistos, setAvisosVistos] = useState(false);
+  // Avisos: franja con etiquetas, punto en la fila y confirmación de cada uno al autorizar.
   const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
   const [devolver, setDevolver] = useState(false);
   /** Fila resaltada un momento al saltar a ella desde el aviso de revisión. */
@@ -206,22 +201,6 @@ export function CorridaAutorizacion({
   const [pendiente, iniciar] = useTransition();
   const area = useRef<HTMLDivElement>(null);
   const menuDevolver = useRef<HTMLDivElement>(null);
-  const menuAvisos = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!verAvisos) return;
-    const fuera = (e: MouseEvent) => {
-      if (!menuAvisos.current?.contains(e.target as Node)) setVerAvisos(false);
-    };
-    const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setVerAvisos(false);
-    };
-    document.addEventListener('mousedown', fuera);
-    document.addEventListener('keydown', tecla);
-    return () => {
-      document.removeEventListener('mousedown', fuera);
-      document.removeEventListener('keydown', tecla);
-    };
-  }, [verAvisos]);
   useEffect(() => {
     if (!devolver) return;
     const fuera = (e: MouseEvent) => {
@@ -335,13 +314,7 @@ export function CorridaAutorizacion({
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
-      if (
-        e.key === 'Escape' &&
-        completa &&
-        !devolver &&
-        !verAvisos &&
-        !document.querySelector('dialog[open]')
-      )
+      if (e.key === 'Escape' && completa && !devolver && !document.querySelector('dialog[open]'))
         guardarCompleta(null);
     };
     const salir = (e: BeforeUnloadEvent) => {
@@ -353,7 +326,7 @@ export function CorridaAutorizacion({
       window.removeEventListener('keydown', tecla);
       window.removeEventListener('beforeunload', salir);
     };
-  }, [completa, sucio, guardarCompleta, devolver, verAvisos]);
+  }, [completa, sucio, guardarCompleta, devolver]);
 
   // Costo (no depende de la utilidad) y resultado de cada partida por separado: un dato inválido sólo marca su fila.
   let entrada: ReturnType<typeof entradaCorrida> | null = null;
@@ -654,16 +627,13 @@ export function CorridaAutorizacion({
         const estado = estadoVigenciaPrecio(fecha, hoyLocal(), fechaVigencia);
         const texto = fechaCorta.format(new Date(`${fecha}T00:00:00Z`));
         return estado === 'vencido' ? (
-          <span
-            title="El precio del mayorista ya venció"
-            className="rounded-sm bg-peligro px-1.5 py-0.5 text-[11px] font-bold text-white"
-          >
+          <span title="El precio del mayorista ya venció" className="font-bold text-peligro">
             {texto} · vencido
           </span>
         ) : estado === 'antes' ? (
           <span
             title="El precio del mayorista vence antes que la cotización"
-            className="rounded-sm bg-aviso-suave px-1.5 py-0.5 text-[11px] font-bold text-aviso"
+            className="font-semibold text-aviso"
           >
             {texto}
           </span>
@@ -873,218 +843,105 @@ export function CorridaAutorizacion({
 
   const contenido = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-borde bg-superficie">
-      {/* Renglón 1: estado, avisos y decisión. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde px-4 py-2.5">
-        <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
-        {estadoPill}
-        {avisos.length > 0 && (
-          <div ref={menuAvisos} className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setVerAvisos((x) => !x);
-                setAvisosVistos(true);
-              }}
-              aria-expanded={verAvisos}
-              className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-pill bg-peligro px-3 text-xs font-bold text-white transition-transform hover:brightness-110 ${
-                avisosVistos ? '' : 'animate-pulse'
-              }`}
-            >
-              <Icon name="campana" size={14} strokeWidth={2.4} />
-              {avisos.length} {avisos.length === 1 ? 'aviso' : 'avisos'}
-              <Icon name={verAvisos ? 'arriba' : 'abajo'} size={12} strokeWidth={2.6} />
-            </button>
-            {verAvisos && (
-              <div
-                role="dialog"
-                aria-label="Avisos de esta cotización"
-                className="animar-entrada absolute top-full left-0 z-40 mt-1.5 w-[min(440px,calc(100vw-2rem))] rounded-lg border border-borde bg-superficie p-2 sombra"
-              >
-                {avisos.map((a) => (
-                  <div key={a.id} className="flex gap-3 rounded-md px-3 py-2.5">
-                    <span
-                      className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-white ${
-                        a.tono === 'peligro' ? 'bg-peligro' : 'bg-aviso'
-                      }`}
+      {/*
+        Propuesta B (2026-10-10): arriba sólo dos renglones finos —título con los avisos en una línea y los parámetros
+        como campos neutros—; las cifras y la decisión van en una barra fija al pie. Un solo color fuerte: «Autorizar».
+      */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h2 className="text-[15px] font-bold tracking-tight">Corrida de precios</h2>
+          {estadoPill}
+          <p className="min-w-0 truncate text-xs text-texto-suave">
+            {revision.estado === 'pendiente_autorizacion' ? (
+              <>
+                {solicitante ?? 'El ejecutivo'} solicitó autorización
+                {revision.enviada_en ? ` el ${fechaHora.format(new Date(revision.enviada_en))}` : ''}
+                {puedeRetirar && !puedeAutorizar && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      disabled={pendiente}
+                      onClick={() =>
+                        iniciar(async () =>
+                          resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador'), true),
+                        )
+                      }
+                      className="cursor-pointer font-semibold text-acento-texto hover:underline"
                     >
-                      <Icon name="campana" size={15} />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-bold">{a.titulo}</div>
-                      <div className="text-xs text-texto-suave">{a.detalle}</div>
-                      {a.filas && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {a.filas.map((x) => (
-                            <button
-                              key={x.id}
-                              type="button"
-                              onClick={() => {
-                                setVerAvisos(false);
-                                irAFila(x.id);
-                              }}
-                              title={`Ir a ${x.ref}: ${x.descripcion}`}
-                              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-sm border border-aviso/40 px-2 text-[11px] font-bold text-aviso tabular hover:bg-aviso-suave"
-                            >
-                              {x.ref}
-                              <Icon name="derecha" size={11} />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      Retirar para corregir
+                    </button>
+                  </>
+                )}
+              </>
+            ) : revision.estado === 'rechazada' ? (
+              <>Motivo: «{revision.comentario_autorizacion}»</>
+            ) : (
+              <>
+                {revision.autorizada_en
+                  ? `Autorizada el ${fechaHora.format(new Date(revision.autorizada_en))}`
+                  : ''}
+                {revision.comentario_autorizacion ? ` · Nota: «${revision.comentario_autorizacion}»` : ''}
+              </>
             )}
+          </p>
+          <div className="ml-auto flex items-center gap-1.5">
+            <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
+            <Boton
+              tamano="chico"
+              variante="fantasma"
+              icono={completa ? 'compactar' : 'expandir'}
+              onClick={() => guardarCompleta(completa ? null : '1')}
+              title={completa ? 'Salir de pantalla completa (Esc)' : 'Usar toda la pantalla'}
+            >
+              {completa ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            </Boton>
+          </div>
+        </div>
+
+        {/*
+          Avisos con protagonismo (2026-10-10): franja ámbar con campana que parpadea y una etiqueta sólida por aviso
+          (roja si es grave o bloquea). Cada etiqueta lleva a su fila.
+        */}
+        {avisos.length > 0 && (
+          <div
+            role="note"
+            className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-md border border-aviso/50 bg-aviso-suave px-2.5 py-1.5"
+          >
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-aviso">
+              <Icon name="campana" size={15} strokeWidth={2.6} className="motion-safe:animate-pulse" />
+              {avisos.length} por revisar
+            </span>
+            {avisos.map((a) => {
+              const primera = a.filas?.[0];
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  title={a.detalle}
+                  onClick={() => primera && irAFila(primera.id)}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-[12px] font-bold text-superficie transition-[filter] hover:brightness-110 ${
+                    a.tono === 'peligro' ? 'bg-peligro' : 'bg-aviso'
+                  } ${primera ? 'cursor-pointer' : 'cursor-help'}`}
+                >
+                  {a.titulo}
+                  {a.filas && a.filas.length > 0 && (
+                    <span className="tabular font-semibold opacity-90">
+                      {a.filas.map((x) => x.ref).join(', ')}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
-        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/*
-            Cifras en dos renglones, junto a la decisión (2026-10-08). La transaccionalidad va aparte: no entra en la
-            utilidad (ni en monto ni en %).
-          */}
-          <div
-            className={`grid shrink-0 grid-flow-col grid-rows-2 gap-x-4 gap-y-1 border-l border-borde pl-3 ${plegado ? 'hidden' : ''}`}
-          >
-            <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
-            <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} tono="text-acento-texto" />
-            <Dato
-              etiqueta="Utilidad sin IVA"
-              valor={validas ? pesos(utilidad) : '—'}
-              detalle={validas ? `${pct(utilidad, costo)} %` : undefined}
-              tono="text-exito"
-            />
-            <Dato
-              etiqueta={`Al cliente con IVA${numAdicionales ? ` (+${numAdicionales} adic.)` : ''}`}
-              valor={
-                principales.length === 0
-                  ? '—'
-                  : principales.length === 1
-                    ? pesos(principales[0] ?? 0n)
-                    : `${pesos(principales.reduce((a, b) => (b < a ? b : a)))} – ${pesos(principales.reduce((a, b) => (b > a ? b : a)))}`
-              }
-            />
-            {conTransaccion && (
-              <Dato
-                etiqueta="Transaccionalidad sin IVA"
-                valor={pesos(transaccionTotal)}
-                detalle={Number(transaccion) > 0 ? `${transaccion} %` : undefined}
-                tono="text-aviso"
-              />
-            )}
-          </div>
-          {editable && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Boton tamano="chico" icono="guardado" disabled={pendiente || !sucio} onClick={guardarAvance}>
-                Guardar avance
-              </Boton>
-              {/* Retirar y rechazar en un solo menú: menos botones a la vista (2026-10-07). */}
-              <div ref={menuDevolver} className="relative">
-                <Boton
-                  tamano="chico"
-                  variante="peligro"
-                  icono="izquierda"
-                  iconoFinal="abajo"
-                  disabled={pendiente}
-                  aria-expanded={devolver}
-                  aria-haspopup="menu"
-                  onClick={() => setDevolver((x) => !x)}
-                >
-                  Devolver
-                </Boton>
-                {devolver && (
-                  <div
-                    role="menu"
-                    className="animar-entrada absolute top-full right-0 z-40 mt-1.5 w-80 rounded-lg border border-borde bg-superficie p-1.5 sombra"
-                  >
-                    {(
-                      [
-                        {
-                          id: 'retirar',
-                          titulo: 'Retirar para corregir',
-                          detalle: `Regresa a borrador. Se avisa a ${[capturista, solicitante].filter((x, i, xs) => x && xs.indexOf(x) === i).join(' y ') || 'quien la preparó'}.`,
-                          icono: 'izquierda',
-                        },
-                        {
-                          id: 'rechazar',
-                          titulo: 'Rechazar',
-                          detalle: 'Queda rechazada con el motivo que escribas.',
-                          icono: 'cerrar',
-                        },
-                      ] as const
-                    ).map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setDevolver(false);
-                          setDialogo(o.id);
-                        }}
-                        className="flex w-full cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-superficie-2"
-                      >
-                        <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-peligro-suave text-peligro">
-                          <Icon name={o.icono} size={14} />
-                        </span>
-                        <span>
-                          <span className="block text-[13px] font-semibold">{o.titulo}</span>
-                          <span className="block text-xs text-texto-suave">{o.detalle}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Boton
-                tamano="chico"
-                icono="candado"
-                variante="primario"
-                disabled={
-                  pendiente ||
-                  !validas ||
-                  !tcsValidos ||
-                  !anticipoValido ||
-                  !transaccionValida ||
-                  falsaAlcance ||
-                  !vigenciaValida
-                }
-                onClick={() => {
-                  setConfirmados(new Set());
-                  setDialogo('autorizar');
-                }}
-                title={
-                  !vigenciaValida
-                    ? 'Define la vigencia de la cotización'
-                    : validas && tcsValidos
-                      ? undefined
-                      : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
-                }
-              >
-                Autorizar
-              </Boton>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/*
-        Renglón 2 (propuesta C, 2026-10-08): tarjetas de parámetros siempre visibles y editables, y las cifras a la
-        derecha en el mismo bloque.
-      */}
-      <div
-        className={`flex flex-wrap items-stretch gap-2 border-b border-borde bg-superficie-2/60 px-3 py-2.5 ${plegado ? 'hidden' : ''}`}
-      >
-        <Tarjeta2
-          borde={vigenciaValida ? 'border-acento/40' : 'border-peligro/60'}
-          etiqueta="Vigencia"
-          ayuda={
-            vigenciaEnFinDeSemana
-              ? 'No puede caer en sábado ni domingo'
-              : vigenciaValida
-                ? undefined
-                : 'Obligatoria para autorizar'
-          }
-          error={!vigenciaValida}
+      {/* Parámetros: campos neutros, siempre visibles; lo que falta se marca en rojo. */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-y border-borde bg-superficie-2/50 px-4 py-2.5">
+        <CampoNeutro
+          etiqueta={vigenciaEnFinDeSemana ? 'Vigencia · no en fin de semana' : 'Vigencia'}
+          falta={!vigenciaValida}
         >
           <input
             type="date"
@@ -1094,9 +951,8 @@ export function CorridaAutorizacion({
             autoComplete="off"
             aria-invalid={!vigenciaValida}
             onChange={(e) => setVigencia(e.target.value ? `${e.target.value}T${horaVigencia}` : '')}
-            className={`${controlParametro} w-[128px] font-bold ${vigenciaValida ? '' : 'border-peligro'}`}
+            className={`${controlParametro} w-[132px] ${vigenciaValida ? '' : 'border-peligro'}`}
           />
-          {/* Hora en 24 h (el control nativo la mostraba como «02:00» sin a. m./p. m.). */}
           <select
             aria-label="Hora de vigencia"
             value={horaVigencia}
@@ -1116,7 +972,7 @@ export function CorridaAutorizacion({
               title="Atajos de vigencia (a las 14:00 h)"
               value=""
               onChange={(e) => e.target.value && setVigencia(`${e.target.value}T${HORA_VIGENCIA}`)}
-              className={`${controlParametro} w-[76px] cursor-pointer text-texto-suave`}
+              className={`${controlParametro} w-[78px] cursor-pointer text-texto-suave`}
             >
               <option value="">Atajos</option>
               {atajos.map((a) => (
@@ -1126,44 +982,29 @@ export function CorridaAutorizacion({
               ))}
             </select>
           )}
-        </Tarjeta2>
+        </CampoNeutro>
 
-        <Tarjeta2
-          borde={tcsValidos ? 'border-aviso/50' : 'border-peligro/60'}
-          etiqueta="Tipo de cambio"
-          ayuda={monedas.length ? undefined : 'Todo en pesos'}
-          error={!tcsValidos}
-        >
-          <span
-            title="En pesos mexicanos el tipo de cambio es 1 y no se modifica"
-            className="inline-flex h-10 items-center gap-1 text-xs font-semibold text-texto-suave"
-          >
-            <Icon name="candado" size={11} />
-            MXN <strong className="text-texto">1</strong>
-          </span>
-          {monedas.map((m) => {
-            const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
-            return (
-              <label key={m} className="inline-flex items-center gap-1 text-xs font-bold text-aviso">
-                {m}
-                <input
-                  value={tcs[m] ?? ''}
-                  disabled={!editable}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="0.00000"
-                  aria-label={`Tipo de cambio ${m}`}
-                  aria-invalid={!valido}
-                  onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
-                  className={`${controlParametro} tabular w-[92px] text-center font-bold ${valido ? '' : 'border-peligro'}`}
-                />
-              </label>
-            );
-          })}
-        </Tarjeta2>
+        {monedas.map((m) => {
+          const valido = tipoCambioSchema.safeParse(tcs[m] ?? '').success;
+          return (
+            <CampoNeutro key={m} etiqueta={`T.C. ${m}`} falta={!valido}>
+              <input
+                value={tcs[m] ?? ''}
+                disabled={!editable}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00000"
+                aria-label={`Tipo de cambio ${m}`}
+                aria-invalid={!valido}
+                onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
+                className={`${controlParametro} tabular w-[96px] text-right ${valido ? '' : 'border-peligro'}`}
+              />
+            </CampoNeutro>
+          );
+        })}
 
         {editable && (
-          <Tarjeta2 borde="border-exito/50" etiqueta="Utilidad general">
+          <CampoNeutro etiqueta="Utilidad general">
             <CampoPorcentaje
               valor={general}
               onCambio={(v) => setGeneral(v.trim())}
@@ -1174,23 +1015,17 @@ export function CorridaAutorizacion({
             />
             <Boton
               tamano="chico"
-              variante="exito"
+              variante="fantasma"
               onClick={() => setPorPartida({})}
               disabled={!general || !generalValida}
-              title="Aplicar a todas las partidas"
             >
-              Aplicar
+              Aplicar a todas
             </Boton>
-          </Tarjeta2>
+          </CampoNeutro>
         )}
 
         {esAdquisicion && (
-          <Tarjeta2
-            borde={anticipoValido && anticipo ? 'border-info/50' : 'border-peligro/60'}
-            etiqueta="Anticipo"
-            ayuda="Del total con IVA"
-            error={!(anticipoValido && anticipo)}
-          >
+          <CampoNeutro etiqueta="Anticipo · del total con IVA" falta={!(anticipoValido && anticipo)}>
             <CampoPorcentaje
               valor={anticipo}
               onCambio={(v) => setAnticipo(v.replace(/[^\d.]/g, ''))}
@@ -1200,16 +1035,11 @@ export function CorridaAutorizacion({
               deshabilitado={!editable}
               ancho="w-[76px]"
             />
-          </Tarjeta2>
+          </CampoNeutro>
         )}
 
         {conTransaccion && (
-          <Tarjeta2
-            borde={falsaAlcance ? 'border-peligro/60' : 'border-aviso/50'}
-            etiqueta="Transaccionalidad"
-            ayuda={falsaAlcance ? '¿A qué partidas aplica?' : undefined}
-            error={falsaAlcance}
-          >
+          <CampoNeutro etiqueta="Transaccionalidad" falta={falsaAlcance}>
             <CampoPorcentaje
               valor={transaccion}
               onCambio={(v) => setTransaccion(v.replace(/[^\d.]/g, ''))}
@@ -1223,12 +1053,12 @@ export function CorridaAutorizacion({
               <div
                 role="radiogroup"
                 aria-label="¿A qué partidas aplica?"
-                className={`inline-flex h-10 rounded-sm border p-0.5 ${falsaAlcance ? 'border-peligro' : 'border-borde'}`}
+                className={`inline-flex h-10 rounded-sm border bg-superficie p-0.5 ${falsaAlcance ? 'border-peligro' : 'border-texto/20'}`}
               >
                 {(
                   [
                     ['todas', 'Todas'],
-                    ['diferentes', `Otro prov. (${diferentes.length})`],
+                    ['diferentes', `Otro proveedor (${diferentes.length})`],
                   ] as const
                 ).map(([id, nombre]) => (
                   <button
@@ -1238,8 +1068,8 @@ export function CorridaAutorizacion({
                     aria-checked={alcance === id}
                     disabled={!editable}
                     onClick={() => setAlcance(id)}
-                    className={`cursor-pointer rounded-[3px] px-2 text-[11px] font-semibold transition-colors ${
-                      alcance === id ? 'bg-aviso text-white' : 'text-texto-suave hover:text-texto'
+                    className={`cursor-pointer rounded-[3px] px-2.5 text-xs font-semibold transition-colors ${
+                      alcance === id ? 'bg-texto text-superficie' : 'text-texto-suave hover:text-texto'
                     }`}
                   >
                     {nombre}
@@ -1247,135 +1077,24 @@ export function CorridaAutorizacion({
                 ))}
               </div>
             )}
-          </Tarjeta2>
+          </CampoNeutro>
         )}
-      </div>
 
-      {/* Renglón 3: la entrega fuera de zona no está en una fila: va en una banda roja. */}
-      {fueraDeZona(estadoEntrega) && (
-        <div
-          role="note"
-          className="flex items-center gap-2.5 border-b border-peligro bg-peligro px-4 py-2 text-[13px] text-white"
-        >
-          <Icon name="campana" size={16} strokeWidth={2.4} className="shrink-0" />
-          <span>
-            <strong>{estadoEntrega ? `Entrega en ${estadoEntrega}` : 'Sin estado de entrega'}:</strong>{' '}
-            {avisos.find((a) => a.id === 'zona')?.detalle}
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 border-b border-borde px-3 py-1.5">
-        <button
-          type="button"
-          onClick={() => guardarPlegado(plegado ? null : '1')}
-          aria-expanded={!plegado}
-          title={plegado ? 'Mostrar parámetros y cifras' : 'Plegar parámetros y cifras para ver más filas'}
-          className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-borde bg-superficie px-2.5 text-xs font-semibold text-texto hover:bg-superficie-2"
-        >
-          <Icon name={plegado ? 'abajo' : 'arriba'} size={13} strokeWidth={2.6} />
-          {plegado ? 'Mostrar parámetros' : 'Plegar'}
-        </button>
-        {plegado && (
-          // Resumen en una línea: lo que falta, en rojo, y las cifras clave.
-          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            {[
-              vigenciaValida
-                ? { t: `Vigencia ${textoVigencia(vigenciaIso)}` }
-                : { t: 'Falta la vigencia', falta: true },
-              ...monedas.map((m) =>
-                tipoCambioSchema.safeParse(tcs[m] ?? '').success
-                  ? { t: `T.C. ${m} ${tcs[m]}` }
-                  : { t: `Falta el T.C. ${m}`, falta: true },
-              ),
-              ...(esAdquisicion && !(anticipoValido && anticipo)
-                ? [{ t: 'Falta el anticipo', falta: true }]
-                : []),
-              {
-                t: `Utilidad ${validas ? `${pesos(utilidad)} · ${pct(utilidad, costo)} %` : '—'}`,
-                exito: true,
-              },
-              ...(conTransaccion ? [{ t: `Transacc. ${pesos(transaccionTotal)}` }] : []),
-            ].map((x: { t: string; falta?: boolean; exito?: boolean }) => (
-              <button
-                key={x.t}
-                type="button"
-                onClick={() => guardarPlegado(null)}
-                className={`inline-flex h-7 shrink-0 cursor-pointer items-center rounded-pill border px-2.5 text-xs font-semibold whitespace-nowrap ${
-                  x.falta
-                    ? 'border-peligro/40 bg-peligro-suave text-peligro'
-                    : x.exito
-                      ? 'border-exito/30 bg-exito-suave text-exito'
-                      : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
-                }`}
-              >
-                {x.t}
-              </button>
-            ))}
-          </div>
-        )}
-        <p className={`min-w-0 truncate text-xs text-texto-suave ${plegado ? 'hidden 2xl:block' : ''}`}>
-          {revision.estado === 'pendiente_autorizacion' ? (
-            <>
-              <strong className="text-texto">{solicitante ?? 'El ejecutivo'}</strong> solicitó autorización
-              {revision.enviada_en ? ` el ${fechaHora.format(new Date(revision.enviada_en))}` : ''}
-              {puedeRetirar && !puedeAutorizar && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    disabled={pendiente}
-                    onClick={() =>
-                      iniciar(async () =>
-                        resultado(await cambiarEstadoRevision(revision.id, cotizacionId, 'borrador'), true),
-                      )
-                    }
-                    className="cursor-pointer font-semibold text-acento-texto hover:underline"
-                  >
-                    Retirar para corregir
-                  </button>
-                </>
-              )}
-            </>
-          ) : revision.estado === 'rechazada' ? (
-            <>Motivo: «{revision.comentario_autorizacion}»</>
-          ) : (
-            <>
-              {revision.autorizada_en
-                ? `Autorizada el ${fechaHora.format(new Date(revision.autorizada_en))}`
-                : ''}
-              {revision.comentario_autorizacion ? ` · Nota: «${revision.comentario_autorizacion}»` : ''}
-            </>
-          )}
-        </p>
         <span
           tabIndex={0}
           title="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
           aria-label="Precio = costo × T.C. + utilidad (% sobre el costo); unitario redondeado a 2 decimales."
-          className="inline-flex size-7 shrink-0 cursor-help items-center justify-center rounded-full text-[13px] font-bold text-texto-suave italic hover:bg-superficie-2 hover:text-texto"
+          className="mb-2 ml-auto inline-flex size-7 shrink-0 cursor-help items-center justify-center rounded-full text-[13px] font-bold text-texto-suave italic hover:bg-superficie hover:text-texto"
         >
           ƒ
         </span>
-
-        <div className="ml-auto flex items-center gap-2">
-          <MenuColumnas ocultas={ocultas} onCambio={cambiarOcultas} columnas={disponibles} tamano="chico" />
-          <Boton
-            tamano="chico"
-            variante="paso"
-            icono={completa ? 'compactar' : 'expandir'}
-            onClick={() => guardarCompleta(completa ? null : '1')}
-            title={completa ? 'Salir de pantalla completa (Esc)' : 'Usar toda la pantalla'}
-          >
-            {completa ? 'Salir de pantalla completa' : 'Pantalla completa'}
-          </Boton>
-        </div>
       </div>
 
       {/* Mensajes: flotan sobre la hoja en lugar de empujarla. */}
       {mensaje && (
         <div
           role="status"
-          className={`animar-entrada absolute right-4 bottom-4 z-30 flex max-w-[480px] items-start gap-2 rounded-lg border px-4 py-3 text-[13px] font-semibold sombra ${
+          className={`animar-entrada absolute right-4 bottom-20 z-30 flex max-w-[480px] items-start gap-2 rounded-lg border px-4 py-3 text-[13px] font-semibold sombra ${
             mensaje.error
               ? 'border-peligro/30 bg-peligro-suave text-peligro'
               : 'border-exito/30 bg-exito-suave text-exito'
@@ -1416,7 +1135,7 @@ export function CorridaAutorizacion({
                   key={g}
                   scope="colgroup"
                   colSpan={span}
-                  className={`${borde} border-l border-l-texto/25 px-3 py-1.5 text-left text-xs font-bold tracking-wide uppercase ${GRUPOS[g].banda} ${GRUPOS[g].texto}`}
+                  className={`${borde} border-l border-l-texto/25 bg-superficie px-3 py-1.5 text-left text-[11px] font-bold tracking-wide text-texto-suave uppercase`}
                 >
                   {GRUPOS[g].titulo}
                 </th>
@@ -1435,7 +1154,7 @@ export function CorridaAutorizacion({
                   scope="col"
                   className={`${borde} ${i === 0 ? 'border-l border-l-texto/25' : inicioGrupo(i)} ${
                     c.id === 'utilidadPct'
-                      ? 'w-[86px] max-w-[86px] min-w-[86px] bg-exito-suave px-2'
+                      ? 'w-[86px] max-w-[86px] min-w-[86px] bg-superficie-2 px-2'
                       : 'max-w-32 min-w-20 bg-superficie-2 px-3'
                   } py-2 align-middle leading-tight ${
                     CENTRADAS.has(c.id) ? 'text-center' : c.numero ? 'text-right' : 'text-left'
@@ -1465,8 +1184,7 @@ export function CorridaAutorizacion({
             const barra = `before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] ${
               tono === 'aviso' ? 'before:bg-aviso' : tono === 'acento' ? 'before:bg-acento' : 'before:bg-info'
             }`;
-            const fondo =
-              tono === 'aviso' ? 'bg-aviso-suave' : tono === 'acento' ? 'bg-acento-suave' : 'bg-info-suave';
+            const fondo = 'bg-superficie-2/70';
             const texto =
               tono === 'aviso' ? 'text-aviso' : tono === 'acento' ? 'text-acento-texto' : 'text-info';
             return (
@@ -1495,41 +1213,23 @@ export function CorridaAutorizacion({
                   const personalizada = editable && valor !== '' && valor !== utilidadBase;
                   // Fondo opaco para las columnas fijas; tinte suave para el resto de la fila.
                   const aviso = avisoDeFila.get(f.p.id);
+                  // Sin tintes por tipo de fila (propuesta B): el aviso es un punto junto a la partida.
                   const fijo =
-                    resaltada === f.p.id
-                      ? 'bg-acento-suave'
-                      : aviso
-                        ? 'bg-aviso-suave'
-                        : f.tipo === 'cargo'
-                          ? 'bg-aviso-suave'
-                          : f.tipo === 'partida'
-                            ? 'bg-superficie group-hover:bg-superficie-2'
-                            : 'bg-info-suave';
-                  const tinte =
-                    resaltada === f.p.id
-                      ? 'bg-acento-suave'
-                      : aviso
-                        ? 'bg-aviso-suave/50'
-                        : f.tipo === 'cargo'
-                          ? 'bg-aviso-suave/50'
-                          : f.tipo === 'partida'
-                            ? ''
-                            : 'bg-info-suave/40';
+                    resaltada === f.p.id ? 'bg-acento-suave' : 'bg-superficie group-hover:bg-superficie-2';
+                  const tinte = resaltada === f.p.id ? 'bg-acento-suave' : '';
+                  const grave = aviso === 'Precio vencido';
                   return (
                     <tr key={f.p.id} id={`fila-${f.p.id}`} className="group h-10 transition-colors">
                       <td
-                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold ${
-                          aviso ? 'text-aviso' : 'text-texto-suave'
-                        }`}
+                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold text-texto-suave`}
                       >
-                        {aviso ? (
-                          <span className="inline-flex items-center gap-1" title={aviso}>
-                            <Icon name="campana" size={12} strokeWidth={2.4} />
-                            {f.ref}
-                          </span>
-                        ) : (
-                          f.ref
-                        )}
+                        <span className="inline-flex items-center gap-1.5" title={aviso}>
+                          <span
+                            aria-hidden="true"
+                            className={`size-2 rounded-full ${aviso ? (grave ? 'bg-peligro' : 'bg-aviso') : 'bg-transparent'}`}
+                          />
+                          {f.ref}
+                        </span>
                       </td>
                       <td className={`${fija2} ${borde} ${fijo} px-3`}>
                         <Descripcion
@@ -1554,7 +1254,7 @@ export function CorridaAutorizacion({
                               key={c.id}
                               title={personalizada ? 'Utilidad personalizada de esta partida' : undefined}
                               className={`${clases} relative w-[86px] max-w-[86px] min-w-[86px] px-2 text-center ${
-                                editable ? (valida ? 'bg-exito-suave/60' : 'bg-peligro-suave') : ''
+                                editable && !valida ? 'bg-peligro-suave' : ''
                               }`}
                             >
                               {personalizada && (
@@ -1575,7 +1275,7 @@ export function CorridaAutorizacion({
                                       setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
                                     }
                                     className={`tabular block h-7 w-full rounded-sm border bg-superficie pr-5 pl-1 text-right text-[13px] font-bold shadow-sm outline-none hover:border-exito focus:ring-2 focus:ring-acento ${
-                                      valida ? 'border-exito/50 text-texto' : 'border-peligro text-peligro'
+                                      valida ? 'border-texto/20 text-texto' : 'border-peligro text-peligro'
                                     }`}
                                   />
                                   <span
@@ -1594,12 +1294,7 @@ export function CorridaAutorizacion({
                           <td
                             key={c.id}
                             className={`${clases} px-3 whitespace-nowrap group-hover:bg-superficie-2 ${alinear(c)} ${
-                              tinte ||
-                              (c.id === 'tc' && f.p.costo?.moneda !== 'MXN'
-                                ? 'bg-aviso-suave/60'
-                                : c.grupo === 'venta'
-                                  ? 'bg-acento-suave/30'
-                                  : '')
+                              tinte
                             }`}
                           >
                             {celda(c, f)}
@@ -1720,6 +1415,131 @@ export function CorridaAutorizacion({
             })}
           </div>
         </section>
+      </div>
+
+      {/* Cifras y decisión fijas al pie, como el total de una compra (propuesta B). */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-borde bg-superficie px-4 py-2.5">
+        <Dato etiqueta="Costo sin IVA" valor={pesos(costo)} />
+        <Dato etiqueta="Venta sin IVA" valor={validas ? pesos(venta) : '—'} />
+        <Dato
+          etiqueta="Utilidad sin IVA"
+          valor={validas ? pesos(utilidad) : '—'}
+          detalle={validas ? `${pct(utilidad, costo)} %` : undefined}
+          tono="text-exito"
+        />
+        {conTransaccion && (
+          <Dato
+            etiqueta="Transaccionalidad sin IVA"
+            valor={pesos(transaccionTotal)}
+            detalle={Number(transaccion) > 0 ? `${transaccion} %` : undefined}
+          />
+        )}
+        <Dato
+          etiqueta={`Al cliente con IVA${numAdicionales ? ` (+${numAdicionales} adic.)` : ''}`}
+          valor={
+            principales.length === 0
+              ? '—'
+              : principales.length === 1
+                ? pesos(principales[0] ?? 0n)
+                : `${pesos(principales.reduce((x, y) => (y < x ? y : x)))} – ${pesos(principales.reduce((x, y) => (y > x ? y : x)))}`
+          }
+        />
+        {editable && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Boton
+              tamano="chico"
+              variante="fantasma"
+              icono="guardado"
+              disabled={pendiente || !sucio}
+              onClick={guardarAvance}
+            >
+              Guardar avance
+            </Boton>
+            {/* Retirar y rechazar en un solo menú, que abre hacia arriba. */}
+            <div ref={menuDevolver} className="relative">
+              <Boton
+                tamano="chico"
+                icono="izquierda"
+                iconoFinal="arriba"
+                disabled={pendiente}
+                aria-expanded={devolver}
+                aria-haspopup="menu"
+                onClick={() => setDevolver((x) => !x)}
+              >
+                Devolver
+              </Boton>
+              {devolver && (
+                <div
+                  role="menu"
+                  className="animar-entrada absolute right-0 bottom-full z-40 mb-1.5 w-80 rounded-lg border border-borde bg-superficie p-1.5 sombra"
+                >
+                  {(
+                    [
+                      {
+                        id: 'retirar',
+                        titulo: 'Retirar para corregir',
+                        detalle: `Regresa a borrador. Se avisa a ${[capturista, solicitante].filter((x, i, xs) => x && xs.indexOf(x) === i).join(' y ') || 'quien la preparó'}.`,
+                        icono: 'izquierda',
+                      },
+                      {
+                        id: 'rechazar',
+                        titulo: 'Rechazar',
+                        detalle: 'Queda rechazada con el motivo que escribas.',
+                        icono: 'cerrar',
+                      },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDevolver(false);
+                        setDialogo(o.id);
+                      }}
+                      className="flex w-full cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-superficie-2"
+                    >
+                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-peligro-suave text-peligro">
+                        <Icon name={o.icono} size={14} />
+                      </span>
+                      <span>
+                        <span className="block text-[13px] font-semibold">{o.titulo}</span>
+                        <span className="block text-xs text-texto-suave">{o.detalle}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Boton
+              tamano="chico"
+              icono="candado"
+              variante="primario"
+              disabled={
+                pendiente ||
+                !validas ||
+                !tcsValidos ||
+                !anticipoValido ||
+                !transaccionValida ||
+                falsaAlcance ||
+                !vigenciaValida
+              }
+              onClick={() => {
+                setConfirmados(new Set());
+                setDialogo('autorizar');
+              }}
+              title={
+                !vigenciaValida
+                  ? 'Define la vigencia de la cotización'
+                  : validas && tcsValidos
+                    ? undefined
+                    : `Define ${monedas.length ? 'el T.C. y ' : ''}la utilidad de todas las partidas`
+              }
+            >
+              Autorizar
+            </Boton>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1921,27 +1741,20 @@ const HORAS = Array.from({ length: 25 }, (_, i) => {
 const controlParametro =
   'h-10 rounded-sm border border-texto/20 bg-superficie px-2 text-[13px] text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
 
-/** Tarjeta de un parámetro, siempre visible y editable (propuesta C, 2026-10-08). */
-function Tarjeta2({
-  borde,
+/** Parámetro neutro (propuesta B, 2026-10-10): etiqueta gris arriba; en rojo si falta. */
+function CampoNeutro({
   etiqueta,
-  ayuda,
-  error,
+  falta,
   children,
 }: {
-  borde: string;
   etiqueta: string;
-  ayuda?: string;
-  error?: boolean;
+  falta?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div
-      className={`flex flex-col justify-center gap-1 rounded-md border-2 bg-superficie px-2.5 py-1.5 ${borde}`}
-    >
-      <span className="flex items-baseline gap-2 text-[11px] font-bold text-texto-suave">
+    <div className="flex flex-col gap-1">
+      <span className={`text-[11px] font-semibold ${falta ? 'text-peligro' : 'text-texto-suave'}`}>
         {etiqueta}
-        {ayuda && <span className={`font-semibold ${error ? 'text-peligro' : ''}`}>· {ayuda}</span>}
       </span>
       <div className="flex items-center gap-1.5">{children}</div>
     </div>
@@ -2017,9 +1830,9 @@ function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; avis
   const [abierta, setAbierta] = useState(false);
   const etiqueta = {
     partida: null,
-    incluida: { texto: 'Incluido', clase: 'bg-neutro-suave text-neutro' },
-    visible: { texto: 'Visible', clase: 'bg-info-suave text-info' },
-    cargo: { texto: 'Cargo', clase: 'bg-aviso-suave text-aviso' },
+    incluida: { texto: 'Incluido', clase: 'bg-superficie-2 text-texto-suave' },
+    visible: { texto: 'Visible', clase: 'bg-superficie-2 text-texto-suave' },
+    cargo: { texto: 'Cargo', clase: 'bg-superficie-2 text-texto-suave' },
   }[f.tipo];
   const sub = f.tipo === 'incluida' || f.tipo === 'visible';
   return (
