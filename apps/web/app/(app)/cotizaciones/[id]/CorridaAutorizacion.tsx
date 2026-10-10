@@ -22,7 +22,15 @@ import {
   type ResultadoPartida,
 } from '@celmi/core';
 import { fueraDeZona, porcentaje, tipoCambio as tipoCambioSchema, ZONA_ENTREGA } from '@celmi/validation';
-import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+  type KeyboardEvent as EventoTecla,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   COLUMNAS,
@@ -528,6 +536,24 @@ export function CorridaAutorizacion({
     const t = window.setTimeout(() => setMensaje(null), 5000);
     return () => window.clearTimeout(t);
   }, [mensaje]);
+
+  /**
+   * Como en Excel (2026-10-10): Enter (o ↓) aplica la utilidad y pasa a la partida siguiente; Mayús + Enter (o ↑), a la
+   * anterior. El valor ya quedó aplicado al escribir; aquí sólo se mueve el foco y se selecciona el siguiente.
+   */
+  const moverEntreUtilidades = (e: EventoTecla<HTMLInputElement>) => {
+    const abajo = (e.key === 'Enter' && !e.shiftKey) || e.key === 'ArrowDown';
+    const arriba = (e.key === 'Enter' && e.shiftKey) || e.key === 'ArrowUp';
+    if (!abajo && !arriba) return;
+    e.preventDefault();
+    const todas = [...(hoja.current?.querySelectorAll<HTMLInputElement>('input[data-utilidad]') ?? [])];
+    const i = todas.indexOf(e.currentTarget);
+    const siguiente = todas[i + (abajo ? 1 : -1)];
+    if (!siguiente) return;
+    siguiente.focus();
+    siguiente.select();
+    siguiente.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
 
   const guardarAvance = () =>
     iniciar(async () =>
@@ -1272,6 +1298,9 @@ export function CorridaAutorizacion({
                                     autoComplete="off"
                                     aria-label={`Utilidad en porcentaje, partida ${f.ref}`}
                                     aria-invalid={!valida}
+                                    data-utilidad
+                                    onKeyDown={moverEntreUtilidades}
+                                    onFocus={(e) => e.currentTarget.select()}
                                     onChange={(e) =>
                                       setPorPartida((s) => ({ ...s, [f.p.id]: e.target.value.trim() }))
                                     }

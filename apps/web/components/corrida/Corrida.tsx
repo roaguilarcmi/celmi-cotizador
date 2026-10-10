@@ -56,6 +56,8 @@ export const COLUMNAS: Columna[] = [
 /** «Utilidad en %» es donde se autoriza: siempre visible. */
 export const FIJAS = new Set(['utilidadPct']);
 const ESENCIALES = new Set([
+  // La marca también es esencial para decidir (2026-10-10).
+  'marca',
   'cantidad',
   'mayorista',
   'unitario',

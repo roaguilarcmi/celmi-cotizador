@@ -52,12 +52,7 @@ export function PasoAutorizacion({
       texto: sinCosto ? `${sinCosto} partidas sin costo` : 'Todas las partidas tienen costo',
       paso: 1,
     },
-    {
-      ok: Boolean(revision.vigencia_hasta),
-      aviso: true,
-      texto: revision.vigencia_hasta ? 'Vigencia definida' : 'Sin vigencia (recomendada)',
-      paso: 2,
-    },
+    // La vigencia no se revisa aquí: la fija quien autoriza, en la corrida (2026-10-10).
   ];
   const lista = checklist.every((c) => c.ok || c.aviso);
 
