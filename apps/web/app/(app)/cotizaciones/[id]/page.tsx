@@ -6,6 +6,7 @@ import {
   listarCatalogosCotizacion,
   listarCondicionesCatalogo,
   listarCondicionesDeRevision,
+  listarPaquetesCondiciones,
   listarFinancieras,
   listarFinanciamiento,
   listarTiposCambio,
@@ -58,10 +59,11 @@ export default async function PaginaCotizacion({
   const { cotizacion, revision } = datos;
   // La utilidad sólo la ve quien autoriza (RLS también lo exige).
   const veUtilidad = sesion.permisos.has('utilidad.ver') || sesion.permisos.has('utilidad.autorizar');
-  const [catalogoCondiciones, condiciones, financieras, financiamiento, utilidades, tiposCambio] =
+  const [catalogoCondiciones, condiciones, paquetes, financieras, financiamiento, utilidades, tiposCambio] =
     await Promise.all([
       listarCondicionesCatalogo(),
       listarCondicionesDeRevision(revision.id),
+      listarPaquetesCondiciones(),
       listarFinancieras(),
       listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
       veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
@@ -142,6 +144,11 @@ export default async function PaginaCotizacion({
       }
       catalogoCondiciones={catalogoCondiciones}
       condiciones={condiciones}
+      paquetes={{
+        lista: paquetes,
+        usuarioId: sesion.usuarioId,
+        esAdmin: sesion.permisos.has('catalogos.administrar'),
+      }}
       financieras={financieras}
       financiamiento={financiamiento}
       autorizacion={

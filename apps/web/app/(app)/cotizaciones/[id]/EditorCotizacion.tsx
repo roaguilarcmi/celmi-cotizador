@@ -9,6 +9,7 @@ import { Boton, Pill, Tarjeta } from '@/components/ui';
 import type {
   CondicionCatalogo,
   CondicionRevision,
+  PaqueteCondiciones,
   CotizacionFila,
   Financiera,
   FinanciamientoFila,
@@ -60,6 +61,7 @@ export function EditorCotizacion({
   puedeEliminar,
   catalogoCondiciones,
   condiciones,
+  paquetes,
   financieras,
   financiamiento,
   tipoOportunidad,
@@ -74,6 +76,7 @@ export function EditorCotizacion({
   puedeEliminar: boolean;
   catalogoCondiciones: CondicionCatalogo[];
   condiciones: CondicionRevision[];
+  paquetes: { lista: PaqueteCondiciones[]; usuarioId: string; esAdmin: boolean };
   financieras: Financiera[];
   financiamiento: FinanciamientoFila[];
   tipoOportunidad: TipoOportunidad;
@@ -455,6 +458,7 @@ export function EditorCotizacion({
           editable={editable}
           catalogo={catalogoCondiciones}
           elegidasIniciales={condiciones}
+          paquetes={paquetes}
         />
       )}
       {paso === 4 && (

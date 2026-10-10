@@ -90,6 +90,28 @@ export const condicionesRevisionSchema = z
   )
   .max(60, 'Máximo 60 condiciones');
 
+/**
+ * Paquete de condiciones (0029): nombre y condiciones en orden. Sin contenido, la condición usa el texto vigente del
+ * catálogo; con contenido, es un texto ajustado o una condición propia.
+ */
+export const paqueteCondicionesSchema = z.object({
+  nombre: z.string().trim().min(1, 'Escribe el nombre del paquete').max(80, 'Máximo 80 caracteres'),
+  condiciones: z
+    .array(
+      z
+        .object({
+          condicion_id: z
+            .union([uuid, z.literal('')])
+            .nullable()
+            .default(null),
+          contenido: contenidoEnriquecidoSchema.nullable().default(null),
+        })
+        .refine((c) => c.condicion_id || c.contenido, 'Condición sin texto'),
+    )
+    .min(1, 'El paquete necesita al menos una condición')
+    .max(60, 'Máximo 60 condiciones'),
+});
+
 const decimales = (n: number, mensaje: string) =>
   z
     .union([

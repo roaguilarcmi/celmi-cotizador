@@ -486,6 +486,23 @@ export interface CondicionRevision {
   contenido: unknown;
 }
 
+/** Paquete de condiciones (0029). Una condición sin contenido usa el texto vigente del catálogo. */
+export interface PaqueteCondiciones {
+  id: string;
+  nombre: string;
+  creado_por: string | null;
+  condiciones: { orden: number; condicion_id: string | null; contenido: unknown }[];
+}
+
+export async function listarPaquetesCondiciones(): Promise<PaqueteCondiciones[]> {
+  const supabase = await clienteServidor();
+  const paquetes = (exigir(
+    await supabase.from('paquetes_condiciones').select(CONSULTAS.paquetes).eq('activo', true).order('nombre'),
+    'los paquetes de condiciones',
+  ) ?? []) as unknown as PaqueteCondiciones[];
+  return paquetes.map((p) => ({ ...p, condiciones: [...p.condiciones].sort((a, b) => a.orden - b.orden) }));
+}
+
 export interface Financiera {
   id: string;
   nombre: string;

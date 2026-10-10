@@ -4,6 +4,7 @@ import {
   condicionesRevisionSchema,
   financiamientoSchema,
   normalizarContenido,
+  paqueteCondicionesSchema,
   propuestasCotizacionSchema,
   datosAutorizacionSchema,
   esquemaRevisionSchema,
@@ -127,6 +128,56 @@ export async function guardarCondicionesCotizacion(
   if (r.error) return { error: mensajeDe(r.error, 'No se pudieron guardar las condiciones.') };
   refrescar(cotizacionId);
   return { ok: 'Condiciones guardadas.' };
+}
+
+/**
+ * Crea (paquete null) o reemplaza un paquete de condiciones (0029). Cualquiera que cotiza los crea; sólo quien lo creó
+ * o un administrador lo cambia (la base lo exige). Devuelve el id en `ok`.
+ */
+export async function guardarPaqueteCondiciones(
+  paqueteId: string | null,
+  datos: unknown,
+  cotizacionId: string,
+): Promise<Resultado & { id?: string }> {
+  await obtenerSesion();
+  const d = datos as { nombre?: unknown; condiciones?: unknown } | null;
+  const leido = paqueteCondicionesSchema.safeParse({
+    nombre: d?.nombre,
+    condiciones: Array.isArray(d?.condiciones)
+      ? d.condiciones.map((c: { contenido?: unknown }) => ({
+          ...c,
+          contenido: c?.contenido == null ? null : normalizarContenido(c.contenido),
+        }))
+      : d?.condiciones,
+  });
+  if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa el paquete.' };
+  const supabase = await clienteServidor();
+  const r = await supabase.rpc('guardar_paquete_condiciones', {
+    paquete: paqueteId,
+    nombre: leido.data.nombre,
+    condiciones: leido.data.condiciones,
+  });
+  if (r.error) return { error: mensajeDe(r.error, 'No se pudo guardar el paquete.') };
+  refrescar(cotizacionId);
+  return { ok: 'Paquete guardado.', id: r.data as string };
+}
+
+/** Elimina un paquete (queda inactivo; la auditoría lo conserva). */
+export async function eliminarPaqueteCondiciones(
+  paqueteId: string,
+  cotizacionId: string,
+): Promise<Resultado> {
+  await obtenerSesion();
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase
+    .from('paquetes_condiciones')
+    .update({ activo: false })
+    .eq('id', paqueteId)
+    .select('id');
+  if (error) return { error: mensajeDe(error, 'No se pudo eliminar el paquete.') };
+  if (!data?.length) return { error: 'Sólo quien creó el paquete o un administrador puede eliminarlo.' };
+  refrescar(cotizacionId);
+  return { ok: 'Paquete eliminado.' };
 }
 
 /** Propuesta de financiamiento (después de autorizar precios; no requiere otra autorización). */
