@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { Icon } from '@/components/Icon';
 import { alClicLibre } from '@/components/tareas/clicLibre';
 import { TextoEnriquecido } from '@/components/TextoEnriquecido';
+import { Boton } from '@/components/ui';
+import { useVentana, VentanaFlotante } from '@/components/VentanaFlotante';
 import { mover } from '@/lib/reordenar';
 import { ChipPresentacion, PrecioAnterior } from './FormularioPartida';
 import {
@@ -17,7 +19,7 @@ import {
 } from './modelo';
 
 const fechaCorta = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const COLUMNAS = 'grid-cols-[32px_28px_minmax(0,1fr)_96px_180px_150px_130px_96px]';
+const COLUMNAS = 'grid-cols-[32px_28px_minmax(0,1fr)_96px_180px_150px_130px_128px]';
 
 /**
  * Partidas y costos en un solo paso (decisión 2026-10-05): cada fila resume todo de forma compacta; debajo, sus
@@ -31,6 +33,7 @@ export function TablaPartidas({
   onCambiar,
   onAbrir,
   onAbrirAdicional,
+  onConvertida,
 }: {
   filas: FilaEditable[];
   esAdicional: boolean;
@@ -40,7 +43,11 @@ export function TablaPartidas({
   onAbrir: (clave: string) => void;
   /** Abrir (o crear, con `clave` null) un adicional de la partida `padre`. */
   onAbrirAdicional: (padre: string, clave: string | null) => void;
+  /** Tras convertir una partida en adicional: se abre la partida destino para ajustar su descripción. */
+  onConvertida?: (destino: string) => void;
 }) {
+  /** Partida que se va a convertir en adicional de otra (2026-10-10). */
+  const [convertir, setConvertir] = useState<string | null>(null);
   const lineas = filas.filter((f) => f.presentacion !== 'prorrateada');
   const cargos = filas.filter((f) => f.presentacion === 'prorrateada');
   const [arrastrando, setArrastrando] = useState<number | null>(null);
@@ -68,6 +75,41 @@ export function TablaPartidas({
         ),
     );
 
+  /**
+   * Convierte una partida en adicional de otra (2026-10-10). Sus propios adicionales pasan también a la partida
+   * destino (sólo hay un nivel); un incluido toma la cantidad de su partida; deja de recibir cargos prorrateados.
+   */
+  const convertirEnAdicional = (origen: string, destino: string, presentacion: 'incluida' | 'linea') => {
+    const o = lineas.find((x) => x.clave === origen);
+    const d = lineas.find((x) => x.clave === destino);
+    if (!o || !d) return;
+    const comoAdicional = (x: FilaEditable, p: FilaEditable['presentacion']): FilaEditable => ({
+      ...x,
+      presentacion: p,
+      cantidad: p === 'incluida' ? d.cantidad : x.cantidad,
+      se_suma: false,
+      componentes: [],
+      prorratear_entre: [],
+    });
+    const nuevos = [
+      comoAdicional(o, presentacion),
+      ...o.componentes.map((c) => comoAdicional(c, c.presentacion === 'linea' ? 'linea' : 'incluida')),
+    ];
+    onCambiar(
+      filas
+        .filter((x) => x.clave !== origen)
+        .map((x) => (x.clave === destino ? { ...x, componentes: [...x.componentes, ...nuevos] } : x))
+        .map((x) =>
+          x.prorratear_entre.includes(origen)
+            ? { ...x, prorratear_entre: x.prorratear_entre.filter((c) => c !== origen) }
+            : x,
+        ),
+    );
+    setConvertir(null);
+    onConvertida?.(destino);
+  };
+  const aConvertir = lineas.find((x) => x.clave === convertir);
+
   const teclas = (i: number, clave: string) => (e: KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
@@ -79,7 +121,7 @@ export function TablaPartidas({
 
   return (
     <div className="-mx-1 overflow-x-auto px-1">
-      <div className="min-w-[880px]">
+      <div className="min-w-[912px]">
         <div
           className={`grid ${COLUMNAS} gap-x-3 border-b border-borde px-1 py-2 text-xs font-semibold text-texto-suave`}
         >
@@ -151,6 +193,14 @@ export function TablaPartidas({
                     {!soloLectura && (
                       <Accion etiqueta="Agregar adicional" onClick={() => onAbrirAdicional(f.clave, null)}>
                         <Icon name="mas" size={15} strokeWidth={2.4} />
+                      </Accion>
+                    )}
+                    {!soloLectura && lineas.length > 1 && (
+                      <Accion
+                        etiqueta="Convertir en adicional de otra partida"
+                        onClick={() => setConvertir(f.clave)}
+                      >
+                        <Icon name="enlace" size={15} />
                       </Accion>
                     )}
                     <Accion etiqueta={soloLectura ? 'Ver' : 'Editar'} onClick={() => onAbrir(f.clave)}>
@@ -257,7 +307,138 @@ export function TablaPartidas({
           </section>
         )}
       </div>
+
+      {aConvertir && (
+        <VentanaFlotante
+          titulo={`Convertir la partida ${numeroDe(aConvertir.clave)} en adicional`}
+          detalle="Pasa a ser adicional de la partida que elijas, con su propio costo y utilidad."
+          onCerrar={() => setConvertir(null)}
+        >
+          <Convertir
+            origen={aConvertir}
+            destinos={lineas
+              .filter((x) => x.clave !== aConvertir.clave)
+              .map((x) => ({ fila: x, numero: numeroDe(x.clave) }))}
+            onConvertir={(destino, presentacion) =>
+              convertirEnAdicional(aConvertir.clave, destino, presentacion)
+            }
+          />
+        </VentanaFlotante>
+      )}
     </div>
+  );
+}
+
+/** Elegir la partida destino y cómo se presenta el adicional (incluido en su precio o línea visible). */
+function Convertir({
+  origen,
+  destinos,
+  onConvertir,
+}: {
+  origen: FilaEditable;
+  destinos: { fila: FilaEditable; numero: number }[];
+  onConvertir: (destino: string, presentacion: 'incluida' | 'linea') => void;
+}) {
+  const ventana = useVentana();
+  const [destino, setDestino] = useState<string | null>(null);
+  const [presentacion, setPresentacion] = useState<'incluida' | 'linea'>('incluida');
+  const elegido = destinos.find((x) => x.fila.clave === destino)?.fila;
+  const cambiaCantidad = presentacion === 'incluida' && elegido && elegido.cantidad !== origen.cantidad;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (destino) onConvertir(destino, presentacion);
+      }}
+      className="flex flex-col gap-5"
+    >
+      <p className="rounded-md bg-superficie-2 px-3 py-2 text-[13px]">
+        <span className="font-semibold">{origen.descripcion || 'Sin descripción'}</span>
+        <span className="text-texto-suave"> · {origen.cantidad} pzas.</span>
+      </p>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-[13px] font-bold">¿De qué partida será adicional?</legend>
+        <ul className="flex max-h-60 flex-col overflow-y-auto rounded-md border border-borde">
+          {destinos.map(({ fila, numero }) => (
+            <li key={fila.clave} className="border-b border-borde last:border-0">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-[13px] hover:bg-superficie-2 has-[:checked]:bg-acento-suave">
+                <input
+                  type="radio"
+                  name="destino"
+                  value={fila.clave}
+                  checked={destino === fila.clave}
+                  onChange={() => setDestino(fila.clave)}
+                  className="size-4 shrink-0 accent-[var(--c-acento)]"
+                />
+                <span className="w-6 shrink-0 text-xs font-semibold text-texto-suave tabular">{numero}</span>
+                <span className="line-clamp-1 flex-1">{fila.descripcion || 'Sin descripción'}</span>
+                <span className="text-xs text-texto-suave tabular">{fila.cantidad} pzas.</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-[13px] font-bold">¿Cómo se presenta al cliente?</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(
+            [
+              {
+                valor: 'incluida',
+                nombre: 'Incluido en el precio',
+                ayuda: 'El cliente ve una sola línea; lleva la misma cantidad que su partida.',
+              },
+              {
+                valor: 'linea',
+                nombre: 'Línea visible',
+                ayuda: 'Aparece como línea propia en la cotización.',
+              },
+            ] as const
+          ).map((o) => (
+            <label
+              key={o.valor}
+              className="flex cursor-pointer items-start gap-2.5 rounded-md border border-borde px-3 py-2.5 hover:bg-superficie-2 has-[:checked]:border-acento has-[:checked]:bg-acento-suave"
+            >
+              <input
+                type="radio"
+                name="presentacion"
+                value={o.valor}
+                checked={presentacion === o.valor}
+                onChange={() => setPresentacion(o.valor)}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--c-acento)]"
+              />
+              <span>
+                <span className="block text-[13px] font-semibold">{o.nombre}</span>
+                <span className="block text-xs text-texto-suave">{o.ayuda}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {cambiaCantidad && (
+          <p className="text-xs font-semibold text-aviso">
+            La cantidad cambiará de {origen.cantidad} a {elegido.cantidad} para igualar a su partida.
+          </p>
+        )}
+        {origen.componentes.length > 0 && (
+          <p className="text-xs text-texto-suave">
+            Sus {origen.componentes.length} adicionales también pasarán a la partida elegida.
+          </p>
+        )}
+      </fieldset>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Boton type="submit" variante="primario" icono="enlace" disabled={!destino}>
+          Convertir en adicional
+        </Boton>
+        {ventana && (
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
+            Cancelar
+          </Boton>
+        )}
+        <span className="text-xs text-texto-suave">
+          Después se abre la partida para ajustar su descripción.
+        </span>
+      </div>
+    </form>
   );
 }
 

@@ -221,3 +221,52 @@ describe('precios vencidos (0028)', () => {
     ]);
   });
 });
+
+describe('convertir una partida en adicional (2026-10-10)', () => {
+  it('una partida ya guardada pasa a ser adicional incluido de otra', async () => {
+    const op = await crearOportunidad(db, 'jorge');
+    const [prop] = await filas<{ id: string }>(
+      db,
+      'select id from public.propuestas where revision_id = $1',
+      [op.revision],
+    );
+    await db.query('select public.guardar_partidas($1, $2)', [
+      op.revision,
+      JSON.stringify([
+        {
+          id: prop!.id,
+          nombre: 'Propuesta 1',
+          tipo: '',
+          es_adicional: false,
+          partidas: [
+            {
+              clave: 'nueva',
+              descripcion: 'Laptop con 32 GB',
+              cantidad: 2,
+              presentacion: 'linea',
+              costo: { moneda: 'MXN', costo_unitario: '15000.00' },
+              componentes: [
+                {
+                  id: op.partida,
+                  clave: op.partida,
+                  descripcion: 'Laptop Dell Pro 14 Essential',
+                  cantidad: 2,
+                  presentacion: 'incluida',
+                  costo: { moneda: 'MXN', costo_unitario: '14533.46' },
+                },
+              ],
+              prorratear_entre: [],
+            },
+          ],
+        },
+      ]),
+    ]);
+    const [pa] = await filas<{ presentacion: string; padre: string | null; padre_desc: string }>(
+      db,
+      `select pa.presentacion, pa.partida_padre_id as padre, p.descripcion as padre_desc
+       from public.partidas pa left join public.partidas p on p.id = pa.partida_padre_id where pa.id = $1`,
+      [op.partida],
+    );
+    expect(pa).toMatchObject({ presentacion: 'incluida', padre_desc: 'Laptop con 32 GB' });
+  });
+});

@@ -435,6 +435,11 @@ export function EditorCotizacion({
                   setAbierta({ tipo: f?.presentacion === 'prorrateada' ? 'cargo' : 'partida', clave });
                 }}
                 onAbrirAdicional={(padre, clave) => setAbierta({ tipo: 'adicional', padre, clave })}
+                onConvertida={(destino) => {
+                  // Recordar ajustar la descripción de la partida que recibe el adicional.
+                  setAbierta({ tipo: 'partida', clave: destino });
+                  setEnfocarDescripcionAbierta(true);
+                }}
               />
             )}
           </div>
