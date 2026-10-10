@@ -187,6 +187,20 @@ export function EditorCotizacion({
   };
 
   const lineas = propuesta?.partidas.filter((f) => f.presentacion !== 'prorrateada') ?? [];
+  // «Revisa a detalle» desde la captura (2026-10-10): partidas con adicionales y cargos prorrateados de todas las
+  // propuestas, para que quien captura refleje desde el inicio lo que implica cada adicional en la descripción.
+  const porRevisar = propuestas.flatMap((p, pi) => {
+    const lineasP = p.partidas.filter((f) => f.presentacion !== 'prorrateada');
+    const conAdicionales = lineasP
+      .map((f, i) => ({ p, f, ref: `${pi + 1}.${i + 1}`, tipo: 'partida' as const }))
+      .filter((x) => x.f.componentes.length > 0);
+    const cargos = p.partidas
+      .filter((f) => f.presentacion === 'prorrateada')
+      .map((f, i) => ({ p, f, ref: `${pi + 1}.C${i + 1}`, tipo: 'cargo' as const }));
+    return [...conAdicionales, ...cargos];
+  });
+  const numAdicionales = porRevisar.reduce((s, x) => s + x.f.componentes.length, 0);
+  const numCargos = porRevisar.filter((x) => x.tipo === 'cargo').length;
   const padreAbierto =
     abierta?.tipo === 'adicional' ? propuesta?.partidas.find((f) => f.clave === abierta.padre) : undefined;
   const filaAbierta =
@@ -289,6 +303,45 @@ export function EditorCotizacion({
           editable={editable}
           mayoristas={catalogos.mayoristas}
         />
+      )}
+      {paso === 1 && porRevisar.length > 0 && (
+        <div
+          role="note"
+          className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-md border border-aviso/50 bg-aviso-suave px-3 py-2"
+        >
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-aviso">
+            <Icon name="campana" size={16} strokeWidth={2.6} className="motion-safe:animate-pulse" />
+            Revisa a detalle
+          </span>
+          <span className="text-[13px] text-aviso">
+            {numAdicionales > 0 &&
+              `${numAdicionales} ${numAdicionales === 1 ? 'adicional' : 'adicionales'}: asegúrate de que la descripción de su partida incluya lo que implica`}
+            {numAdicionales > 0 && numCargos > 0 && ' · '}
+            {numCargos > 0 &&
+              `${numCargos} ${numCargos === 1 ? 'cargo prorrateado' : 'cargos prorrateados'}: revisa entre qué partidas se reparte`}
+            .
+          </span>
+          {porRevisar.map((x) => (
+            <button
+              key={x.f.clave}
+              type="button"
+              title={`Abrir ${x.ref}: ${x.f.descripcion}`}
+              onClick={() => {
+                setActiva(x.p.clave);
+                setAbierta({ tipo: x.tipo, clave: x.f.clave });
+                setEnfocarDescripcionAbierta(x.tipo === 'partida');
+              }}
+              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-sm bg-aviso px-2.5 text-[12px] font-bold text-superficie tabular hover:brightness-110"
+            >
+              {x.ref}
+              {x.tipo === 'partida' && (
+                <span className="font-semibold opacity-90">
+                  · {x.f.componentes.length} {x.f.componentes.length === 1 ? 'adicional' : 'adicionales'}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       )}
       {paso === 1 && propuesta && (
         <Tarjeta className="overflow-hidden">

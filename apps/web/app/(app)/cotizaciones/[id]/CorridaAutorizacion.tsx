@@ -799,7 +799,8 @@ export function CorridaAutorizacion({
       id: 'especiales',
       tono: 'aviso',
       titulo: 'Revisa a detalle',
-      detalle: `Esta cotización tiene ${resumenEspeciales}.`,
+      // Para quien autoriza: corroborar que lo que implica cada adicional ya está en la descripción (2026-10-10).
+      detalle: `Esta cotización tiene ${resumenEspeciales}. Corrobora que lo que implica cada adicional ya esté plasmado en la descripción de su partida${cuenta('cargo') ? ' y revisa el reparto de los cargos' : ''}.`,
       filas: especiales.map((f) => ({ id: f.p.id, ref: f.ref, descripcion: f.p.descripcion, tipo: f.tipo })),
     });
 
