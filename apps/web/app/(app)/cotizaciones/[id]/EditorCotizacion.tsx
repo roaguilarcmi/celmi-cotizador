@@ -33,6 +33,7 @@ import { EsquemaCotizacion } from './EsquemaCotizacion';
 import { MenuRevisiones } from './MenuRevisiones';
 import { CorridaAutorizacion, type ReferenciaCorrida } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
+import type { TipoCambioDof } from '@/lib/dof';
 import { PasoCondiciones } from './PasoCondiciones';
 import { PasoFinanciamiento } from './PasoFinanciamiento';
 import { VentanaPartida } from './FormularioPartida';
@@ -86,6 +87,8 @@ export function EditorCotizacion({
     tiposCambio: Record<string, string>;
     referencia: ReferenciaCorrida | null;
     puedeAutorizar: boolean;
+    /** T.C. del dólar publicado en el DOF (referencia; null si el servicio no respondió). */
+    tcDof: TipoCambioDof | null;
   } | null;
 }) {
   const editable = puedeEditar && (revision.estado === 'borrador' || revision.estado === 'rechazada');
@@ -481,6 +484,7 @@ export function EditorCotizacion({
           tiposCambioIniciales={autorizacion.tiposCambio}
           referencia={autorizacion.referencia}
           puedeAutorizar={autorizacion.puedeAutorizar}
+          tcDof={autorizacion.tcDof}
           puedeRetirar={puedeEditar}
           solicitante={cotizacion.oportunidad?.ejecutivo?.nombre ?? null}
           capturista={cotizacion.revisiones.find((r) => r.id === revision.id)?.autor?.nombre ?? null}

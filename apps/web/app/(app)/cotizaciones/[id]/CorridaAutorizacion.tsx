@@ -53,6 +53,7 @@ import {
 } from '@/lib/corrida';
 import type { PartidaFila, RevisionDetalle } from '@/lib/datos';
 import { usePreferencia } from '@/lib/preferencias';
+import type { TipoCambioDof } from '@/lib/dof';
 import { aLocal, hoyLocal, textoVigencia } from '@/lib/vigencia';
 import {
   autorizarRevision,
@@ -156,6 +157,7 @@ export function CorridaAutorizacion({
   tiposCambioIniciales: tcGuardados,
   referencia,
   puedeAutorizar,
+  tcDof,
   puedeRetirar,
   solicitante,
   capturista,
@@ -169,6 +171,8 @@ export function CorridaAutorizacion({
   tiposCambioIniciales: Record<string, string>;
   referencia?: ReferenciaCorrida | null;
   puedeAutorizar: boolean;
+  /** T.C. del dólar publicado en el DOF, como referencia junto al T.C. USD (2026-10-11). */
+  tcDof?: TipoCambioDof | null;
   /** Quien preparó la cotización puede retirarla mientras espera. */
   puedeRetirar: boolean;
   solicitante: string | null;
@@ -980,6 +984,33 @@ export function CorridaAutorizacion({
             onChange={(e) => setVigencia(e.target.value ? `${e.target.value}T${horaVigencia}` : '')}
             className={`${controlParametro} w-[132px] ${vigenciaValida ? '' : 'border-peligro'}`}
           />
+          {editable && (
+            <div
+              role="group"
+              aria-label="Atajos de vigencia (a las 14:00 h)"
+              className="flex items-center gap-1"
+            >
+              {atajos.map((a) => {
+                const activo = fechaVigencia === a.fecha;
+                return (
+                  <button
+                    key={a.dias}
+                    type="button"
+                    aria-pressed={activo}
+                    title={`Vence el ${textoVigencia(new Date(`${a.fecha}T${HORA_VIGENCIA}`).toISOString())}`}
+                    onClick={() => setVigencia(`${a.fecha}T${HORA_VIGENCIA}`)}
+                    className={`h-8 cursor-pointer rounded-pill border px-2.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+                      activo
+                        ? 'border-acento bg-acento-suave text-acento-texto'
+                        : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+                    }`}
+                  >
+                    {a.etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <select
             aria-label="Hora de vigencia"
             value={horaVigencia}
@@ -993,22 +1024,6 @@ export function CorridaAutorizacion({
               </option>
             ))}
           </select>
-          {editable && (
-            <select
-              aria-label="Atajos de vigencia"
-              title="Atajos de vigencia (a las 14:00 h)"
-              value=""
-              onChange={(e) => e.target.value && setVigencia(`${e.target.value}T${HORA_VIGENCIA}`)}
-              className={`${controlParametro} w-[78px] cursor-pointer text-texto-suave`}
-            >
-              <option value="">Atajos</option>
-              {atajos.map((a) => (
-                <option key={a.dias} value={a.fecha}>
-                  {a.etiqueta}
-                </option>
-              ))}
-            </select>
-          )}
         </CampoNeutro>
 
         {monedas.map((m) => {
@@ -1026,6 +1041,14 @@ export function CorridaAutorizacion({
                 onChange={(e) => setTcs((s) => ({ ...s, [m]: e.target.value.replace(/[^\d.]/g, '') }))}
                 className={`${controlParametro} tabular w-[96px] text-right ${valido ? '' : 'border-peligro'}`}
               />
+              {m === 'USD' && (
+                <ReferenciaDof
+                  dof={tcDof ?? null}
+                  actual={tcs[m] ?? ''}
+                  editable={editable}
+                  onUsar={(v) => setTcs((s) => ({ ...s, [m]: v }))}
+                />
+              )}
             </CampoNeutro>
           );
         })}
@@ -1770,6 +1793,58 @@ const HORAS = Array.from({ length: 25 }, (_, i) => {
 
 const controlParametro =
   'h-10 rounded-sm border border-texto/20 bg-superficie px-2 text-[13px] text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento-suave disabled:bg-superficie-2 disabled:text-texto-suave';
+
+const diaYMes = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/**
+ * T.C. del dólar publicado en el DOF junto al campo del T.C. USD (2026-10-11): sólo referencia; un clic lo copia al
+ * campo. Si el servicio del DOF no respondió, se indica sin estorbar.
+ */
+function ReferenciaDof({
+  dof,
+  actual,
+  editable,
+  onUsar,
+}: {
+  dof: TipoCambioDof | null;
+  actual: string;
+  editable: boolean;
+  onUsar: (valor: string) => void;
+}) {
+  if (!dof)
+    return (
+      <span className="text-[11px] text-texto-suave" title="El servicio del Diario Oficial no respondió">
+        DOF no disponible
+      </span>
+    );
+  const fecha = diaYMes.format(new Date(`${dof.fecha}T12:00:00Z`));
+  const igual = Number(actual) === Number(dof.valor);
+  const texto = (
+    <>
+      <span className="text-texto-suave">DOF {fecha}</span>
+      <span className="tabular">{dof.valor}</span>
+      {igual && <Icon name="palomita" size={12} strokeWidth={3} className="text-exito" />}
+    </>
+  );
+  const titulo = `Tipo de cambio publicado en el Diario Oficial de la Federación el ${fecha}`;
+  if (!editable || igual)
+    return (
+      <span title={titulo} className="inline-flex h-8 items-center gap-1.5 px-1 text-xs font-semibold">
+        {texto}
+      </span>
+    );
+  return (
+    <button
+      type="button"
+      onClick={() => onUsar(dof.valor)}
+      title={`${titulo}. Clic para usarlo.`}
+      className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-pill border border-borde bg-superficie px-2.5 text-xs font-semibold hover:bg-superficie-2"
+    >
+      {texto}
+      <span className="text-acento-texto">Usar</span>
+    </button>
+  );
+}
 
 /** Parámetro neutro (propuesta B, 2026-10-10): etiqueta gris arriba; en rojo si falta. */
 function CampoNeutro({

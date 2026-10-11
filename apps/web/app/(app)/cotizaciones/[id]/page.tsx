@@ -1,7 +1,8 @@
 import { etiquetaRevision } from '@celmi/core';
 import { notFound } from 'next/navigation';
 import { EnConstruccion } from '@/components/EnConstruccion';
-import { decimal } from '@/lib/corrida';
+import { decimal, monedasExtranjeras } from '@/lib/corrida';
+import { tipoCambioDof } from '@/lib/dof';
 import {
   listarCatalogosCotizacion,
   listarCondicionesCatalogo,
@@ -72,6 +73,9 @@ export default async function PaginaCotizacion({
 
   // Rev anterior (sólo para quien ve la utilidad): su utilidad y su T.C. se precargan como punto de partida, y su
   // utilidad y precio se muestran como referencia en la corrida (decisión 2026-10-06; se vuelve a autorizar).
+  // Referencia del DOF junto al T.C. del dólar (2026-10-11): sólo si hay costos en USD y para quien autoriza.
+  const tcDof = veUtilidad && monedasExtranjeras(revision).includes('USD') ? await tipoCambioDof() : null;
+
   const anterior =
     veUtilidad && revision.revision_anterior_id ? await obtenerRevision(revision.revision_anterior_id) : null;
   const [utilidadesAnteriores, tiposCambioAnteriores] = anterior
@@ -158,6 +162,7 @@ export default async function PaginaCotizacion({
               tiposCambio: { ...tiposCambioAnteriores, ...(tiposCambio ?? {}) },
               referencia,
               puedeAutorizar: sesion.permisos.has('utilidad.autorizar'),
+              tcDof,
             }
           : null
       }
