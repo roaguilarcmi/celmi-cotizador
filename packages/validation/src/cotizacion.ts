@@ -7,6 +7,8 @@ import { contenidoEnriquecidoSchema } from './enriquecido';
 import { dinero, porcentaje, tipoCambio } from './numeros';
 
 const uuid = z.uuid();
+/** «AAAA-MM-DD» con año 20xx: descarta valores a medio escribir como «0002-11-08» (2026-10-12). */
+const FECHA_RAZONABLE = /^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const opcionalUuid = z
   .union([uuid, z.literal('')])
   .nullable()
@@ -148,11 +150,11 @@ export const financiamientoSchema = z
       pago_seguro: decimales(2, 'Pago del seguro con máximo 2 decimales'),
       factor: decimales(6, 'Factor con máximo 6 decimales'),
       vigencia_financiera: z
-        .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida')])
+        .union([z.literal(''), z.string().regex(FECHA_RAZONABLE, 'Fecha no válida (año entre 2000 y 2099)')])
         .default(''),
       /** Fecha de emisión de la cotización de la financiera (0025). */
       fecha_emision_financiera: z
-        .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida')])
+        .union([z.literal(''), z.string().regex(FECHA_RAZONABLE, 'Fecha no válida (año entre 2000 y 2099)')])
         .default(''),
     }),
   )

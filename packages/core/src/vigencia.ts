@@ -16,9 +16,26 @@ export const ATAJOS_VIGENCIA: readonly { etiqueta: string; dias: number }[] = [
 function leer(fecha: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha);
   if (!m) throw new Error(`Fecha no válida: «${fecha}»`);
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  // setUTCFullYear: Date.UTC convierte los años 0–99 en 1900–1999.
+  const d = new Date(0);
+  d.setUTCFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   if (d.toISOString().slice(0, 10) !== fecha) throw new Error(`Fecha no válida: «${fecha}»`);
   return d;
+}
+
+/**
+ * true si es una fecha real «AAAA-MM-DD» entre los años 2000 y 2100. Mientras se escribe el año en un campo de
+ * fecha, el navegador entrega valores intermedios como «0002-11-08» (2026-10-12): esos no cuentan.
+ */
+export function fechaValida(fecha: string): boolean {
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(fecha);
+  if (!m || Number(m[1]) < 2000 || Number(m[1]) > 2100) return false;
+  try {
+    leer(fecha);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const escribir = (d: Date) => d.toISOString().slice(0, 10);

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { esFinDeSemana, finDeMesHabil, vigenciaSugerida } from './vigencia';
+import { esFinDeSemana, fechaValida, finDeMesHabil, vigenciaSugerida } from './vigencia';
 
 describe('vigencia', () => {
+  it('fechas a medio escribir no truenan y no cuentan como válidas (2026-10-12)', () => {
+    expect(() => vigenciaSugerida('0002-11-08', 15)).not.toThrow();
+    expect(fechaValida('0002-11-08')).toBe(false);
+    expect(fechaValida('2026-02-30')).toBe(false);
+    expect(fechaValida('2026-11-08')).toBe(true);
+    expect(fechaValida('')).toBe(false);
+  });
+
   // 2026-10-07 es miércoles.
   it('suma días naturales cuando cae entre semana', () => {
     expect(vigenciaSugerida('2026-10-07', 1)).toBe('2026-10-08'); // jueves

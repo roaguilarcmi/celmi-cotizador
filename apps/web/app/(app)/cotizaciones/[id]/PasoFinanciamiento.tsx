@@ -5,6 +5,7 @@ import {
   ESCALA_DINERO,
   formatearMXN,
   ATAJOS_VIGENCIA_FINANCIERA,
+  fechaValida,
   finDeMesHabil,
   MESES_POR_PAGO,
   numeroDePagos,
@@ -307,10 +308,15 @@ function OpcionFinanciamiento({
     }
   };
   const pagoTotal = centavos(f.pago) + centavos(f.pago_seguro);
+  const errorEmision = Boolean(f.fecha_emision_financiera) && !fechaValida(f.fecha_emision_financiera);
   const errorVigencia =
-    f.vigencia_financiera && f.fecha_emision_financiera && f.vigencia_financiera < f.fecha_emision_financiera
-      ? 'La vigencia no puede ser anterior a la emisión'
-      : null;
+    f.vigencia_financiera && !fechaValida(f.vigencia_financiera)
+      ? 'Fecha no válida (año entre 2000 y 2099)'
+      : f.vigencia_financiera &&
+          f.fecha_emision_financiera &&
+          f.vigencia_financiera < f.fecha_emision_financiera
+        ? 'La vigencia no puede ser anterior a la emisión'
+        : null;
   const tasa =
     valor !== undefined && pagos
       ? tasaAnualNominal({ valor, pagoPorPeriodo: pagoTotal, pagos, frecuencia: f.frecuencia })
@@ -409,15 +415,19 @@ function OpcionFinanciamiento({
             className={control}
           />
         </Campo>
-        <Campo etiqueta="Fecha de emisión de su cotización">
+        <Campo
+          etiqueta="Fecha de emisión de su cotización"
+          error={errorEmision ? 'Fecha no válida (año entre 2000 y 2099)' : null}
+        >
           <div className="flex gap-2">
             <input
               type="date"
               value={f.fecha_emision_financiera}
               disabled={!editable}
               autoComplete="off"
+              aria-invalid={errorEmision}
               onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
-              className={`${control} min-w-0 flex-1`}
+              className={`${control} min-w-0 flex-1 ${errorEmision ? 'border-peligro' : ''}`}
             />
             {editable && (
               <Boton tamano="chico" onClick={() => onCambiar({ fecha_emision_financiera: hoy() })}>
@@ -443,7 +453,8 @@ function OpcionFinanciamiento({
             />
             {editable &&
               ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
-                const desde = f.fecha_emision_financiera || hoy();
+                // Con la emisión a medio escribir («0002-11-08») los atajos cuentan desde hoy (2026-10-12).
+                const desde = fechaValida(f.fecha_emision_financiera) ? f.fecha_emision_financiera : hoy();
                 const fecha =
                   atajo.dias === 'fin_de_mes' ? finDeMesHabil(desde) : vigenciaSugerida(desde, atajo.dias);
                 return (

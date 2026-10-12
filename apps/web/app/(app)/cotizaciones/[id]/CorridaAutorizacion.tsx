@@ -6,6 +6,7 @@ import {
   ATAJOS_VIGENCIA,
   calcularPartida,
   esFinDeSemana,
+  fechaValida,
   HORA_VIGENCIA,
   vigenciaSugerida,
   dividirRedondeando,
@@ -260,7 +261,8 @@ export function CorridaAutorizacion({
     vigenciaEnFinDeSemana = false;
   }
   const vigenciaIso = vigencia && !Number.isNaN(Date.parse(vigencia)) ? new Date(vigencia).toISOString() : '';
-  const vigenciaValida = Boolean(vigenciaIso) && !vigenciaEnFinDeSemana;
+  // Un año a medio escribir («0002-…») no cuenta como vigencia (2026-10-12).
+  const vigenciaValida = Boolean(vigenciaIso) && fechaValida(fechaVigencia) && !vigenciaEnFinDeSemana;
   const [datosBase] = useState(() =>
     JSON.stringify([
       texto(revision.anticipo_pct),
