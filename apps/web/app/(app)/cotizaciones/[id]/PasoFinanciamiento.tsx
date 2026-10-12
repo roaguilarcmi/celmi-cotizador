@@ -165,6 +165,8 @@ export function PasoFinanciamiento({
   const valorDe = (propuesta: string) => presentadas?.find((p) => p.id === propuesta)?.totales.subtotal;
   /** Propuesta cuya pestaña está abierta (2026-10-12): cada una con sus propias opciones. */
   const [activa, setActiva] = useState(() => principales[0]?.id ?? '');
+  /** Opciones contraídas (2026-10-12): sólo su encabezado con el resumen. */
+  const [contraidas, setContraidas] = useState<Set<string>>(new Set());
   // Un PDF soltado fuera de una opción no debe abrirse encima del cotizador (se perdería lo no guardado).
   useEffect(() => {
     if (!editable) return;
@@ -294,6 +296,17 @@ export function PasoFinanciamiento({
             onCambiar={cambiar}
             onQuitar={(clave) => setOpciones((xs) => xs.filter((x) => x.clave !== clave))}
             onAgregar={() => setOpciones((xs) => [...xs, vacia(actual.id)])}
+            contraidas={contraidas}
+            onContraer={(claves, contraer) =>
+              setContraidas((xs) => {
+                const n = new Set(xs);
+                for (const c of claves) {
+                  if (contraer) n.add(c);
+                  else n.delete(c);
+                }
+                return n;
+              })
+            }
           />
         </Tarjeta>
       )}
@@ -326,6 +339,8 @@ function PropuestaFinanciamiento({
   onCambiar,
   onQuitar,
   onAgregar,
+  contraidas,
+  onContraer,
 }: {
   nombre: string;
   valor: bigint | undefined;
@@ -336,11 +351,25 @@ function PropuestaFinanciamiento({
   onCambiar: (clave: string, cambio: Partial<Opcion>) => void;
   onQuitar: (clave: string) => void;
   onAgregar: () => void;
+  contraidas: ReadonlySet<string>;
+  onContraer: (claves: string[], contraer: boolean) => void;
 }) {
+  const claves = opciones.map((o) => o.clave);
+  const todasContraidas = claves.length > 0 && claves.every((c) => contraidas.has(c));
   return (
     <>
       <div className="flex flex-wrap items-center gap-3 border-b border-borde px-6 py-3">
         <h3 className="mr-auto text-[15px] font-bold">{nombre}</h3>
+        {opciones.length > 1 && (
+          <Boton
+            tamano="chico"
+            variante="fantasma"
+            icono={todasContraidas ? 'expandir' : 'compactar'}
+            onClick={() => onContraer(claves, !todasContraidas)}
+          >
+            {todasContraidas ? 'Expandir todas' : 'Contraer todas'}
+          </Boton>
+        )}
         <span className="text-[13px] text-texto-suave">
           Valor de los equipos (sin IVA):{' '}
           <strong className="tabular text-texto">
@@ -364,6 +393,8 @@ function PropuestaFinanciamiento({
             editable={editable}
             onCambiar={(cambio) => onCambiar(f.clave, cambio)}
             onQuitar={() => onQuitar(f.clave)}
+            contraida={contraidas.has(f.clave)}
+            onAlternar={() => onContraer([f.clave], !contraidas.has(f.clave))}
           />
         ))}
         {editable && (
@@ -387,6 +418,8 @@ function OpcionFinanciamiento({
   editable,
   onCambiar,
   onQuitar,
+  contraida,
+  onAlternar,
 }: {
   numero: number;
   f: Opcion;
@@ -396,6 +429,8 @@ function OpcionFinanciamiento({
   editable: boolean;
   onCambiar: (cambio: Partial<Opcion>) => void;
   onQuitar: () => void;
+  contraida: boolean;
+  onAlternar: () => void;
 }) {
   const financiera = financieras.find((x) => x.id === f.financiera_id);
   const plazo = Number(f.plazo_meses);
@@ -605,50 +640,66 @@ function OpcionFinanciamiento({
             f.tipo_arrendamiento && esArrendamiento
               ? TIPOS.find((t) => t.id === f.tipo_arrendamiento)?.nombre
               : null,
+            // Contraída: también la mensualidad total, para comparar sin abrirla.
+            contraida && pagoTotal > 0n
+              ? `${formatearMXN(pagoTotal)} ${f.frecuencia === 'mensual' ? 'al mes' : 'por pago'} + IVA`
+              : null,
           ]
             .filter(Boolean)
             .join(' · ')}
         </span>
-        {editable && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <input
-              ref={archivo}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const a = e.target.files?.[0];
-                e.target.value = '';
-                if (a) void cargarPdf(a);
-              }}
-            />
-            <Boton
-              tamano="chico"
-              icono="abrir"
-              disabled={leyendo}
-              title="Se lee en tu navegador; el PDF no se sube ni se guarda"
-              onClick={() => archivo.current?.click()}
-            >
-              {leyendo ? 'Leyendo…' : 'Cargar PDF de la financiera'}
-            </Boton>
-            <Boton
-              tamano="chico"
-              icono="copiar"
-              disabled={leyendo}
-              aria-pressed={pegando}
-              title="Copia el PDF en el Explorador de archivos (Ctrl + C) y pégalo aquí con Ctrl + V. Desde Outlook, arrástralo."
-              onClick={() => {
-                setLectura(null);
-                setPegando((x) => !x);
-              }}
-            >
-              {pegando ? 'Esperando Ctrl + V…' : 'Pegar PDF'}
-            </Boton>
-            <Boton tamano="chico" variante="peligro" icono="cerrar" onClick={onQuitar}>
-              Quitar
-            </Boton>
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-1.5">
+          {editable && (
+            <>
+              <input
+                ref={archivo}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const a = e.target.files?.[0];
+                  e.target.value = '';
+                  if (a) void cargarPdf(a);
+                }}
+              />
+              <Boton
+                tamano="chico"
+                icono="abrir"
+                disabled={leyendo}
+                title="Se lee en tu navegador; el PDF no se sube ni se guarda"
+                onClick={() => archivo.current?.click()}
+              >
+                {leyendo ? 'Leyendo…' : 'Cargar PDF de la financiera'}
+              </Boton>
+              <Boton
+                tamano="chico"
+                icono="copiar"
+                disabled={leyendo}
+                aria-pressed={pegando}
+                title="Copia el PDF en el Explorador de archivos (Ctrl + C) y pégalo aquí con Ctrl + V. Desde Outlook, arrástralo."
+                onClick={() => {
+                  setLectura(null);
+                  setPegando((x) => !x);
+                }}
+              >
+                {pegando ? 'Esperando Ctrl + V…' : 'Pegar PDF'}
+              </Boton>
+              <Boton tamano="chico" variante="peligro" icono="cerrar" onClick={onQuitar}>
+                Quitar
+              </Boton>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onAlternar}
+            aria-expanded={!contraida}
+            aria-label={`${contraida ? 'Expandir' : 'Contraer'} la opción ${numero}`}
+            title={contraida ? 'Expandir' : 'Contraer'}
+            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-texto-suave hover:bg-superficie hover:text-texto"
+          >
+            <Icon name={contraida ? 'abajo' : 'arriba'} size={18} />
+          </button>
+        </div>
       </div>
       {pegando && (
         <div role="status" className="border-b border-borde bg-info-suave px-4 py-2.5 text-[13px] text-info">
@@ -681,325 +732,334 @@ function OpcionFinanciamiento({
         </div>
       )}
 
-      {/* Sección 1 · La financiera y su cotización. */}
-      <Seccion titulo="Financiera">
-        <Campo etiqueta="Financiera">
-          <select
-            value={f.financiera_id}
-            disabled={!editable}
-            autoComplete="off"
-            onChange={(e) => {
-              const elegida = financieras.find((x) => x.id === e.target.value);
-              // Si la financiera tiene una sola aseguradora, se elige sola (2026-10-07).
-              onCambiar({
-                financiera_id: e.target.value,
-                aseguradora: elegida?.aseguradoras.length === 1 ? (elegida.aseguradoras[0] ?? '') : '',
-              });
-            }}
-            className={control}
-          >
-            <option value="">Elige…</option>
-            {financieras.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.nombre}
-              </option>
-            ))}
-          </select>
-        </Campo>
-        <Campo etiqueta="Aseguradora">
-          <select
-            value={f.aseguradora}
-            disabled={!editable || !financiera}
-            autoComplete="off"
-            onChange={(e) => onCambiar({ aseguradora: e.target.value })}
-            className={control}
-          >
-            <option value="">{financiera?.aseguradoras.length ? 'Elige…' : 'Sin aseguradoras'}</option>
-            {financiera?.aseguradoras.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </Campo>
-        <Campo etiqueta="# de cotización de la financiera">
-          <input
-            value={f.folio_financiera}
-            disabled={!editable}
-            maxLength={60}
-            autoComplete="off"
-            onChange={(e) => onCambiar({ folio_financiera: e.target.value })}
-            className={control}
-          />
-        </Campo>
-        <Campo
-          etiqueta="Fecha de emisión de su cotización"
-          error={errorEmision ? 'Fecha no válida (año entre 2000 y 2099)' : null}
-        >
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={f.fecha_emision_financiera}
+      {!contraida && (
+        <>
+          {/* Sección 1 · La financiera y su cotización. */}
+          <Seccion titulo="Financiera">
+            <Campo etiqueta="Financiera">
+              <select
+                value={f.financiera_id}
+                disabled={!editable}
+                autoComplete="off"
+                onChange={(e) => {
+                  const elegida = financieras.find((x) => x.id === e.target.value);
+                  // Si la financiera tiene una sola aseguradora, se elige sola (2026-10-07).
+                  onCambiar({
+                    financiera_id: e.target.value,
+                    aseguradora: elegida?.aseguradoras.length === 1 ? (elegida.aseguradoras[0] ?? '') : '',
+                  });
+                }}
+                className={control}
+              >
+                <option value="">Elige…</option>
+                {financieras.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nombre}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+            <Campo etiqueta="Aseguradora">
+              <select
+                value={f.aseguradora}
+                disabled={!editable || !financiera}
+                autoComplete="off"
+                onChange={(e) => onCambiar({ aseguradora: e.target.value })}
+                className={control}
+              >
+                <option value="">{financiera?.aseguradoras.length ? 'Elige…' : 'Sin aseguradoras'}</option>
+                {financiera?.aseguradoras.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+            <Campo etiqueta="# de cotización de la financiera">
+              <input
+                value={f.folio_financiera}
+                disabled={!editable}
+                maxLength={60}
+                autoComplete="off"
+                onChange={(e) => onCambiar({ folio_financiera: e.target.value })}
+                className={control}
+              />
+            </Campo>
+            <Campo
+              etiqueta="Fecha de emisión de su cotización"
+              error={errorEmision ? 'Fecha no válida (año entre 2000 y 2099)' : null}
+            >
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={f.fecha_emision_financiera}
+                  disabled={!editable}
+                  autoComplete="off"
+                  aria-invalid={errorEmision}
+                  onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
+                  className={`${control} min-w-0 flex-1 ${errorEmision ? 'border-peligro' : ''}`}
+                />
+                {editable && (
+                  <Boton tamano="chico" onClick={() => onCambiar({ fecha_emision_financiera: hoy() })}>
+                    Hoy
+                  </Boton>
+                )}
+              </div>
+            </Campo>
+            <Campo
+              etiqueta="Vigencia de su cotización"
+              ayuda={`Desde ${f.fecha_emision_financiera ? 'la emisión' : 'hoy'}; en fin de semana, el viernes anterior.`}
+              error={errorVigencia}
+            >
+              <input
+                type="date"
+                value={f.vigencia_financiera}
+                disabled={!editable}
+                autoComplete="off"
+                aria-invalid={Boolean(errorVigencia)}
+                onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
+                className={`${control} ${errorVigencia ? 'border-peligro' : ''}`}
+              />
+              {editable && (
+                <div className="flex gap-1.5">
+                  {ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
+                    // Con la emisión a medio escribir («0002-11-08») los atajos cuentan desde hoy (2026-10-12).
+                    const desde = fechaValida(f.fecha_emision_financiera)
+                      ? f.fecha_emision_financiera
+                      : hoy();
+                    const fecha =
+                      atajo.dias === 'fin_de_mes'
+                        ? finDeMesHabil(desde)
+                        : vigenciaFinanciera(desde, atajo.dias);
+                    const activo = f.vigencia_financiera === fecha;
+                    return (
+                      <button
+                        key={atajo.etiqueta}
+                        type="button"
+                        aria-pressed={activo}
+                        title={`Vence el ${fecha}`}
+                        onClick={() => onCambiar({ vigencia_financiera: fecha })}
+                        className={`h-8 flex-1 cursor-pointer rounded-pill border px-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+                          activo
+                            ? 'border-acento bg-acento-suave text-acento-texto'
+                            : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+                        }`}
+                      >
+                        {atajo.etiqueta}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </Campo>
+          </Seccion>
+
+          {/* Sección 2 · Condiciones del financiamiento. */}
+          <Seccion titulo="Condiciones">
+            {esArrendamiento && (
+              <Campo etiqueta="Tipo de arrendamiento" ancho>
+                <div role="radiogroup" aria-label="Tipo de arrendamiento" className="grid grid-cols-2 gap-2">
+                  {TIPOS.map((t) => {
+                    const activo = f.tipo_arrendamiento === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={activo}
+                        disabled={!editable}
+                        onClick={() => onCambiar({ tipo_arrendamiento: t.id })}
+                        className={`flex min-h-11 cursor-pointer flex-col justify-center rounded-md border-2 px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed ${
+                          activo ? 'border-acento bg-acento-suave/50' : 'border-borde hover:border-acento/40'
+                        }`}
+                      >
+                        <span className="text-[13px] font-bold">{t.nombre}</span>
+                        <span className="text-[11px] text-texto-suave">{t.detalle}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Campo>
+            )}
+            <Campo etiqueta="Plazo" error={errorPlazo}>
+              <select
+                value={f.plazo_meses}
+                disabled={!editable}
+                autoComplete="off"
+                aria-invalid={Boolean(errorPlazo)}
+                onChange={(e) => onCambiar({ plazo_meses: e.target.value })}
+                className={`${control} ${errorPlazo ? 'border-peligro' : ''}`}
+              >
+                <option value="">Elige…</option>
+                {/* Una opción capturada antes con otro plazo se conserva. */}
+                {[...new Set([...PLAZOS, ...(f.plazo_meses ? [Number(f.plazo_meses)] : [])])]
+                  .sort((x, y) => x - y)
+                  .map((p) => (
+                    <option key={p} value={p}>
+                      {p} meses
+                    </option>
+                  ))}
+              </select>
+            </Campo>
+            <Campo etiqueta="Frecuencia de pago">
+              <select
+                value={f.frecuencia}
+                disabled={!editable}
+                autoComplete="off"
+                onChange={(e) => onCambiar({ frecuencia: e.target.value as Frecuencia })}
+                className={control}
+              >
+                {FRECUENCIAS.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nombre}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+
+            {esFpo && (
+              <Campo etiqueta="Valor residual (Full PayOut)" ayuda="Captura uno; el otro se calcula." ancho>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex rounded-md border border-borde bg-superficie p-0.5" role="radiogroup">
+                    {(
+                      [
+                        ['pct', 'En %'],
+                        ['monto', 'En monto'],
+                      ] as const
+                    ).map(([id, nombre]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={f.residual_capturado === id}
+                        disabled={!editable}
+                        onClick={() => onCambiar({ residual_capturado: id, residual_valor: '' })}
+                        className={`min-h-9 cursor-pointer rounded-sm px-3 text-[13px] font-semibold ${
+                          f.residual_capturado === id ? 'bg-acento text-sobre-acento' : 'text-texto-suave'
+                        }`}
+                      >
+                        {nombre}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="w-44">
+                    <CampoMoneda
+                      etiqueta={<span className="sr-only">Valor residual</span>}
+                      valor={f.residual_valor}
+                      onCambio={(v) => onCambiar({ residual_valor: v })}
+                      disabled={!editable}
+                      decimales={f.residual_capturado === 'pct' ? 4 : 2}
+                      prefijo={f.residual_capturado === 'pct' ? '' : '$'}
+                      sufijo={f.residual_capturado === 'pct' ? '%' : undefined}
+                      invalido={Boolean(errorResidual)}
+                    />
+                  </div>
+                  <span className="text-[13px]">
+                    {errorResidual ? (
+                      <span className="font-semibold text-peligro">{errorResidual}</span>
+                    ) : residual ? (
+                      <>
+                        ={' '}
+                        <strong className="tabular">
+                          {f.residual_capturado === 'pct'
+                            ? formatearMXN(residual.monto)
+                            : `${residual.porcentaje} % del valor`}
+                        </strong>
+                      </>
+                    ) : (
+                      <span className="text-texto-suave">Captura el residual.</span>
+                    )}
+                  </span>
+                </div>
+              </Campo>
+            )}
+          </Seccion>
+
+          {/* Sección 3 · Montos, todos sin IVA. */}
+          <Seccion titulo="Montos sin IVA">
+            <CampoMoneda
+              etiqueta="Gastos administrativos"
+              valor={f.gastos_administrativos}
+              onCambio={(v) => onCambiar({ gastos_administrativos: v })}
               disabled={!editable}
-              autoComplete="off"
-              aria-invalid={errorEmision}
-              onChange={(e) => onCambiar({ fecha_emision_financiera: e.target.value })}
-              className={`${control} min-w-0 flex-1 ${errorEmision ? 'border-peligro' : ''}`}
             />
-            {editable && (
-              <Boton tamano="chico" onClick={() => onCambiar({ fecha_emision_financiera: hoy() })}>
-                Hoy
-              </Boton>
+            <CampoMoneda
+              etiqueta="Seguro de equipo (inicial)"
+              valor={f.seguro_equipo}
+              onCambio={(v) => onCambiar({ seguro_equipo: v })}
+              disabled={!editable}
+            />
+            <CampoMoneda
+              etiqueta={nombrePago(f.frecuencia, ' de los equipos')}
+              valor={f.pago}
+              onCambio={(v) => onCambiar({ pago: v })}
+              disabled={!editable}
+            />
+            <CampoMoneda
+              etiqueta={nombrePago(f.frecuencia, ' del seguro')}
+              valor={f.pago_seguro}
+              onCambio={(v) => onCambiar({ pago_seguro: v })}
+              disabled={!editable}
+            />
+            <CampoMoneda
+              etiqueta="Factor (opcional)"
+              valor={f.factor}
+              onCambio={(v) => onCambiar({ factor: v })}
+              disabled={!editable}
+              decimales={6}
+              prefijo=""
+            />
+            <CampoMoneda
+              etiqueta="Tasa de interés de la financiera"
+              valor={f.tasa_financiera}
+              onCambio={(v) => onCambiar({ tasa_financiera: v })}
+              disabled={!editable}
+              decimales={6}
+              prefijo=""
+              sufijo="%"
+            />
+          </Seccion>
+
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-borde bg-superficie-2/60 px-4 py-2.5 text-[13px]">
+            <span className="text-texto-suave">
+              {nombrePago(f.frecuencia)} total (equipos + seguro):{' '}
+              <strong className="tabular text-texto">{formatearMXN(pagoTotal)}</strong>
+            </span>
+            <span className="text-texto-suave">
+              Pagos:{' '}
+              <strong className="tabular text-texto">
+                {errorPlazo ? <span className="text-peligro">{errorPlazo}</span> : (pagos ?? '—')}
+              </strong>
+              {pagos && f.frecuencia !== 'mensual' && ` (cada ${MESES_POR_PAGO[f.frecuencia]} meses)`}
+            </span>
+            <span className="text-texto-suave">
+              Gastos iniciales:{' '}
+              <strong className="tabular text-texto">{formatearMXN(gastosIniciales)}</strong>
+            </span>
+            <span
+              className="text-texto-suave"
+              title="Referencia: la que se presenta al cliente es la de la financiera"
+            >
+              Tasa calculada:{' '}
+              <strong className={`tabular ${tasaNegativa ? 'text-peligro' : 'text-acento-texto'}`}>
+                {tasa ? `${Number(tasa).toFixed(2)} %` : '—'}
+              </strong>
+            </span>
+            {valor !== undefined && (
+              <span className="ml-auto text-xs text-texto-suave">
+                Sobre un valor de {formatearMXN(valor)} sin IVA
+              </span>
+            )}
+            {tasaNegativa && valor !== undefined && pagos && (
+              <p className="w-full text-xs font-semibold text-peligro">
+                Los pagos ({pagos} × {formatearMXN(pagoTotal)} = {formatearMXN(pagoTotal * BigInt(pagos))}) no
+                alcanzan el valor de los equipos ({formatearMXN(valor)}), por eso la tasa sale negativa.
+                Revisa la mensualidad, el seguro o el plazo.
+              </p>
             )}
           </div>
-        </Campo>
-        <Campo
-          etiqueta="Vigencia de su cotización"
-          ayuda={`Desde ${f.fecha_emision_financiera ? 'la emisión' : 'hoy'}; en fin de semana, el viernes anterior.`}
-          error={errorVigencia}
-        >
-          <input
-            type="date"
-            value={f.vigencia_financiera}
-            disabled={!editable}
-            autoComplete="off"
-            aria-invalid={Boolean(errorVigencia)}
-            onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
-            className={`${control} ${errorVigencia ? 'border-peligro' : ''}`}
-          />
-          {editable && (
-            <div className="flex gap-1.5">
-              {ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
-                // Con la emisión a medio escribir («0002-11-08») los atajos cuentan desde hoy (2026-10-12).
-                const desde = fechaValida(f.fecha_emision_financiera) ? f.fecha_emision_financiera : hoy();
-                const fecha =
-                  atajo.dias === 'fin_de_mes' ? finDeMesHabil(desde) : vigenciaFinanciera(desde, atajo.dias);
-                const activo = f.vigencia_financiera === fecha;
-                return (
-                  <button
-                    key={atajo.etiqueta}
-                    type="button"
-                    aria-pressed={activo}
-                    title={`Vence el ${fecha}`}
-                    onClick={() => onCambiar({ vigencia_financiera: fecha })}
-                    className={`h-8 flex-1 cursor-pointer rounded-pill border px-2 text-xs font-semibold whitespace-nowrap transition-colors ${
-                      activo
-                        ? 'border-acento bg-acento-suave text-acento-texto'
-                        : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
-                    }`}
-                  >
-                    {atajo.etiqueta}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Campo>
-      </Seccion>
-
-      {/* Sección 2 · Condiciones del financiamiento. */}
-      <Seccion titulo="Condiciones">
-        {esArrendamiento && (
-          <Campo etiqueta="Tipo de arrendamiento" ancho>
-            <div role="radiogroup" aria-label="Tipo de arrendamiento" className="grid grid-cols-2 gap-2">
-              {TIPOS.map((t) => {
-                const activo = f.tipo_arrendamiento === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={activo}
-                    disabled={!editable}
-                    onClick={() => onCambiar({ tipo_arrendamiento: t.id })}
-                    className={`flex min-h-11 cursor-pointer flex-col justify-center rounded-md border-2 px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed ${
-                      activo ? 'border-acento bg-acento-suave/50' : 'border-borde hover:border-acento/40'
-                    }`}
-                  >
-                    <span className="text-[13px] font-bold">{t.nombre}</span>
-                    <span className="text-[11px] text-texto-suave">{t.detalle}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </Campo>
-        )}
-        <Campo etiqueta="Plazo" error={errorPlazo}>
-          <select
-            value={f.plazo_meses}
-            disabled={!editable}
-            autoComplete="off"
-            aria-invalid={Boolean(errorPlazo)}
-            onChange={(e) => onCambiar({ plazo_meses: e.target.value })}
-            className={`${control} ${errorPlazo ? 'border-peligro' : ''}`}
-          >
-            <option value="">Elige…</option>
-            {/* Una opción capturada antes con otro plazo se conserva. */}
-            {[...new Set([...PLAZOS, ...(f.plazo_meses ? [Number(f.plazo_meses)] : [])])]
-              .sort((x, y) => x - y)
-              .map((p) => (
-                <option key={p} value={p}>
-                  {p} meses
-                </option>
-              ))}
-          </select>
-        </Campo>
-        <Campo etiqueta="Frecuencia de pago">
-          <select
-            value={f.frecuencia}
-            disabled={!editable}
-            autoComplete="off"
-            onChange={(e) => onCambiar({ frecuencia: e.target.value as Frecuencia })}
-            className={control}
-          >
-            {FRECUENCIAS.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.nombre}
-              </option>
-            ))}
-          </select>
-        </Campo>
-
-        {esFpo && (
-          <Campo etiqueta="Valor residual (Full PayOut)" ayuda="Captura uno; el otro se calcula." ancho>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex rounded-md border border-borde bg-superficie p-0.5" role="radiogroup">
-                {(
-                  [
-                    ['pct', 'En %'],
-                    ['monto', 'En monto'],
-                  ] as const
-                ).map(([id, nombre]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={f.residual_capturado === id}
-                    disabled={!editable}
-                    onClick={() => onCambiar({ residual_capturado: id, residual_valor: '' })}
-                    className={`min-h-9 cursor-pointer rounded-sm px-3 text-[13px] font-semibold ${
-                      f.residual_capturado === id ? 'bg-acento text-sobre-acento' : 'text-texto-suave'
-                    }`}
-                  >
-                    {nombre}
-                  </button>
-                ))}
-              </div>
-              <div className="w-44">
-                <CampoMoneda
-                  etiqueta={<span className="sr-only">Valor residual</span>}
-                  valor={f.residual_valor}
-                  onCambio={(v) => onCambiar({ residual_valor: v })}
-                  disabled={!editable}
-                  decimales={f.residual_capturado === 'pct' ? 4 : 2}
-                  prefijo={f.residual_capturado === 'pct' ? '' : '$'}
-                  sufijo={f.residual_capturado === 'pct' ? '%' : undefined}
-                  invalido={Boolean(errorResidual)}
-                />
-              </div>
-              <span className="text-[13px]">
-                {errorResidual ? (
-                  <span className="font-semibold text-peligro">{errorResidual}</span>
-                ) : residual ? (
-                  <>
-                    ={' '}
-                    <strong className="tabular">
-                      {f.residual_capturado === 'pct'
-                        ? formatearMXN(residual.monto)
-                        : `${residual.porcentaje} % del valor`}
-                    </strong>
-                  </>
-                ) : (
-                  <span className="text-texto-suave">Captura el residual.</span>
-                )}
-              </span>
-            </div>
-          </Campo>
-        )}
-      </Seccion>
-
-      {/* Sección 3 · Montos, todos sin IVA. */}
-      <Seccion titulo="Montos sin IVA">
-        <CampoMoneda
-          etiqueta="Gastos administrativos"
-          valor={f.gastos_administrativos}
-          onCambio={(v) => onCambiar({ gastos_administrativos: v })}
-          disabled={!editable}
-        />
-        <CampoMoneda
-          etiqueta="Seguro de equipo (inicial)"
-          valor={f.seguro_equipo}
-          onCambio={(v) => onCambiar({ seguro_equipo: v })}
-          disabled={!editable}
-        />
-        <CampoMoneda
-          etiqueta={nombrePago(f.frecuencia, ' de los equipos')}
-          valor={f.pago}
-          onCambio={(v) => onCambiar({ pago: v })}
-          disabled={!editable}
-        />
-        <CampoMoneda
-          etiqueta={nombrePago(f.frecuencia, ' del seguro')}
-          valor={f.pago_seguro}
-          onCambio={(v) => onCambiar({ pago_seguro: v })}
-          disabled={!editable}
-        />
-        <CampoMoneda
-          etiqueta="Factor (opcional)"
-          valor={f.factor}
-          onCambio={(v) => onCambiar({ factor: v })}
-          disabled={!editable}
-          decimales={6}
-          prefijo=""
-        />
-        <CampoMoneda
-          etiqueta="Tasa de interés de la financiera"
-          valor={f.tasa_financiera}
-          onCambio={(v) => onCambiar({ tasa_financiera: v })}
-          disabled={!editable}
-          decimales={6}
-          prefijo=""
-          sufijo="%"
-        />
-      </Seccion>
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-borde bg-superficie-2/60 px-4 py-2.5 text-[13px]">
-        <span className="text-texto-suave">
-          {nombrePago(f.frecuencia)} total (equipos + seguro):{' '}
-          <strong className="tabular text-texto">{formatearMXN(pagoTotal)}</strong>
-        </span>
-        <span className="text-texto-suave">
-          Pagos:{' '}
-          <strong className="tabular text-texto">
-            {errorPlazo ? <span className="text-peligro">{errorPlazo}</span> : (pagos ?? '—')}
-          </strong>
-          {pagos && f.frecuencia !== 'mensual' && ` (cada ${MESES_POR_PAGO[f.frecuencia]} meses)`}
-        </span>
-        <span className="text-texto-suave">
-          Gastos iniciales: <strong className="tabular text-texto">{formatearMXN(gastosIniciales)}</strong>
-        </span>
-        <span
-          className="text-texto-suave"
-          title="Referencia: la que se presenta al cliente es la de la financiera"
-        >
-          Tasa calculada:{' '}
-          <strong className={`tabular ${tasaNegativa ? 'text-peligro' : 'text-acento-texto'}`}>
-            {tasa ? `${Number(tasa).toFixed(2)} %` : '—'}
-          </strong>
-        </span>
-        {valor !== undefined && (
-          <span className="ml-auto text-xs text-texto-suave">
-            Sobre un valor de {formatearMXN(valor)} sin IVA
-          </span>
-        )}
-        {tasaNegativa && valor !== undefined && pagos && (
-          <p className="w-full text-xs font-semibold text-peligro">
-            Los pagos ({pagos} × {formatearMXN(pagoTotal)} = {formatearMXN(pagoTotal * BigInt(pagos))}) no
-            alcanzan el valor de los equipos ({formatearMXN(valor)}), por eso la tasa sale negativa. Revisa la
-            mensualidad, el seguro o el plazo.
-          </p>
-        )}
-      </div>
+        </>
+      )}
     </section>
   );
 }

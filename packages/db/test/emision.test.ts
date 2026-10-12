@@ -85,7 +85,7 @@ describe('emisión con folio (0031)', () => {
     await expect(como(db, 'fabiola', () => emitir(ok.revision))).rejects.toThrow(/No tienes acceso/);
   });
 
-  it('Rev visible: mismo folio + « Rev A»; interna: mismo folio; nuevo folio: otro consecutivo', async () => {
+  it('Rev visible: mismo número + « Rev A»; interna: el folio anterior tal cual; nuevo folio: otro consecutivo', async () => {
     const op = await autorizada();
     await como(db, 'jorge', async () => {
       const original = await emitir(op.revision);
@@ -96,7 +96,8 @@ describe('emisión con folio (0031)', () => {
       await ser(null);
       const b = await revNueva(op.cotizacion, 'interna');
       await ser('jorge');
-      expect(await emitir(b)).toBe(original);
+      // La interna conserva exactamente el folio de la emisión anterior (con su « Rev A»).
+      expect(await emitir(b)).toBe(`${original} Rev A`);
       await ser(null);
       const c = await revNueva(op.cotizacion, 'nuevo_folio');
       await ser('jorge');
@@ -171,6 +172,24 @@ describe('cancelación (0031)', () => {
       const b = await revNueva(op.cotizacion, 'interna');
       await ser('jorge');
       expect(await emitir(b)).toBe(folio);
+    });
+  });
+
+  it('una Rev visible es otro folio: la original sigue cancelada (2026-10-12)', async () => {
+    const op = await autorizada();
+    await como(db, 'alejandro', async () => {
+      const folio = await emitir(op.revision);
+      await db.query('select public.solicitar_cancelacion($1, $2)', [op.revision, 'El cliente canceló']);
+      await ser(null);
+      const a = await revNueva(op.cotizacion, 'visible');
+      await ser('alejandro');
+      expect(await emitir(a)).toBe(`${folio} Rev A`);
+      const [original] = await filas<{ cancelada_en: Date | null }>(
+        db,
+        'select cancelada_en from public.revisiones where id = $1',
+        [op.revision],
+      );
+      expect(original!.cancelada_en).not.toBeNull();
     });
   });
 
