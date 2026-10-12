@@ -146,6 +146,14 @@ export const financiamientoSchema = z
       residual_capturado: z.enum(['pct', 'monto']).nullable().default(null),
       residual_valor: decimales(4, 'Valor residual con máximo 4 decimales en % o 2 en monto'),
       gastos_iniciales: decimales(2, 'Gastos iniciales con máximo 2 decimales'),
+      /** Desglose de los gastos iniciales, como lo presenta la financiera (0030). */
+      gastos_administrativos: decimales(2, 'Gastos administrativos con máximo 2 decimales'),
+      seguro_equipo: decimales(2, 'Seguro de equipo con máximo 2 decimales'),
+      /** Tasa anual que da la financiera; es la que se presenta al cliente (0030). */
+      tasa_financiera: decimales(6, 'Tasa con máximo 6 decimales').refine(
+        (v) => v === '' || Number(v) <= 100,
+        'La tasa no puede pasar de 100 %',
+      ),
       pago: decimales(2, 'Pago con máximo 2 decimales'),
       pago_seguro: decimales(2, 'Pago del seguro con máximo 2 decimales'),
       factor: decimales(6, 'Factor con máximo 6 decimales'),

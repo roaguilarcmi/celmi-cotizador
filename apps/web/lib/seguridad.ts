@@ -27,6 +27,8 @@ export function politicaDeContenido({
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
+    // pdf.js lee los PDF de las financieras en un worker del mismo origen (2026-10-12).
+    "worker-src 'self'",
     `connect-src 'self' ${supabase.join(' ')}${desarrollo ? ' ws:' : ''}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",

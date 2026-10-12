@@ -15,6 +15,7 @@
     "@celmi/core": "*",
     "@celmi/ui": "*",
     "@celmi/validation": "*",
+    "@react-pdf/renderer": "4.9.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
     "@tiptap/core": "3.31.4",
@@ -27,6 +28,7 @@
     "@tiptap/starter-kit": "3.31.4",
     "@tiptap/static-renderer": "3.31.4",
     "next": "^16.3.8",
+    "pdfjs-dist": "6.3.289",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

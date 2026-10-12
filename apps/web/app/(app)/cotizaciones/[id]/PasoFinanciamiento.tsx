@@ -4,6 +4,7 @@ import {
   aEscalado,
   ESCALA_DINERO,
   formatearMXN,
+  leerCorridaFinanciera,
   ATAJOS_VIGENCIA_FINANCIERA,
   fechaValida,
   finDeMesHabil,
@@ -14,11 +15,12 @@ import {
   vigenciaFinanciera,
   type Frecuencia,
 } from '@celmi/core';
-import { useState, useTransition, type ReactNode } from 'react';
+import { useRef, useState, useTransition, type ReactNode } from 'react';
 import { CampoMoneda } from '@/components/CampoMoneda';
 import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
 import { presentacionAutorizada } from '@/lib/corrida';
+import { textosDePdf } from '@/lib/leer-pdf';
 import type { Financiera, FinanciamientoFila, RevisionDetalle } from '@/lib/datos';
 import type { TipoOportunidad } from '@/lib/tipos-oportunidad';
 import { guardarFinanciamiento } from '../acciones';
@@ -35,6 +37,10 @@ interface Opcion {
   residual_capturado: 'pct' | 'monto';
   residual_valor: string;
   gastos_iniciales: string;
+  /** Desglose de los gastos iniciales y tasa de la financiera (0030). */
+  gastos_administrativos: string;
+  seguro_equipo: string;
+  tasa_financiera: string;
   pago: string;
   pago_seguro: string;
   factor: string;
@@ -80,6 +86,9 @@ const vacia = (propuesta: string): Opcion => ({
   residual_capturado: 'pct',
   residual_valor: '',
   gastos_iniciales: '',
+  gastos_administrativos: '',
+  seguro_equipo: '',
+  tasa_financiera: '',
   pago: '',
   pago_seguro: '',
   factor: '',
@@ -126,6 +135,13 @@ export function PasoFinanciamiento({
       residual_capturado: f.residual_capturado ?? 'pct',
       residual_valor: f.residual_capturado === 'monto' ? texto(f.valor_residual) : texto(f.residual_pct),
       gastos_iniciales: texto(f.gastos_apertura),
+      // Opciones anteriores al desglose (0030): su total pasa a «gastos administrativos».
+      gastos_administrativos:
+        f.gastos_administrativos == null && f.seguro_equipo == null
+          ? texto(f.gastos_apertura)
+          : texto(f.gastos_administrativos),
+      seguro_equipo: texto(f.seguro_equipo),
+      tasa_financiera: texto(f.tasa_financiera),
       pago: texto(f.mensualidad),
       pago_seguro: texto(f.pago_seguro),
       factor: texto(f.factor),
@@ -170,6 +186,9 @@ export function PasoFinanciamiento({
           residual_capturado: f.tipo_arrendamiento === 'fpo' ? f.residual_capturado : null,
           residual_valor: f.tipo_arrendamiento === 'fpo' ? f.residual_valor : '',
           gastos_iniciales: f.gastos_iniciales,
+          gastos_administrativos: f.gastos_administrativos,
+          seguro_equipo: f.seguro_equipo,
+          tasa_financiera: f.tasa_financiera,
           pago: f.pago,
           pago_seguro: f.pago_seguro,
           factor: f.factor,
@@ -191,8 +210,9 @@ export function PasoFinanciamiento({
           </span>
         </div>
         <p className="mt-1 text-[13px] text-texto-suave">
-          Por cada propuesta captura una o varias opciones con los datos que da la financiera. El valor de los
-          equipos sale de los precios autorizados; la tasa de interés se calcula sola.
+          Por cada propuesta captura una o varias opciones con los datos que da la financiera, o usa «Cargar
+          PDF de la financiera» para llenarlas solas (el PDF se lee en tu navegador; no se sube ni se guarda).
+          El valor de los equipos sale de los precios autorizados.
         </p>
         {!autorizada && (
           <p className="mt-3 flex items-center gap-2 rounded-md bg-superficie-2 px-4 py-3 text-[13px] text-texto-suave">
@@ -413,6 +433,80 @@ function OpcionFinanciamiento({
   }
 
   const tasaNegativa = tasa !== null && Number(tasa) < 0;
+  const gastosIniciales = centavos(f.gastos_administrativos) + centavos(f.seguro_equipo);
+
+  // Cargar el PDF de la financiera (2026-10-12): se lee en el navegador y se llena la opción; no se sube ni se guarda.
+  const archivo = useRef<HTMLInputElement>(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [lectura, setLectura] = useState<{ texto: string; avisos: string[]; error?: boolean } | null>(null);
+  const cargarPdf = async (a: File) => {
+    setLeyendo(true);
+    setLectura(null);
+    try {
+      const c = leerCorridaFinanciera(await textosDePdf(a));
+      if (!c) {
+        setLectura({
+          texto:
+            'No se reconoció el formato de este PDF. Captura los datos a mano (o compárteme el PDF para agregarlo).',
+          avisos: [],
+          error: true,
+        });
+        return;
+      }
+      const avisos = c.faltantes.length ? [`No se encontró en el PDF: ${c.faltantes.join(', ')}.`] : [];
+      const enCatalogo = financieras.find((x) =>
+        /\bdll\b|de lage landen/i.test(`${x.nombre} ${x.razon_social}`),
+      );
+      if (!enCatalogo)
+        avisos.push(
+          `«${c.nombreFinanciera}» no está en el catálogo de financieras; pide a un administrador que la agregue.`,
+        );
+      const valorPdf = c.valorEquipos ? aEscalado(c.valorEquipos, ESCALA_DINERO) : null;
+      const coincide = valor !== undefined && valorPdf === valor;
+      if (valorPdf !== null && valor !== undefined && !coincide)
+        avisos.push(
+          `El valor de los equipos del PDF (${formatearMXN(valorPdf)}) no coincide con el de la propuesta (${formatearMXN(valor)}).`,
+        );
+      const cambio: Partial<Opcion> = {
+        folio_financiera: c.folio,
+        ...(enCatalogo && {
+          financiera_id: enCatalogo.id,
+          aseguradora:
+            enCatalogo.aseguradoras.length === 1 ? (enCatalogo.aseguradoras[0] ?? '') : f.aseguradora,
+        }),
+        ...(c.fechaEmision && { fecha_emision_financiera: c.fechaEmision }),
+        ...(c.fechaEmision &&
+          c.diasVigencia !== null && {
+            vigencia_financiera: vigenciaFinanciera(c.fechaEmision, c.diasVigencia),
+          }),
+        ...(c.tipo && esArrendamiento && { tipo_arrendamiento: c.tipo }),
+        ...(c.plazoMeses && { plazo_meses: String(c.plazoMeses) }),
+        ...(c.frecuencia && { frecuencia: c.frecuencia }),
+        gastos_administrativos: c.gastosAdministrativos ?? '',
+        seguro_equipo: c.seguroEquipo ?? '',
+        pago: c.pago ?? '',
+        pago_seguro: c.seguro ?? '',
+        factor: c.factor ?? '',
+        tasa_financiera: c.tasa ?? '',
+        // Opción de compra: en % si el valor coincide (el monto sale igual); si no, el monto exacto del PDF.
+        ...(c.tipo === 'fpo' &&
+          (coincide && c.opcionCompraPct
+            ? { residual_capturado: 'pct' as const, residual_valor: c.opcionCompraPct }
+            : c.opcionCompraMonto
+              ? { residual_capturado: 'monto' as const, residual_valor: c.opcionCompraMonto }
+              : {})),
+      };
+      onCambiar(cambio);
+      setLectura({
+        texto: `Se llenó la opción con la cotización ${c.folio} de ${c.nombreFinanciera}. Revisa los datos y guarda.`,
+        avisos,
+      });
+    } catch (e) {
+      setLectura({ texto: (e as Error).message || 'No se pudo leer el PDF.', avisos: [], error: true });
+    } finally {
+      setLeyendo(false);
+    }
+  };
 
   return (
     <section
@@ -436,11 +530,50 @@ function OpcionFinanciamiento({
             .join(' · ')}
         </span>
         {editable && (
-          <Boton tamano="chico" variante="peligro" icono="cerrar" className="ml-auto" onClick={onQuitar}>
-            Quitar
-          </Boton>
+          <div className="ml-auto flex items-center gap-1.5">
+            <input
+              ref={archivo}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const a = e.target.files?.[0];
+                e.target.value = '';
+                if (a) void cargarPdf(a);
+              }}
+            />
+            <Boton
+              tamano="chico"
+              icono="abrir"
+              disabled={leyendo}
+              title="Se lee en tu navegador; el PDF no se sube ni se guarda"
+              onClick={() => archivo.current?.click()}
+            >
+              {leyendo ? 'Leyendo…' : 'Cargar PDF de la financiera'}
+            </Boton>
+            <Boton tamano="chico" variante="peligro" icono="cerrar" onClick={onQuitar}>
+              Quitar
+            </Boton>
+          </div>
         )}
       </div>
+      {lectura && (
+        <div
+          role="status"
+          className={`border-b border-borde px-4 py-2.5 text-[13px] ${
+            lectura.error ? 'bg-peligro-suave text-peligro' : 'bg-exito-suave text-exito'
+          }`}
+        >
+          <p className="font-semibold">{lectura.texto}</p>
+          {lectura.avisos.length > 0 && (
+            <ul className="mt-1 list-disc pl-5 font-semibold text-aviso">
+              {lectura.avisos.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Sección 1 · La financiera y su cotización. */}
       <Seccion titulo="Financiera">
@@ -682,9 +815,15 @@ function OpcionFinanciamiento({
       {/* Sección 3 · Montos, todos sin IVA. */}
       <Seccion titulo="Montos sin IVA">
         <CampoMoneda
-          etiqueta="Gastos iniciales (MXN)"
-          valor={f.gastos_iniciales}
-          onCambio={(v) => onCambiar({ gastos_iniciales: v })}
+          etiqueta="Gastos administrativos"
+          valor={f.gastos_administrativos}
+          onCambio={(v) => onCambiar({ gastos_administrativos: v })}
+          disabled={!editable}
+        />
+        <CampoMoneda
+          etiqueta="Seguro de equipo (inicial)"
+          valor={f.seguro_equipo}
+          onCambio={(v) => onCambiar({ seguro_equipo: v })}
           disabled={!editable}
         />
         <CampoMoneda
@@ -707,6 +846,15 @@ function OpcionFinanciamiento({
           decimales={6}
           prefijo=""
         />
+        <CampoMoneda
+          etiqueta="Tasa de interés de la financiera"
+          valor={f.tasa_financiera}
+          onCambio={(v) => onCambiar({ tasa_financiera: v })}
+          disabled={!editable}
+          decimales={6}
+          prefijo=""
+          sufijo="%"
+        />
       </Seccion>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-borde bg-superficie-2/60 px-4 py-2.5 text-[13px]">
@@ -722,7 +870,13 @@ function OpcionFinanciamiento({
           {pagos && f.frecuencia !== 'mensual' && ` (cada ${MESES_POR_PAGO[f.frecuencia]} meses)`}
         </span>
         <span className="text-texto-suave">
-          Tasa anual (calculada):{' '}
+          Gastos iniciales: <strong className="tabular text-texto">{formatearMXN(gastosIniciales)}</strong>
+        </span>
+        <span
+          className="text-texto-suave"
+          title="Referencia: la que se presenta al cliente es la de la financiera"
+        >
+          Tasa calculada:{' '}
           <strong className={`tabular ${tasaNegativa ? 'text-peligro' : 'text-acento-texto'}`}>
             {tasa ? `${Number(tasa).toFixed(2)} %` : '—'}
           </strong>

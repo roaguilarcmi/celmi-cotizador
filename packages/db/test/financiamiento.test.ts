@@ -162,6 +162,40 @@ describe('opciones de financiamiento (0017, 0023)', () => {
     });
   });
 
+  it('desglose de gastos iniciales y tasa de la financiera (0030); se suman en gastos_apertura', async () => {
+    const op = await autorizada();
+    await como(db, 'jorge', async () => {
+      await db.query('select public.guardar_financiamiento($1, $2)', [
+        op.revision,
+        JSON.stringify([
+          fila(op.propuesta, {
+            gastos_iniciales: '',
+            gastos_administrativos: '5500.00',
+            seguro_equipo: '221.92',
+            tasa_financiera: '16.37',
+          }),
+          fila(op.propuesta),
+        ]),
+      ]);
+      const r = await filas<{
+        apertura: string;
+        adm: string | null;
+        seg: string | null;
+        tasa: string | null;
+      }>(
+        db,
+        `select gastos_apertura::text as apertura, gastos_administrativos::text as adm, seguro_equipo::text as seg,
+                tasa_financiera::text as tasa
+         from public.propuesta_financiamientos order by orden`,
+      );
+      expect(r).toEqual([
+        { apertura: '5721.92', adm: '5500.00', seg: '221.92', tasa: '16.370000' },
+        // Sin desglose (opciones anteriores) se conserva el total capturado.
+        { apertura: '1500.00', adm: null, seg: null, tasa: null },
+      ]);
+    });
+  });
+
   it('el residual sólo va en Full PayOut y la frecuencia es una de las cinco', async () => {
     const op = await autorizada();
     await expect(

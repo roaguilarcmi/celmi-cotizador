@@ -542,6 +542,10 @@ export interface FinanciamientoFila {
   pago_seguro: string | null;
   vigencia_financiera: string | null;
   fecha_emision_financiera: string | null;
+  /** Desglose de los gastos iniciales y tasa de la financiera (0030). */
+  gastos_administrativos: string | null;
+  seguro_equipo: string | null;
+  tasa_financiera: string | null;
 }
 
 export async function listarCondicionesCatalogo(soloActivas = true): Promise<CondicionCatalogo[]> {
