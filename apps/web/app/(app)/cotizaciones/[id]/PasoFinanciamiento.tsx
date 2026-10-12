@@ -15,7 +15,7 @@ import {
   vigenciaFinanciera,
   type Frecuencia,
 } from '@celmi/core';
-import { useRef, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { CampoMoneda } from '@/components/CampoMoneda';
 import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
@@ -508,6 +508,39 @@ function OpcionFinanciamiento({
     }
   };
 
+  // «Pegar PDF» (2026-10-12): el navegador sólo entrega un archivo copiado al presionar Ctrl + V, así que el botón
+  // deja la opción esperando ese pegado (Esc o 60 s lo cancelan).
+  const [pegando, setPegando] = useState(false);
+  useEffect(() => {
+    if (!pegando) return;
+    const alPegar = (e: ClipboardEvent) => {
+      const pdf = [...(e.clipboardData?.files ?? [])].find(
+        (x) => x.type === 'application/pdf' || /\.pdf$/i.test(x.name),
+      );
+      e.preventDefault();
+      setPegando(false);
+      if (pdf) void cargarPdf(pdf);
+      else
+        setLectura({
+          texto:
+            'Lo que pegaste no es un PDF. En el Explorador de archivos selecciona el PDF de la financiera, presiona Ctrl + C y vuelve a intentarlo.',
+          avisos: [],
+          error: true,
+        });
+    };
+    const alTeclear = (e: KeyboardEvent) => e.key === 'Escape' && setPegando(false);
+    const limite = setTimeout(() => setPegando(false), 60_000);
+    window.addEventListener('paste', alPegar);
+    window.addEventListener('keydown', alTeclear);
+    return () => {
+      clearTimeout(limite);
+      window.removeEventListener('paste', alPegar);
+      window.removeEventListener('keydown', alTeclear);
+    };
+    // cargarPdf cambia en cada render; basta con escuchar mientras se espera el pegado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegando]);
+
   return (
     <section
       aria-label={`Opción ${numero}`}
@@ -551,12 +584,38 @@ function OpcionFinanciamiento({
             >
               {leyendo ? 'Leyendo…' : 'Cargar PDF de la financiera'}
             </Boton>
+            <Boton
+              tamano="chico"
+              icono="copiar"
+              disabled={leyendo}
+              aria-pressed={pegando}
+              title="Copia el PDF en el Explorador de archivos (Ctrl + C) y pégalo aquí con Ctrl + V"
+              onClick={() => {
+                setLectura(null);
+                setPegando((x) => !x);
+              }}
+            >
+              {pegando ? 'Esperando Ctrl + V…' : 'Pegar PDF'}
+            </Boton>
             <Boton tamano="chico" variante="peligro" icono="cerrar" onClick={onQuitar}>
               Quitar
             </Boton>
           </div>
         )}
       </div>
+      {pegando && (
+        <div role="status" className="border-b border-borde bg-info-suave px-4 py-2.5 text-[13px] text-info">
+          <p className="font-semibold">
+            Presiona <kbd className="rounded-sm border border-info/40 px-1">Ctrl</kbd> +{' '}
+            <kbd className="rounded-sm border border-info/40 px-1">V</kbd> para pegar el PDF que copiaste (Esc
+            para cancelar).
+          </p>
+          <p className="mt-0.5">
+            ¿Aún no lo copias? En el Explorador de archivos haz clic en el PDF de la financiera y presiona
+            Ctrl + C.
+          </p>
+        </div>
+      )}
       {lectura && (
         <div
           role="status"
