@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esFinDeSemana, fechaValida, finDeMesHabil, vigenciaSugerida } from './vigencia';
+import { esFinDeSemana, fechaValida, finDeMesHabil, vigenciaFinanciera, vigenciaSugerida } from './vigencia';
 
 describe('vigencia', () => {
   it('fechas a medio escribir no truenan y no cuentan como válidas (2026-10-12)', () => {
@@ -34,6 +34,15 @@ describe('vigencia', () => {
     expect(esFinDeSemana('2026-10-12')).toBe(false);
     expect(() => esFinDeSemana('2026-02-30')).toThrow();
     expect(() => vigenciaSugerida('2026-10-07', -1)).toThrow();
+  });
+});
+
+describe('vigenciaFinanciera (2026-10-12)', () => {
+  it('si cae en fin de semana regresa al viernes inmediato anterior', () => {
+    expect(vigenciaFinanciera('2026-10-07', 15)).toBe('2026-10-22'); // jueves, sin cambio
+    expect(vigenciaFinanciera('2026-10-03', 15)).toBe('2026-10-16'); // domingo 18 → viernes 16
+    expect(vigenciaFinanciera('2026-10-02', 15)).toBe('2026-10-16'); // sábado 17 → viernes 16
+    expect(vigenciaFinanciera('2026-10-01', 30)).toBe('2026-10-30'); // sábado 31 → viernes 30
   });
 });
 

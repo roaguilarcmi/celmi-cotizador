@@ -70,6 +70,20 @@ export function finDeMesHabil(fecha: string): string {
   return escribir(fin);
 }
 
+/**
+ * Vigencia de la cotización de la financiera a `dias` días naturales de su emisión (decisión 2026-10-12): si cae en
+ * sábado o domingo, el viernes inmediato anterior (la financiera no amplía su vigencia al lunes).
+ */
+export function vigenciaFinanciera(desde: string, dias: number): string {
+  if (!Number.isSafeInteger(dias) || dias < 0) throw new Error('Los días deben ser un entero no negativo');
+  const d = leer(desde);
+  d.setUTCDate(d.getUTCDate() + dias);
+  const semana = d.getUTCDay();
+  if (semana === 6) d.setUTCDate(d.getUTCDate() - 1);
+  if (semana === 0) d.setUTCDate(d.getUTCDate() - 2);
+  return escribir(d);
+}
+
 /** Atajos de vigencia de la cotización de la financiera, desde su fecha de emisión (2026-10-07). */
 export const ATAJOS_VIGENCIA_FINANCIERA: readonly { etiqueta: string; dias: number | 'fin_de_mes' }[] = [
   { etiqueta: '15 días', dias: 15 },

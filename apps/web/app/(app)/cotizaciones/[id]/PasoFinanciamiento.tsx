@@ -11,7 +11,7 @@ import {
   numeroDePagos,
   tasaAnualNominal,
   valorResidual,
-  vigenciaSugerida,
+  vigenciaFinanciera,
   type Frecuencia,
 } from '@celmi/core';
 import { useState, useTransition, type ReactNode } from 'react';
@@ -147,6 +147,9 @@ export function PasoFinanciamiento({
   const principales = revision.propuestas.filter((p) => !p.es_adicional);
   const presentadas = autorizada ? presentacionAutorizada(revision) : null;
   const valorDe = (propuesta: string) => presentadas?.find((p) => p.id === propuesta)?.totales.subtotal;
+  /** Propuesta cuya pestaña está abierta (2026-10-12): cada una con sus propias opciones. */
+  const [activa, setActiva] = useState(() => principales[0]?.id ?? '');
+  const actual = principales.find((p) => p.id === activa) ?? principales[0];
 
   const cambiar = (c: string, cambio: Partial<Opcion>) =>
     setOpciones((xs) => xs.map((f) => (f.clave === c ? { ...f, ...cambio } : f)));
@@ -209,49 +212,58 @@ export function PasoFinanciamiento({
         )}
       </Tarjeta>
 
-      {principales.map((p) => {
-        const valor = valorDe(p.id);
-        const propias = opciones.filter((f) => f.propuesta_id === p.id);
-        return (
-          <Tarjeta key={p.id} className="overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 border-b border-borde px-6 py-3">
-              <h3 className="mr-auto text-[15px] font-bold">{p.nombre}</h3>
-              <span className="text-[13px] text-texto-suave">
-                Valor de los equipos (sin IVA):{' '}
-                <strong className="tabular text-texto">
-                  {valor !== undefined ? formatearMXN(valor) : 'pendiente de autorizar'}
-                </strong>
-              </span>
+      {actual && (
+        <Tarjeta className="overflow-hidden">
+          {/* Una pestaña por propuesta (2026-10-12): sus opciones no se mezclan con las de otra. */}
+          {principales.length > 1 && (
+            <div
+              role="tablist"
+              aria-label="Propuestas"
+              className="flex flex-wrap gap-1 border-b border-borde bg-superficie-2/60 px-3 pt-2"
+            >
+              {principales.map((p) => {
+                const elegida = p.id === actual.id;
+                const n = opciones.filter((f) => f.propuesta_id === p.id).length;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={elegida}
+                    onClick={() => setActiva(p.id)}
+                    className={`-mb-px inline-flex h-10 cursor-pointer items-center gap-2 rounded-t-md border px-4 text-[13px] font-semibold transition-colors ${
+                      elegida
+                        ? 'border-borde border-b-superficie bg-superficie text-texto'
+                        : 'border-transparent text-texto-suave hover:text-texto'
+                    }`}
+                  >
+                    {p.nombre}
+                    <span
+                      className={`rounded-pill px-1.5 text-[11px] font-bold tabular ${
+                        n ? 'bg-acento-suave text-acento-texto' : 'bg-superficie-2 text-texto-suave'
+                      }`}
+                    >
+                      {n}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-
-            <div className="flex flex-col gap-3 p-4">
-              {propias.length === 0 && (
-                <p className="px-2 py-2 text-[13px] text-texto-suave">Sin opciones de financiamiento.</p>
-              )}
-              {propias.map((f, i) => (
-                <OpcionFinanciamiento
-                  key={f.clave}
-                  numero={i + 1}
-                  f={f}
-                  valor={valor}
-                  financieras={financieras}
-                  esArrendamiento={esArrendamiento}
-                  editable={editable}
-                  onCambiar={(cambio) => cambiar(f.clave, cambio)}
-                  onQuitar={() => setOpciones((xs) => xs.filter((x) => x.clave !== f.clave))}
-                />
-              ))}
-              {editable && (
-                <div>
-                  <Boton tamano="chico" icono="mas" onClick={() => setOpciones((xs) => [...xs, vacia(p.id)])}>
-                    Agregar opción
-                  </Boton>
-                </div>
-              )}
-            </div>
-          </Tarjeta>
-        );
-      })}
+          )}
+          <PropuestaFinanciamiento
+            key={actual.id}
+            nombre={actual.nombre}
+            valor={valorDe(actual.id)}
+            opciones={opciones.filter((f) => f.propuesta_id === actual.id)}
+            financieras={financieras}
+            esArrendamiento={esArrendamiento}
+            editable={editable}
+            onCambiar={cambiar}
+            onQuitar={(clave) => setOpciones((xs) => xs.filter((x) => x.clave !== clave))}
+            onAgregar={() => setOpciones((xs) => [...xs, vacia(actual.id)])}
+          />
+        </Tarjeta>
+      )}
 
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
@@ -267,6 +279,69 @@ export function PasoFinanciamiento({
         </div>
       )}
     </div>
+  );
+}
+
+/** Opciones de una propuesta, separadas con claridad una de otra (2026-10-12). */
+function PropuestaFinanciamiento({
+  nombre,
+  valor,
+  opciones,
+  financieras,
+  esArrendamiento,
+  editable,
+  onCambiar,
+  onQuitar,
+  onAgregar,
+}: {
+  nombre: string;
+  valor: bigint | undefined;
+  opciones: Opcion[];
+  financieras: Financiera[];
+  esArrendamiento: boolean;
+  editable: boolean;
+  onCambiar: (clave: string, cambio: Partial<Opcion>) => void;
+  onQuitar: (clave: string) => void;
+  onAgregar: () => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3 border-b border-borde px-6 py-3">
+        <h3 className="mr-auto text-[15px] font-bold">{nombre}</h3>
+        <span className="text-[13px] text-texto-suave">
+          Valor de los equipos (sin IVA):{' '}
+          <strong className="tabular text-texto">
+            {valor !== undefined ? formatearMXN(valor) : 'pendiente de autorizar'}
+          </strong>
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-6 bg-superficie-2/40 p-4">
+        {opciones.length === 0 && (
+          <p className="px-2 py-2 text-[13px] text-texto-suave">Sin opciones de financiamiento.</p>
+        )}
+        {opciones.map((f, i) => (
+          <OpcionFinanciamiento
+            key={f.clave}
+            numero={i + 1}
+            f={f}
+            valor={valor}
+            financieras={financieras}
+            esArrendamiento={esArrendamiento}
+            editable={editable}
+            onCambiar={(cambio) => onCambiar(f.clave, cambio)}
+            onQuitar={() => onQuitar(f.clave)}
+          />
+        ))}
+        {editable && (
+          <div>
+            <Boton tamano="chico" icono="mas" onClick={onAgregar}>
+              Agregar opción a {nombre}
+            </Boton>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -342,9 +417,12 @@ function OpcionFinanciamiento({
   return (
     <section
       aria-label={`Opción ${numero}`}
-      className="overflow-hidden rounded-lg border-2 border-borde bg-superficie"
+      className="overflow-hidden rounded-lg border border-l-4 border-borde border-l-acento bg-superficie sombra"
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-borde bg-superficie-2 py-1.5 pr-1.5 pl-4">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-borde bg-acento-suave/40 py-2 pr-1.5 pl-4">
+        <span className="inline-flex size-6 items-center justify-center rounded-full bg-acento text-xs font-bold text-sobre-acento">
+          {numero}
+        </span>
         <span className="text-sm font-bold">Opción {numero}</span>
         <span className="text-[13px] text-texto-suave">
           {[
@@ -438,39 +516,45 @@ function OpcionFinanciamiento({
         </Campo>
         <Campo
           etiqueta="Vigencia de su cotización"
-          ayuda={`Desde ${f.fecha_emision_financiera ? 'la emisión' : 'hoy'}; nunca en sábado ni domingo.`}
-          ancho
+          ayuda={`Desde ${f.fecha_emision_financiera ? 'la emisión' : 'hoy'}; en fin de semana, el viernes anterior.`}
+          error={errorVigencia}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={f.vigencia_financiera}
-              disabled={!editable}
-              autoComplete="off"
-              aria-invalid={Boolean(errorVigencia)}
-              onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
-              className={`${control} w-44 ${errorVigencia ? 'border-peligro' : ''}`}
-            />
-            {editable &&
-              ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
+          <input
+            type="date"
+            value={f.vigencia_financiera}
+            disabled={!editable}
+            autoComplete="off"
+            aria-invalid={Boolean(errorVigencia)}
+            onChange={(e) => onCambiar({ vigencia_financiera: e.target.value })}
+            className={`${control} ${errorVigencia ? 'border-peligro' : ''}`}
+          />
+          {editable && (
+            <div className="flex gap-1.5">
+              {ATAJOS_VIGENCIA_FINANCIERA.map((atajo) => {
                 // Con la emisión a medio escribir («0002-11-08») los atajos cuentan desde hoy (2026-10-12).
                 const desde = fechaValida(f.fecha_emision_financiera) ? f.fecha_emision_financiera : hoy();
                 const fecha =
-                  atajo.dias === 'fin_de_mes' ? finDeMesHabil(desde) : vigenciaSugerida(desde, atajo.dias);
+                  atajo.dias === 'fin_de_mes' ? finDeMesHabil(desde) : vigenciaFinanciera(desde, atajo.dias);
+                const activo = f.vigencia_financiera === fecha;
                 return (
-                  <Boton
+                  <button
                     key={atajo.etiqueta}
-                    tamano="chico"
-                    variante={f.vigencia_financiera === fecha ? 'primario' : 'secundario'}
+                    type="button"
+                    aria-pressed={activo}
                     title={`Vence el ${fecha}`}
                     onClick={() => onCambiar({ vigencia_financiera: fecha })}
+                    className={`h-8 flex-1 cursor-pointer rounded-pill border px-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+                      activo
+                        ? 'border-acento bg-acento-suave text-acento-texto'
+                        : 'border-borde bg-superficie text-texto hover:bg-superficie-2'
+                    }`}
                   >
                     {atajo.etiqueta}
-                  </Boton>
+                  </button>
                 );
               })}
-            {errorVigencia && <span className="text-xs font-semibold text-peligro">{errorVigencia}</span>}
-          </div>
+            </div>
+          )}
         </Campo>
       </Seccion>
 
