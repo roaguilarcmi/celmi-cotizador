@@ -1059,7 +1059,6 @@ export function CorridaAutorizacion({
               valor={general}
               onCambio={(v) => setGeneral(v.trim())}
               valido={generalValida}
-              placeholder="13.5"
               etiqueta="Utilidad general"
               ancho="w-[76px]"
             />
@@ -1278,7 +1277,17 @@ export function CorridaAutorizacion({
                             aria-hidden="true"
                             className={`size-2 rounded-full ${aviso ? (grave ? 'bg-peligro' : 'bg-aviso') : 'bg-transparent'}`}
                           />
-                          {f.ref}
+                          <span className="flex flex-col items-center leading-none">
+                            {f.ref}
+                            {f.tipo !== 'partida' && (
+                              <span
+                                title={TIPO_FILA[f.tipo].titulo}
+                                className="mt-0.5 text-[9px] font-bold tracking-wide uppercase"
+                              >
+                                {TIPO_FILA[f.tipo].corto}
+                              </span>
+                            )}
+                          </span>
                         </span>
                       </td>
                       <td className={`${fija2} ${borde} ${fijo} px-3`}>
@@ -1930,29 +1939,26 @@ function Dato({
   );
 }
 
+/**
+ * Tipo de fila, debajo de su referencia (2026-10-12): así la etiqueta no le quita espacio a la descripción.
+ */
+const TIPO_FILA = {
+  incluida: { corto: 'Incl.', titulo: 'Adicional incluido en el precio de su partida' },
+  visible: { corto: 'Visible', titulo: 'Adicional con línea propia en la cotización' },
+  cargo: { corto: 'Cargo', titulo: 'Cargo prorrateado entre partidas' },
+} as const;
+
 /** Descripción en una sola línea (fila baja, como en Excel); un clic la despliega completa. */
 function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; aviso?: string }) {
   const [abierta, setAbierta] = useState(false);
-  const etiqueta = {
-    partida: null,
-    incluida: { texto: 'Incluido', clase: 'bg-superficie-2 text-texto-suave' },
-    visible: { texto: 'Visible', clase: 'bg-superficie-2 text-texto-suave' },
-    cargo: { texto: 'Cargo', clase: 'bg-superficie-2 text-texto-suave' },
-  }[f.tipo];
-  const sub = f.tipo === 'incluida' || f.tipo === 'visible';
   return (
     <button
       type="button"
       onClick={() => setAbierta((x) => !x)}
       aria-expanded={abierta}
       title={abierta ? 'Contraer' : f.p.descripcion}
-      className={`flex w-full cursor-pointer items-start gap-1.5 py-2 text-left ${sub ? 'pl-4' : ''}`}
+      className="flex w-full cursor-pointer items-start gap-1.5 py-2 text-left"
     >
-      {etiqueta && (
-        <span className={`mt-px shrink-0 rounded-sm px-1.5 text-[11px] font-bold ${etiqueta.clase}`}>
-          {etiqueta.texto}
-        </span>
-      )}
       {f.p.se_suma && (
         <span className="mt-px shrink-0 rounded-sm bg-info-suave px-1.5 text-[11px] font-bold text-info">
           Se suma
