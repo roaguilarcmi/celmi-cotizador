@@ -309,6 +309,11 @@ export interface CotizacionFila {
     enviada_en: string | null;
     autorizada_en: string | null;
     comentario_autorizacion: string;
+    /** Emisión (0031): folio exacto y si se canceló. */
+    folio: string | null;
+    folio_base: string | null;
+    emitida_en: string | null;
+    cancelada_en: string | null;
     autor: { nombre: string } | null;
     autorizador: { nombre: string } | null;
   }[];
@@ -758,5 +763,10 @@ export async function contarPorAutorizar(): Promise<number> {
     .from('revisiones')
     .select('id', { count: 'exact', head: true })
     .eq('estado', 'pendiente_autorizacion');
-  return count ?? 0;
+  // También las solicitudes de cancelación pendientes (0031): las resuelve quien autoriza.
+  const { count: cancelaciones } = await supabase
+    .from('solicitudes_cancelacion')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado', 'pendiente');
+  return (count ?? 0) + (cancelaciones ?? 0);
 }

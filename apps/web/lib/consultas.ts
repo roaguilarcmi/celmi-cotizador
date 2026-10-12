@@ -24,6 +24,7 @@ export const CONSULTAS = {
     oportunidad:oportunidades(id, nombre, ejecutivo_id, tipo, estado_entrega, ciudad_entrega, cliente:clientes(razon_social),
       ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(nombre)),
     revisiones(id, numero, estado, motivo, razon, visibilidad, creado_en, enviada_en, autorizada_en, comentario_autorizacion,
+      folio, folio_base, emitida_en, cancelada_en,
       autor:perfiles!revisiones_creado_por_fkey(nombre), autorizador:perfiles!revisiones_autorizada_por_fkey(nombre))`,
   revision: `id, cotizacion_id, numero, estado, motivo, razon, visibilidad, vigencia_hasta, condiciones, comentario_autorizacion,
     esquema, mayorista_arrendamiento_id, anticipo_pct, transaccion_pct, transaccion_alcance,
@@ -56,6 +57,8 @@ export const CONSULTAS = {
     seguro_equipo, tasa_financiera`,
   financieras: 'id, nombre, razon_social, aseguradoras, activa',
   notificaciones: 'id, tipo, titulo, cuerpo, enlace, creado_en, leida_en',
+  cotizacionPdf: `id, folio,
+    oportunidad:oportunidades(cliente:clientes(razon_social), contacto:contactos(tratamiento, nombre, puesto))`,
   solicitudesCancelacion: `id, revision_id, motivo, estado, solicitada_en, resuelta_en, comentario,
     solicitante:perfiles!solicitudes_cancelacion_solicitada_por_fkey(nombre),
     revision:revisiones(folio, cotizacion_id,
@@ -87,5 +90,6 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   financiamientos: 'propuesta_financiamientos',
   financieras: 'financieras',
   notificaciones: 'notificaciones',
+  cotizacionPdf: 'cotizaciones',
   solicitudesCancelacion: 'solicitudes_cancelacion',
 };

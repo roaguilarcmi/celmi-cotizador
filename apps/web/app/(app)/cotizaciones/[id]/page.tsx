@@ -8,6 +8,7 @@ import {
   listarCondicionesCatalogo,
   listarCondicionesDeRevision,
   listarPaquetesCondiciones,
+  listarSolicitudesCancelacion,
   listarFinancieras,
   listarFinanciamiento,
   listarTiposCambio,
@@ -28,6 +29,8 @@ const PASOS: Record<string, Paso> = {
   condiciones: 2,
   autorizacion: 3,
   financiamiento: 4,
+  'vista-previa': 5,
+  emision: 6,
 };
 /** Paso inicial según el estado: capturando, esperando autorización o ya autorizada (financiamiento). */
 const PASO_POR_ESTADO: Record<string, Paso> = {
@@ -35,7 +38,7 @@ const PASO_POR_ESTADO: Record<string, Paso> = {
   rechazada: 1,
   pendiente_autorizacion: 3,
   autorizada: 4,
-  emitida: 4,
+  emitida: 6,
 };
 
 export default async function PaginaCotizacion({
@@ -60,16 +63,25 @@ export default async function PaginaCotizacion({
   const { cotizacion, revision } = datos;
   // La utilidad sólo la ve quien autoriza (RLS también lo exige).
   const veUtilidad = sesion.permisos.has('utilidad.ver') || sesion.permisos.has('utilidad.autorizar');
-  const [catalogoCondiciones, condiciones, paquetes, financieras, financiamiento, utilidades, tiposCambio] =
-    await Promise.all([
-      listarCondicionesCatalogo(),
-      listarCondicionesDeRevision(revision.id),
-      listarPaquetesCondiciones(),
-      listarFinancieras(),
-      listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
-      veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
-      veUtilidad ? listarTiposCambio(revision.id) : null,
-    ]);
+  const [
+    catalogoCondiciones,
+    condiciones,
+    paquetes,
+    financieras,
+    financiamiento,
+    utilidades,
+    tiposCambio,
+    solicitudesCancelacion,
+  ] = await Promise.all([
+    listarCondicionesCatalogo(),
+    listarCondicionesDeRevision(revision.id),
+    listarPaquetesCondiciones(),
+    listarFinancieras(),
+    listarFinanciamiento(revision.propuestas.filter((p) => !p.es_adicional).map((p) => p.id)),
+    veUtilidad ? listarUtilidades(revision.propuestas.flatMap((p) => p.partidas.map((pa) => pa.id))) : null,
+    veUtilidad ? listarTiposCambio(revision.id) : null,
+    revision.estado === 'emitida' ? listarSolicitudesCancelacion({ revisionId: revision.id }) : [],
+  ]);
 
   // Rev anterior (sólo para quien ve la utilidad): su utilidad y su T.C. se precargan como punto de partida, y su
   // utilidad y precio se muestran como referencia en la corrida (decisión 2026-10-06; se vuelve a autorizar).
@@ -155,6 +167,8 @@ export default async function PaginaCotizacion({
       }}
       financieras={financieras}
       financiamiento={financiamiento}
+      solicitudesCancelacion={solicitudesCancelacion}
+      puedeCancelar={sesion.permisos.has('utilidad.autorizar')}
       autorizacion={
         utilidades
           ? {

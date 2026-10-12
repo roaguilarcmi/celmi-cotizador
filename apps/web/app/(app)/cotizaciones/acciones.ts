@@ -24,6 +24,8 @@ import {
 } from '@celmi/core';
 import { corridaDe, monedasExtranjeras, presentacionAutorizada, transaccionPorPartida } from '@/lib/corrida';
 import { obtenerRevision } from '@/lib/datos';
+import { generarPdf, guardarPdf, rutaPdf } from '@/lib/pdf/almacen';
+import { armarDatosPdf } from '@/lib/pdf/datos-pdf';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 
@@ -476,6 +478,17 @@ export async function emitirRevision(
   const supabase = await clienteServidor();
   const { data, error } = await supabase.rpc('emitir_revision', { revision: revisionId });
   if (error) return { error: mensajeDe(error, 'No se pudo emitir.') };
+  // Copia del PDF emitido (lo que se envía al cliente). Si fallara, la descarga lo genera con los datos congelados.
+  try {
+    const armado = await armarDatosPdf(cotizacionId, revisionId);
+    if (armado)
+      await guardarPdf(
+        rutaPdf(cotizacionId, revisionId),
+        await generarPdf({ ...armado.datos, cancelada: false }),
+      );
+  } catch (e) {
+    console.error('No se guardó la copia del PDF emitido', e);
+  }
   refrescar(cotizacionId);
   return { ok: `Emitida con el folio ${data as string}.`, folio: data as string };
 }

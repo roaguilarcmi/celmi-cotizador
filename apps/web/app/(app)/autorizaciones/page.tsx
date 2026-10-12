@@ -5,11 +5,12 @@ import { Icon } from '@/components/Icon';
 import { clasesBoton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
 import { decimal } from '@/lib/corrida';
 import { textoPorMoneda } from '../cotizaciones/[id]/modelo';
-import { listarBandeja, type RevisionBandeja } from '@/lib/datos';
+import { listarBandeja, listarSolicitudesCancelacion, type RevisionBandeja } from '@/lib/datos';
 import { FOLIO_EPOXEMEX } from '@/lib/epoxemex';
 import { haceCuanto } from '@/lib/presentacion';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { ESTADOS } from '../cotizaciones/estados';
+import { SolicitudesCancelacion } from './SolicitudesCancelacion';
 
 export const metadata = { title: 'Autorizaciones' };
 export const dynamic = 'force-dynamic';
@@ -50,7 +51,10 @@ export default async function Page() {
       </EnConstruccion>
     );
   await exigirPermiso('utilidad.autorizar');
-  const { pendientes, recientes } = await listarBandeja();
+  const [{ pendientes, recientes }, solicitudes] = await Promise.all([
+    listarBandeja(),
+    listarSolicitudesCancelacion(),
+  ]);
 
   return (
     <div className="animar-entrada mx-auto max-w-[1100px]">
@@ -60,6 +64,8 @@ export default async function Page() {
           Define la utilidad de cada partida y autoriza los precios. Lo más antiguo aparece primero.
         </p>
       </header>
+
+      <SolicitudesCancelacion solicitudes={solicitudes} />
 
       <Tarjeta className="mb-6 overflow-hidden">
         <div className="flex items-center gap-3 border-b border-borde px-5 py-4">
