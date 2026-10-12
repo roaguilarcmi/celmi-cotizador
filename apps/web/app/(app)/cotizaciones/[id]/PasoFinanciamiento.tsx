@@ -15,7 +15,7 @@ import {
   vigenciaFinanciera,
   type Frecuencia,
 } from '@celmi/core';
-import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useTransition, type DragEvent, type ReactNode } from 'react';
 import { CampoMoneda } from '@/components/CampoMoneda';
 import { Icon } from '@/components/Icon';
 import { Boton, Tarjeta, Titulo2 } from '@/components/ui';
@@ -165,6 +165,19 @@ export function PasoFinanciamiento({
   const valorDe = (propuesta: string) => presentadas?.find((p) => p.id === propuesta)?.totales.subtotal;
   /** Propuesta cuya pestaña está abierta (2026-10-12): cada una con sus propias opciones. */
   const [activa, setActiva] = useState(() => principales[0]?.id ?? '');
+  // Un PDF soltado fuera de una opción no debe abrirse encima del cotizador (se perdería lo no guardado).
+  useEffect(() => {
+    if (!editable) return;
+    const evitar = (e: globalThis.DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', evitar);
+    window.addEventListener('drop', evitar);
+    return () => {
+      window.removeEventListener('dragover', evitar);
+      window.removeEventListener('drop', evitar);
+    };
+  }, [editable]);
   const actual = principales.find((p) => p.id === activa) ?? principales[0];
 
   const cambiar = (c: string, cambio: Partial<Opcion>) =>
@@ -522,8 +535,10 @@ function OpcionFinanciamiento({
       if (pdf) void cargarPdf(pdf);
       else
         setLectura({
-          texto:
-            'Lo que pegaste no es un PDF. En el Explorador de archivos selecciona el PDF de la financiera, presiona Ctrl + C y vuelve a intentarlo.',
+          // Outlook copia los adjuntos como «archivo virtual»: el navegador no los entrega al pegar, sí al arrastrar.
+          texto: e.clipboardData?.files.length
+            ? 'Lo que pegaste no es un PDF.'
+            : 'El PDF no llegó al pegarlo. Si viene de Outlook, arrastra el adjunto desde Outlook y suéltalo sobre esta opción (Outlook no deja pegar adjuntos en el navegador). También puedes guardarlo y copiarlo desde el Explorador de archivos.',
           avisos: [],
           error: true,
         });
@@ -541,11 +556,43 @@ function OpcionFinanciamiento({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pegando]);
 
+  // Arrastrar y soltar el PDF sobre la opción (2026-10-12), también un adjunto directo desde Outlook.
+  const [encima, setEncima] = useState(false);
+  const conArchivos = (e: DragEvent) => e.dataTransfer.types.includes('Files');
+  const soltar = (e: DragEvent) => {
+    e.preventDefault();
+    setEncima(false);
+    const pdf = [...e.dataTransfer.files].find((x) => x.type === 'application/pdf' || /\.pdf$/i.test(x.name));
+    if (pdf) void cargarPdf(pdf);
+    else setLectura({ texto: 'Lo que soltaste no es un PDF.', avisos: [], error: true });
+  };
+
   return (
     <section
       aria-label={`Opción ${numero}`}
-      className="overflow-hidden rounded-lg border border-l-4 border-borde border-l-acento bg-superficie sombra"
+      onDragOver={
+        editable
+          ? (e) => {
+              if (!conArchivos(e)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+              setEncima(true);
+            }
+          : undefined
+      }
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setEncima(false);
+      }}
+      onDrop={editable ? soltar : undefined}
+      className="relative overflow-hidden rounded-lg border border-l-4 border-borde border-l-acento bg-superficie sombra"
     >
+      {encima && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-4 border-dashed border-acento bg-acento-suave/85">
+          <p className="rounded-md bg-superficie px-5 py-3 text-[15px] font-bold text-acento-texto sombra">
+            Suelta aquí el PDF de la financiera
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2.5 border-b border-borde bg-acento-suave/40 py-2 pr-1.5 pl-4">
         <span className="inline-flex size-6 items-center justify-center rounded-full bg-acento text-xs font-bold text-sobre-acento">
           {numero}
@@ -589,7 +636,7 @@ function OpcionFinanciamiento({
               icono="copiar"
               disabled={leyendo}
               aria-pressed={pegando}
-              title="Copia el PDF en el Explorador de archivos (Ctrl + C) y pégalo aquí con Ctrl + V"
+              title="Copia el PDF en el Explorador de archivos (Ctrl + C) y pégalo aquí con Ctrl + V. Desde Outlook, arrástralo."
               onClick={() => {
                 setLectura(null);
                 setPegando((x) => !x);
@@ -612,7 +659,7 @@ function OpcionFinanciamiento({
           </p>
           <p className="mt-0.5">
             ¿Aún no lo copias? En el Explorador de archivos haz clic en el PDF de la financiera y presiona
-            Ctrl + C.
+            Ctrl + C. Si está en un correo de Outlook, mejor arrastra el adjunto y suéltalo sobre esta opción.
           </p>
         </div>
       )}
