@@ -386,7 +386,45 @@ export interface RevisionDetalle {
   motivo_retiro: string;
   retirada_en: string | null;
   retirador: { nombre: string } | null;
+  /** Emisión y cancelación (0031): folio con su « Rev A», quién y cuándo. */
+  folio: string | null;
+  folio_base: string | null;
+  emitida_en: string | null;
+  emisor: { nombre: string } | null;
+  cancelada_en: string | null;
+  cancelador: { nombre: string } | null;
+  motivo_cancelacion: string;
   propuestas: PropuestaFila[];
+}
+
+/** Solicitud de cancelación de una cotización emitida (0031). */
+export interface SolicitudCancelacion {
+  id: string;
+  revision_id: string;
+  motivo: string;
+  estado: 'pendiente' | 'aprobada' | 'rechazada';
+  solicitada_en: string;
+  resuelta_en: string | null;
+  comentario: string;
+  solicitante: { nombre: string } | null;
+  revision: {
+    folio: string | null;
+    cotizacion_id: string;
+    cotizacion: { oportunidad: { nombre: string; cliente: { razon_social: string } | null } | null } | null;
+  } | null;
+}
+
+/** Solicitudes de una revisión, o las pendientes de todas (bandeja de quien autoriza). */
+export async function listarSolicitudesCancelacion(
+  filtro: { revisionId?: string } = {},
+): Promise<SolicitudCancelacion[]> {
+  const supabase = await clienteServidor();
+  let q = supabase
+    .from('solicitudes_cancelacion')
+    .select(CONSULTAS.solicitudesCancelacion)
+    .order('solicitada_en', { ascending: false });
+  q = filtro.revisionId ? q.eq('revision_id', filtro.revisionId) : q.eq('estado', 'pendiente');
+  return (exigir(await q, 'las solicitudes de cancelación') ?? []) as unknown as SolicitudCancelacion[];
 }
 
 export interface CatalogosCotizacion {

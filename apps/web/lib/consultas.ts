@@ -29,6 +29,8 @@ export const CONSULTAS = {
     esquema, mayorista_arrendamiento_id, anticipo_pct, transaccion_pct, transaccion_alcance,
     enviada_en, autorizada_en, revision_anterior_id, motivo_retiro, retirada_en,
     retirador:perfiles!revisiones_retirada_por_fkey(nombre),
+    folio, folio_base, emitida_en, cancelada_en, motivo_cancelacion,
+    emisor:perfiles!revisiones_emitida_por_fkey(nombre), cancelador:perfiles!revisiones_cancelada_por_fkey(nombre),
     propuestas(id, orden, nombre, tipo, es_adicional, propuesta_origen_id,
       partidas(id, orden, sku, marca, descripcion, descripcion_contenido, entrega, unidad_id, cantidad, se_suma,
         partida_padre_id, partida_origen_id, presentacion, prorrateos:partida_prorrateos!partida_id(destino_id),
@@ -54,6 +56,10 @@ export const CONSULTAS = {
     seguro_equipo, tasa_financiera`,
   financieras: 'id, nombre, razon_social, aseguradoras, activa',
   notificaciones: 'id, tipo, titulo, cuerpo, enlace, creado_en, leida_en',
+  solicitudesCancelacion: `id, revision_id, motivo, estado, solicitada_en, resuelta_en, comentario,
+    solicitante:perfiles!solicitudes_cancelacion_solicitada_por_fkey(nombre),
+    revision:revisiones(folio, cotizacion_id,
+      cotizacion:cotizaciones(oportunidad:oportunidades(nombre, cliente:clientes(razon_social))))`,
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -81,4 +87,5 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   financiamientos: 'propuesta_financiamientos',
   financieras: 'financieras',
   notificaciones: 'notificaciones',
+  solicitudesCancelacion: 'solicitudes_cancelacion',
 };

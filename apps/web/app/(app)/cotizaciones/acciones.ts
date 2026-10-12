@@ -465,6 +465,64 @@ export async function retirarParaCorregir(
   return { ok: 'Retirada. Se avisó al capturista y al ejecutivo.' };
 }
 
+// ───────────── Emisión y cancelación (Fase 4 · B, 0031) ─────────────
+
+/** Emite la revisión autorizada: la base asigna el folio según cómo se presenta la Rev y la bloquea. */
+export async function emitirRevision(
+  revisionId: string,
+  cotizacionId: string,
+): Promise<Resultado & { folio?: string }> {
+  await exigirPermiso('pdf.emitir');
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase.rpc('emitir_revision', { revision: revisionId });
+  if (error) return { error: mensajeDe(error, 'No se pudo emitir.') };
+  refrescar(cotizacionId);
+  return { ok: `Emitida con el folio ${data as string}.`, folio: data as string };
+}
+
+/** Cualquiera con acceso la solicita (con motivo); quien autoriza la cancela de una vez. */
+export async function solicitarCancelacion(
+  revisionId: string,
+  cotizacionId: string,
+  motivo: string,
+): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  const texto = typeof motivo === 'string' ? motivo.trim() : '';
+  if (texto.length < 5) return { error: 'Explica por qué se cancela.' };
+  if (texto.length > 2000) return { error: 'El motivo es demasiado largo.' };
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('solicitar_cancelacion', { revision: revisionId, motivo: texto });
+  if (error) return { error: mensajeDe(error, 'No se pudo solicitar la cancelación.') };
+  refrescarBandeja(cotizacionId);
+  return {
+    ok: sesion.permisos.has('utilidad.autorizar')
+      ? 'Cotización cancelada.'
+      : 'Solicitud enviada. Se avisó a quien autoriza.',
+  };
+}
+
+/** Sólo quien autoriza aprueba o rechaza (al rechazar, explica por qué). */
+export async function resolverCancelacion(
+  solicitudId: string,
+  cotizacionId: string,
+  aprobar: boolean,
+  comentario: string,
+): Promise<Resultado> {
+  await exigirPermiso('utilidad.autorizar');
+  const texto = typeof comentario === 'string' ? comentario.trim() : '';
+  if (!aprobar && texto.length < 5) return { error: 'Explica por qué no se cancela.' };
+  if (texto.length > 2000) return { error: 'El comentario es demasiado largo.' };
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc('resolver_cancelacion', {
+    solicitud: solicitudId,
+    aprobar: Boolean(aprobar),
+    comentario: texto,
+  });
+  if (error) return { error: mensajeDe(error, 'No se pudo resolver la solicitud.') };
+  refrescarBandeja(cotizacionId);
+  return { ok: aprobar ? 'Cotización cancelada.' : 'Solicitud rechazada; se avisó a quien la pidió.' };
+}
+
 // ───────────── Revisiones (Fase 3D) ─────────────
 
 /**
