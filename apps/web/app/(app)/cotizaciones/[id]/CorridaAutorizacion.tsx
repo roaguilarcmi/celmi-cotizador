@@ -113,6 +113,10 @@ interface FilaCorrida {
   p: PartidaFila;
   ref: string;
   tipo: 'partida' | 'incluida' | 'visible' | 'cargo';
+  /** Partida con adicionales debajo (de ella baja la línea del árbol). */
+  conAdicionales?: boolean;
+  /** Adicional: si hay otro adicional de la misma partida debajo (la línea sigue). */
+  sigue?: boolean;
 }
 
 function filasDe(partidas: PartidaFila[], numero: number): FilaCorrida[] {
@@ -120,16 +124,16 @@ function filasDe(partidas: PartidaFila[], numero: number): FilaCorrida[] {
   let n = 0;
   for (const p of partidas.filter((x) => !x.partida_padre_id && x.presentacion === 'linea')) {
     const ref = `${numero}.${++n}`;
-    filas.push({ p, ref, tipo: 'partida' });
-    partidas
-      .filter((c) => c.partida_padre_id === p.id)
-      .forEach((c, i) =>
-        filas.push({
-          p: c,
-          ref: `${ref}.${String.fromCharCode(97 + i)}`,
-          tipo: c.presentacion === 'incluida' ? 'incluida' : 'visible',
-        }),
-      );
+    const hijos = partidas.filter((c) => c.partida_padre_id === p.id);
+    filas.push({ p, ref, tipo: 'partida', conAdicionales: hijos.length > 0 });
+    hijos.forEach((c, i) =>
+      filas.push({
+        p: c,
+        ref: `${ref}.${String.fromCharCode(97 + i)}`,
+        tipo: c.presentacion === 'incluida' ? 'incluida' : 'visible',
+        sigue: i < hijos.length - 1,
+      }),
+    );
   }
   partidas
     .filter((x) => x.presentacion === 'prorrateada')
@@ -1178,6 +1182,7 @@ export function CorridaAutorizacion({
                 className={`sticky left-0 z-10 ${borde} bg-superficie px-3 py-1.5 text-left text-xs font-bold text-texto-suave`}
               >
                 Partida y descripción
+                <LeyendaFilas tipos={new Set(especiales.map((x) => x.tipo))} />
               </th>
               {gruposVisibles.map(({ g, span }) => (
                 <th
@@ -1270,25 +1275,9 @@ export function CorridaAutorizacion({
                   return (
                     <tr key={f.p.id} id={`fila-${f.p.id}`} className="group h-10 transition-colors">
                       <td
-                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-3 text-center font-semibold text-texto-suave`}
+                        className={`${fija1} ${barra} ${borde} ${fijo} tabular px-2 text-center font-semibold text-texto-suave`}
                       >
-                        <span className="inline-flex items-center gap-1.5" title={aviso}>
-                          <span
-                            aria-hidden="true"
-                            className={`size-2 rounded-full ${aviso ? (grave ? 'bg-peligro' : 'bg-aviso') : 'bg-transparent'}`}
-                          />
-                          <span className="flex flex-col items-center leading-none">
-                            {f.ref}
-                            {f.tipo !== 'partida' && (
-                              <span
-                                title={TIPO_FILA[f.tipo].titulo}
-                                className="mt-0.5 text-[9px] font-bold tracking-wide uppercase"
-                              >
-                                {TIPO_FILA[f.tipo].corto}
-                              </span>
-                            )}
-                          </span>
-                        </span>
+                        <RefFila f={f} aviso={aviso} grave={grave} />
                       </td>
                       <td className={`${fija2} ${borde} ${fijo} px-3`}>
                         <Descripcion
@@ -1940,13 +1929,83 @@ function Dato({
 }
 
 /**
- * Tipo de fila, debajo de su referencia (2026-10-12): así la etiqueta no le quita espacio a la descripción.
+ * Tipo de fila en la columna «Partida» (combinación A + B elegida por Rodrigo, 2026-10-12): un árbol une cada
+ * adicional con su partida y un ícono dice cómo se presenta (candado = incluido, ojo = visible, columnas = cargo).
+ * Así la marca no le quita espacio a la descripción.
  */
 const TIPO_FILA = {
-  incluida: { corto: 'Incl.', titulo: 'Adicional incluido en el precio de su partida' },
-  visible: { corto: 'Visible', titulo: 'Adicional con línea propia en la cotización' },
-  cargo: { corto: 'Cargo', titulo: 'Cargo prorrateado entre partidas' },
+  incluida: { icono: 'candado', titulo: 'Incluido en el precio de su partida' },
+  visible: { icono: 'ojo', titulo: 'Visible: línea propia en la cotización' },
+  cargo: { icono: 'columnas', titulo: 'Cargo prorrateado entre partidas' },
 } as const;
+
+/** Leyenda de las marcas (sólo si hay adicionales o cargos). */
+function LeyendaFilas({ tipos }: { tipos: ReadonlySet<FilaCorrida['tipo']> }) {
+  const visibles = (['incluida', 'visible', 'cargo'] as const).filter((t) => tipos.has(t));
+  if (!visibles.length) return null;
+  return (
+    <span className="ml-3 inline-flex items-center gap-2.5 font-semibold">
+      {visibles.map((t) => (
+        <span key={t} className="inline-flex items-center gap-1">
+          <Icon name={TIPO_FILA[t].icono} size={11} className="text-acento-texto" />
+          {t === 'incluida' ? 'Incluido' : t === 'visible' ? 'Visible' : 'Cargo'}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function RefFila({ f, aviso, grave }: { f: FilaCorrida; aviso?: string; grave: boolean }) {
+  const punto = (
+    <span
+      aria-hidden="true"
+      className={`size-2 shrink-0 rounded-full ${aviso ? (grave ? 'bg-peligro' : 'bg-aviso') : 'bg-transparent'}`}
+    />
+  );
+  // Línea del árbol: a la izquierda de la celda (left-4 = centro del primer tercio).
+  const linea = 'pointer-events-none absolute left-4 border-texto/45';
+  if (f.tipo === 'incluida' || f.tipo === 'visible') {
+    const tipo = TIPO_FILA[f.tipo];
+    return (
+      <>
+        <span
+          aria-hidden="true"
+          className={`${linea} top-0 w-0 border-l-2 ${f.sigue ? 'h-full' : 'h-1/2'}`}
+        />
+        <span aria-hidden="true" className={`${linea} top-1/2 w-2.5 border-t-2`} />
+        <span
+          className="flex items-center justify-end gap-1 pl-5"
+          title={`${f.ref} · ${tipo.titulo}${aviso ? ` · ${aviso}` : ''}`}
+        >
+          <Icon name={tipo.icono} size={12} className="shrink-0 text-acento-texto" />
+          <span aria-label={`Partida ${f.ref}, ${tipo.titulo.toLowerCase()}`}>{f.ref.slice(-1)}</span>
+          {aviso && (
+            <span className={`size-1.5 shrink-0 rounded-full ${grave ? 'bg-peligro' : 'bg-aviso'}`} />
+          )}
+        </span>
+      </>
+    );
+  }
+  if (f.tipo === 'cargo')
+    return (
+      <span
+        className="inline-flex items-center gap-1"
+        title={`${TIPO_FILA.cargo.titulo}${aviso ? ` · ${aviso}` : ''}`}
+      >
+        <Icon name={TIPO_FILA.cargo.icono} size={12} className="shrink-0 text-acento-texto" />
+        {f.ref}
+      </span>
+    );
+  return (
+    <>
+      {f.conAdicionales && <span aria-hidden="true" className={`${linea} bottom-0 h-2 w-0 border-l-2`} />}
+      <span className="inline-flex items-center gap-1.5" title={aviso}>
+        {punto}
+        {f.ref}
+      </span>
+    </>
+  );
+}
 
 /** Descripción en una sola línea (fila baja, como en Excel); un clic la despliega completa. */
 function Descripcion({ f, extra, aviso }: { f: FilaCorrida; extra?: string; aviso?: string }) {
