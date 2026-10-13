@@ -8,3 +8,4 @@ export * from './comparacion';
 export * from './vigencia';
 export * from './financiamiento';
 export * from './corrida-financiera';
+export * from './auditoria';

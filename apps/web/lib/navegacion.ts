@@ -60,6 +60,7 @@ export const SECCIONES: Seccion[] = [
     slug: 'auditoria',
     titulo: 'Auditoría',
     icono: 'auditoria',
+    permiso: 'auditoria.ver',
     fase: 7,
     descripcion: 'Registro inalterable de quién hizo qué, cuándo y con qué valores.',
   },

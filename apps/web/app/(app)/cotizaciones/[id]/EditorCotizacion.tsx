@@ -32,6 +32,7 @@ import {
 import { EliminarCotizacion } from './EliminarCotizacion';
 import { EsquemaCotizacion } from './EsquemaCotizacion';
 import { MenuRevisiones } from './MenuRevisiones';
+import { ActividadCotizacion } from '@/components/auditoria/ActividadCotizacion';
 import { CorridaAutorizacion, type ReferenciaCorrida } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import type { TipoCambioDof } from '@/lib/dof';
@@ -69,6 +70,7 @@ export function EditorCotizacion({
   financiamiento,
   solicitudesCancelacion,
   puedeCancelar,
+  veAuditoria,
   tipoOportunidad,
   autorizacion,
 }: {
@@ -87,6 +89,8 @@ export function EditorCotizacion({
   solicitudesCancelacion: SolicitudCancelacion[];
   /** Quien autoriza cancela de una vez; los demás lo solicitan (0031). */
   puedeCancelar: boolean;
+  /** Con auditoria.ver: enlace al expediente completo desde «Actividad». */
+  veAuditoria: boolean;
   tipoOportunidad: TipoOportunidad;
   /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
   autorizacion: {
@@ -263,6 +267,7 @@ export function EditorCotizacion({
           actual={revision.numero}
           puedeEditar={puedeEditar}
         />
+        <ActividadCotizacion cotizacionId={cotizacion.id} veAuditoria={veAuditoria} />
         {puedeEliminar && (
           <EliminarCotizacion
             cotizacionId={cotizacion.id}

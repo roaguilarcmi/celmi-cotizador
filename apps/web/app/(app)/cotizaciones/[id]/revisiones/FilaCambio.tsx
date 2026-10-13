@@ -1,8 +1,15 @@
 'use client';
 
-import { aEscalado, ESCALA_DINERO, formatearMXN, type FilaComparacion } from '@celmi/core';
+import {
+  aEscalado,
+  diferenciaPalabras,
+  ESCALA_DINERO,
+  formatearMXN,
+  type FilaComparacion,
+} from '@celmi/core';
 import { Fragment, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/Icon';
+import { TextoComparado as Texto } from '@/components/TextoComparado';
 import { Pill } from '@/components/ui';
 
 /** Piezas de la comparación de revisiones (Fase 3D). */
@@ -52,62 +59,6 @@ export function Cambio({
         </span>
       )}
     </span>
-  );
-}
-
-type Tramo = { texto: string; tipo: 'igual' | 'quitado' | 'agregado' };
-
-/** Diferencia palabra por palabra (subsecuencia común más larga), para resaltar qué cambió en una descripción. */
-export function diferenciaPalabras(antes: string, despues: string): { antes: Tramo[]; despues: Tramo[] } {
-  const a = antes.split(/(s+)/).filter(Boolean);
-  const b = despues.split(/(s+)/).filter(Boolean);
-  // Descripciones muy largas: sin resaltado fino (evita una tabla enorme).
-  if (a.length * b.length > 400_000)
-    return { antes: [{ texto: antes, tipo: 'quitado' }], despues: [{ texto: despues, tipo: 'agregado' }] };
-  const t: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
-  for (let i = a.length - 1; i >= 0; i--)
-    for (let j = b.length - 1; j >= 0; j--)
-      t[i]![j] = a[i] === b[j] ? t[i + 1]![j + 1]! + 1 : Math.max(t[i + 1]![j]!, t[i]![j + 1]!);
-  const ra: Tramo[] = [];
-  const rb: Tramo[] = [];
-  const poner = (lista: Tramo[], texto: string, tipo: Tramo['tipo']) => {
-    const ultimo = lista[lista.length - 1];
-    if (ultimo && ultimo.tipo === tipo) ultimo.texto += texto;
-    else lista.push({ texto, tipo });
-  };
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      poner(ra, a[i]!, 'igual');
-      poner(rb, b[j]!, 'igual');
-      i++;
-      j++;
-    } else if (t[i + 1]![j]! >= t[i]![j + 1]!) poner(ra, a[i++]!, 'quitado');
-    else poner(rb, b[j++]!, 'agregado');
-  }
-  while (i < a.length) poner(ra, a[i++]!, 'quitado');
-  while (j < b.length) poner(rb, b[j++]!, 'agregado');
-  return { antes: ra, despues: rb };
-}
-
-function Texto({ tramos }: { tramos: Tramo[] }) {
-  return (
-    <>
-      {tramos.map((x, i) =>
-        x.tipo === 'igual' || !x.texto.trim() ? (
-          <span key={i}>{x.texto}</span>
-        ) : x.tipo === 'quitado' ? (
-          <del key={i} className="rounded-sm bg-peligro-suave px-0.5 text-peligro decoration-peligro/60">
-            {x.texto}
-          </del>
-        ) : (
-          <ins key={i} className="rounded-sm bg-exito-suave px-0.5 font-semibold text-exito no-underline">
-            {x.texto}
-          </ins>
-        ),
-      )}
-    </>
   );
 }
 

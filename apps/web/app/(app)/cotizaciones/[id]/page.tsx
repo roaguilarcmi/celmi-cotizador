@@ -169,6 +169,7 @@ export default async function PaginaCotizacion({
       financiamiento={financiamiento}
       solicitudesCancelacion={solicitudesCancelacion}
       puedeCancelar={sesion.permisos.has('utilidad.autorizar')}
+      veAuditoria={sesion.permisos.has('auditoria.ver')}
       autorizacion={
         utilidades
           ? {
