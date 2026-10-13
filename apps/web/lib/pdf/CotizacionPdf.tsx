@@ -400,24 +400,75 @@ function Totales({ p }: { p: PropuestaPdf }) {
 const NADA = '—';
 const montoOGuion = (v: bigint | null) => (v === null ? NADA : formatearMXN(v));
 
-const FILAS_FIN: [string, (o: OpcionPdf) => string][] = [
-  ['Financiera', (o) => o.financiera || NADA],
-  ['Gastos iniciales', (o) => montoOGuion(o.gastosIniciales)],
-  ['Pago de los equipos', (o) => montoOGuion(o.pago)],
-  ['Seguro', (o) => montoOGuion(o.seguro)],
-  ['Factor', (o) => o.factor ?? NADA],
-  [
-    'Opción de compra',
-    (o) =>
-      o.opcionCompra
-        ? `${formatearMXN(o.opcionCompra.monto)}${o.opcionCompra.pct ? ` (${o.opcionCompra.pct} %)` : ''}`
-        : NADA,
-  ],
-  ['Tasa anual', (o) => o.tasa ?? NADA],
+type FilaFin = [string, (o: OpcionPdf) => string];
+
+/** «Mensualidad» o «Pago bimestral»… según la frecuencia. */
+const nombrePago = (frecuencia: string) => (frecuencia === 'mensual' ? 'Mensualidad' : `Pago ${frecuencia}`);
+
+/**
+ * Conceptos en tres bloques (2026-10-13), para que el cliente no confunda los pagos únicos con las mensualidades:
+ * datos generales, mensualidades (con su total) y pagos únicos al final.
+ */
+const secciones = (frecuencia: string): { titulo: string; filas: FilaFin[] }[] => [
+  {
+    titulo: 'DATOS GENERALES',
+    filas: [
+      ['Financiera', (o) => o.financiera || NADA],
+      ['Tasa anual', (o) => o.tasa ?? NADA],
+      ['Factor', (o) => o.factor ?? NADA],
+    ],
+  },
+  {
+    titulo: frecuencia === 'mensual' ? 'MENSUALIDADES' : 'PAGOS PERIÓDICOS',
+    filas: [
+      [`${nombrePago(frecuencia)} de los equipos`, (o) => montoOGuion(o.pago)],
+      [`${nombrePago(frecuencia)} de seguro`, (o) => montoOGuion(o.seguro)],
+    ],
+  },
+  {
+    titulo: 'PAGOS ÚNICOS',
+    filas: [
+      ['Gastos iniciales', (o) => montoOGuion(o.gastosIniciales)],
+      [
+        'Opción de compra',
+        (o) =>
+          o.opcionCompra
+            ? `${formatearMXN(o.opcionCompra.monto)}${o.opcionCompra.pct ? ` (${o.opcionCompra.pct} %)` : ''}`
+            : NADA,
+      ],
+    ],
+  },
 ];
 
-/** Sólo los conceptos que aparecen en al menos una opción (2026-10-13). */
-const filasConDatos = (ops: OpcionPdf[]) => FILAS_FIN.filter(([, v]) => ops.some((o) => v(o) !== NADA));
+/** Sólo los conceptos (y bloques) que aparecen en al menos una opción (2026-10-13). */
+const conDatos = (ops: OpcionPdf[]) =>
+  secciones(ops[0]?.frecuencia ?? 'mensual')
+    .map((sec) => ({ ...sec, filas: sec.filas.filter(([, v]) => ops.some((o) => v(o) !== NADA)) }))
+    .filter((sec) => sec.filas.length > 0);
+
+/** Notas bajo la comparativa: cuándo se pagan los gastos iniciales y las mensualidades (2026-10-13). */
+function NotasFinanciamiento({ ops }: { ops: OpcionPdf[] }) {
+  const mensual = ops.every((o) => o.frecuencia === 'mensual');
+  const conGastos = ops.some((o) => o.gastosIniciales !== null);
+  const conOpcion = ops.some((o) => o.opcionCompra !== null);
+  const notas = [
+    conGastos && 'Los gastos iniciales se pagan por única ocasión, junto con la primera mensualidad.',
+    mensual
+      ? 'Las mensualidades se pagan a mes vencido.'
+      : 'Los pagos se realizan al vencimiento de cada periodo.',
+    conOpcion && 'La opción de compra se ejerce al término del plazo (arrendamiento financiero).',
+  ].filter((x): x is string => Boolean(x));
+  return (
+    <View style={{ marginTop: 5 }}>
+      {notas.map((n) => (
+        <View key={n} style={{ flexDirection: 'row' }}>
+          <Text style={{ width: 8, fontSize: 7.5, color: GRIS }}>•</Text>
+          <Text style={{ flex: 1, fontSize: 7.5, color: GRIS }}>{n}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 /** Diseño B: tabla comparativa con 2 o más opciones; diseño C (tarjeta) con una sola (2026-10-12). */
 function Financiamiento({ p }: { p: PropuestaPdf }) {
@@ -428,6 +479,7 @@ function Financiamiento({ p }: { p: PropuestaPdf }) {
         Opciones de financiamiento · valor de los equipos {formatearMXN(p.valorEquipos)} sin IVA
       </Text>
       {ops.length === 1 && ops[0] ? <Tarjeta o={ops[0]} /> : <Comparativo ops={ops} />}
+      <NotasFinanciamiento ops={ops} />
       <Text style={s.leyenda}>**MONTOS DE ARRENDAMIENTO EXPRESADOS SIN IVA**</Text>
       <Text style={[s.leyenda, { marginTop: 1 }]}>
         **Los pagos de la presente son cantidades estimadas, pueden variar sin previo aviso**
@@ -440,10 +492,30 @@ const TIPO_CORTO: Record<string, string> = { vjm: 'Puro (VJM)', fpo: 'Financiero
 /** Dentro de cada plazo, primero el puro y luego el financiero (como el formato actual). */
 const ORDEN_TIPO = (t: string | null) => (t === 'vjm' ? 0 : t === 'fpo' ? 1 : 2);
 
+/** Renglón que titula un bloque de conceptos (datos generales, mensualidades, pagos únicos). */
+function TituloBloque({ children }: { children: string }) {
+  return (
+    <View
+      style={{
+        borderLeftWidth: 0.6,
+        borderRightWidth: 0.6,
+        borderBottomWidth: 0.6,
+        borderColor: LINEA,
+        backgroundColor: '#e9eaf3',
+        paddingVertical: 2.5,
+        paddingHorizontal: 5,
+      }}
+    >
+      <Text style={{ fontSize: 6.5, fontWeight: 'bold', color: INDIGO, letterSpacing: 0.8 }}>{children}</Text>
+    </View>
+  );
+}
+
 /**
  * Comparativa con el estilo de la tabla de precios, **agrupada por plazo** (2026-10-13): un encabezado por plazo que
  * abarca sus opciones, un separador más marcado entre plazos y un tinte alterno por grupo, para comparar peras con
- * peras.
+ * peras. Los conceptos van en bloques; la mensualidad total cierra el bloque de mensualidades y los pagos únicos van
+ * al final, separados.
  */
 function Comparativo({ ops: originales }: { ops: OpcionPdf[] }) {
   const ops = [...originales].sort(
@@ -453,8 +525,9 @@ function Comparativo({ ops: originales }: { ops: OpcionPdf[] }) {
     plazo,
     ops: ops.filter((o) => o.plazoMeses === plazo),
   }));
-  const filas = filasConDatos(ops);
-  const etiqueta = 22;
+  const bloques = conDatos(ops);
+  const frecuencia = ops[0]?.frecuencia ?? 'mensual';
+  const etiqueta = 24;
   const ancho = (100 - etiqueta) / ops.length;
   const tam = ops.length > 4 ? 7 : 8;
   // Por cada opción: si empieza un grupo (separador) y si su grupo va tintado.
@@ -463,6 +536,26 @@ function Comparativo({ ops: originales }: { ops: OpcionPdf[] }) {
   );
   const separador = (inicio: boolean): Style =>
     inicio ? { borderLeftWidth: 1.6, borderLeftColor: '#b9b9cc' } : {};
+  const ultimoBloque = bloques.at(-1);
+
+  const renglonDatos = ([n, v]: FilaFin, r: number, ultimo: boolean) => (
+    <View key={n} style={renglon(r % 2 === 1, ultimo)}>
+      <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
+        <Text style={[s.negrita, { fontSize: tam }]}>{n}</Text>
+      </View>
+      {meta.map(({ o, inicio, tinte }, i) => (
+        <View
+          key={i}
+          style={[
+            td(`${ancho}%`, i === meta.length - 1, { backgroundColor: tinte ? '#f2f5fc' : undefined }),
+            separador(inicio),
+          ]}
+        >
+          <Text style={[s.centro, { fontSize: tam }]}>{v(o)}</Text>
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <View>
@@ -490,48 +583,47 @@ function Comparativo({ ops: originales }: { ops: OpcionPdf[] }) {
           </View>
         ))}
       </View>
-      {filas.map(([n, v], r) => (
-        <View key={n} style={renglon(r % 2 === 1, false)}>
-          <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
-            <Text style={[s.negrita, { fontSize: tam }]}>{n}</Text>
+      {bloques.map((b) => {
+        const mensual = b.titulo === 'MENSUALIDADES' || b.titulo === 'PAGOS PERIÓDICOS';
+        return (
+          <View key={b.titulo}>
+            <TituloBloque>{b.titulo}</TituloBloque>
+            {b.filas.map((f, r) =>
+              renglonDatos(f, r, !mensual && b === ultimoBloque && r === b.filas.length - 1),
+            )}
+            {mensual && (
+              <View style={renglon(false, b === ultimoBloque)}>
+                <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
+                  <Text style={[s.negrita, { fontSize: tam }]}>{nombrePago(frecuencia)} total</Text>
+                </View>
+                {meta.map(({ o, inicio }, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      td(`${ancho}%`, i === meta.length - 1, { backgroundColor: RESALTE }),
+                      separador(inicio),
+                    ]}
+                  >
+                    <Text style={[s.centro, { fontSize: tam + 1.5, fontWeight: 'bold', color: AZUL }]}>
+                      {o.total === null ? NADA : formatearMXN(o.total)}
+                    </Text>
+                    {o.total !== null && (
+                      <Text style={[s.centro, { fontSize: tam - 1, color: GRIS }]}>+ IVA</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
-          {meta.map(({ o, inicio, tinte }, i) => (
-            <View
-              key={i}
-              style={[
-                td(`${ancho}%`, i === meta.length - 1, { backgroundColor: tinte ? '#f2f5fc' : undefined }),
-                separador(inicio),
-              ]}
-            >
-              <Text style={[s.centro, { fontSize: tam }]}>{v(o)}</Text>
-            </View>
-          ))}
-        </View>
-      ))}
-      <View style={renglon(false, true)}>
-        <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
-          <Text style={[s.negrita, { fontSize: tam }]}>Pago {ops[0]?.frecuencia ?? 'mensual'} total</Text>
-        </View>
-        {meta.map(({ o, inicio }, i) => (
-          <View
-            key={i}
-            style={[td(`${ancho}%`, i === meta.length - 1, { backgroundColor: RESALTE }), separador(inicio)]}
-          >
-            <Text style={[s.centro, { fontSize: tam + 1.5, fontWeight: 'bold', color: AZUL }]}>
-              {o.total === null ? NADA : formatearMXN(o.total)}
-            </Text>
-            {o.total !== null && <Text style={[s.centro, { fontSize: tam - 1, color: GRIS }]}>+ IVA</Text>}
-          </View>
-        ))}
-      </View>
+        );
+      })}
     </View>
   );
 }
 
-/** Una sola opción: tarjeta con la mensualidad en grande y su detalle (mismos bordes que las tablas). */
+/** Una sola opción: tarjeta con la mensualidad en grande y su detalle, en los mismos bloques (mismos bordes). */
 function Tarjeta({ o }: { o: OpcionPdf }) {
-  const filas = filasConDatos([o]);
-  const mitad = Math.ceil(filas.length / 2);
+  const bloques = conDatos([o]);
   return (
     <View style={{ borderWidth: 0.6, borderColor: LINEA, borderRadius: RADIO }}>
       <View
@@ -555,39 +647,39 @@ function Tarjeta({ o }: { o: OpcionPdf }) {
           {o.total === null ? NADA : formatearMXN(o.total)}
         </Text>
         <Text style={{ color: GRIS, marginLeft: 4, marginBottom: 2 }}>
-          + IVA de pago {o.frecuencia} (equipos + seguro)
+          + IVA · {nombrePago(o.frecuencia).toLowerCase()} total (equipos + seguro)
         </Text>
       </View>
-      {/* Detalle en renglones de anchos fijos (los renglones flexibles confunden el corte de página de react-pdf). */}
-      <View
-        style={{
-          borderTopWidth: 0.6,
-          borderColor: LINEA,
-          paddingVertical: 5,
-          paddingHorizontal: 8,
-          backgroundColor: CEBRA,
-        }}
-      >
-        {Array.from({ length: mitad }, (_, r) => (
-          <View key={r} style={{ flexDirection: 'row', paddingVertical: 1.5 }}>
-            {[filas[r], filas[r + mitad]].map((fila, c) =>
-              fila ? (
-                <View
-                  key={c}
-                  style={{
-                    width: '50%',
-                    flexDirection: 'row',
-                    paddingRight: c === 0 ? 14 : 0,
-                    paddingLeft: c === 1 ? 14 : 0,
-                  }}
-                >
-                  <Text style={{ width: '55%', fontSize: 8, color: GRIS }}>{fila[0]}</Text>
-                  <Text style={{ width: '45%', fontSize: 8, textAlign: 'right' }}>{fila[1](o)}</Text>
-                </View>
-              ) : (
-                <View key={c} style={{ width: '50%' }} />
-              ),
-            )}
+      {/* Un bloque por columna, en renglones de anchos fijos (los flexibles confunden el corte de página). */}
+      <View style={{ flexDirection: 'row', borderTopWidth: 0.6, borderColor: LINEA, backgroundColor: CEBRA }}>
+        {bloques.map((b, bi) => (
+          <View
+            key={b.titulo}
+            style={{
+              width: `${100 / bloques.length}%`,
+              paddingVertical: 5,
+              paddingHorizontal: 8,
+              borderLeftWidth: bi ? 0.6 : 0,
+              borderColor: LINEA,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 6.5,
+                fontWeight: 'bold',
+                color: INDIGO,
+                letterSpacing: 0.8,
+                marginBottom: 2,
+              }}
+            >
+              {b.titulo}
+            </Text>
+            {b.filas.map(([n, v]) => (
+              <View key={n} style={{ flexDirection: 'row', paddingVertical: 1.5 }}>
+                <Text style={{ width: '58%', fontSize: 8, color: GRIS }}>{n}</Text>
+                <Text style={{ width: '42%', fontSize: 8, textAlign: 'right' }}>{v(o)}</Text>
+              </View>
+            ))}
           </View>
         ))}
       </View>
@@ -597,21 +689,31 @@ function Tarjeta({ o }: { o: OpcionPdf }) {
 
 // ───────────── Condiciones y firma ─────────────
 
+function Condicion({ c }: { c: unknown }) {
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 2 }} wrap={false}>
+      <Text style={{ width: 10 }}>•</Text>
+      <View style={{ flex: 1 }}>
+        <Enriquecido contenido={c} respaldo="" tamano={8.5} />
+      </View>
+    </View>
+  );
+}
+
 function Condiciones({ condiciones, firma }: { condiciones: unknown[]; firma: DatosPdf['firma'] }) {
   return (
     <View style={{ marginTop: 6 }}>
       {condiciones.length > 0 && (
         <>
-          <Text style={{ color: AZUL, fontSize: 10, marginBottom: 4 }} minPresenceAhead={40}>
-            Términos y Condiciones
-          </Text>
-          {condiciones.map((c, i) => (
-            <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }} wrap={false}>
-              <Text style={{ width: 10 }}>•</Text>
-              <View style={{ flex: 1 }}>
-                <Enriquecido contenido={c} respaldo="" tamano={8.5} />
-              </View>
-            </View>
+          {/* El título viaja con la primera condición: nunca queda solo al pie de la hoja. */}
+          <View wrap={false}>
+            <Text style={{ color: AZUL, fontSize: 10, marginBottom: 4 }}>Términos y Condiciones</Text>
+            {condiciones.slice(0, 1).map((c, i) => (
+              <Condicion key={i} c={c} />
+            ))}
+          </View>
+          {condiciones.slice(1).map((c, i) => (
+            <Condicion key={i} c={c} />
           ))}
         </>
       )}
