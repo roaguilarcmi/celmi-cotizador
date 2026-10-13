@@ -1,9 +1,11 @@
 import { formatearMXN } from '@celmi/core';
 import {
+  Circle,
   Defs,
   Document,
   Font,
   LinearGradient,
+  Link,
   Page,
   Path,
   Rect,
@@ -218,6 +220,16 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
     >
       <Page size="LETTER" style={s.pagina}>
         <LineaSuperior />
+        {/* Gigantografía del isotipo (2026-10-13): detrás, en color sólido claro, para que se vea en cualquier visor. */}
+        <Svg
+          fixed
+          style={{ position: 'absolute', top: 250, right: -150, width: 560, height: 290 }}
+          viewBox="-2 0 58 30"
+        >
+          {ISOTIPO.map((t, i) => (
+            <Path key={i} d={t.d} fill="#e2e5f1" />
+          ))}
+        </Svg>
         <Encabezado d={d} />
 
         {todas.map(({ p, titulo }, i) => (
@@ -229,27 +241,33 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
 
         <Pie />
         {/* Número de hoja (2026-10-13): hijo directo de la hoja; dentro de un componente react-pdf no lo dibuja. */}
-        <Text
+        <View
           fixed
           style={{
             position: 'absolute',
-            bottom: 16,
+            bottom: 13,
             right: M,
-            width: 90,
-            textAlign: 'right',
-            fontSize: 7.5,
-            color: GRIS,
+            width: 66,
+            paddingVertical: 3,
+            backgroundColor: '#f4f5fa',
+            borderWidth: 0.6,
+            borderColor: LINEA,
+            borderRadius: 9,
           }}
-          render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-        />
-        {/* Gigantografía del isotipo como marca de agua (como el formato actual), encima y muy tenue. */}
+        >
+          <Text
+            style={{ textAlign: 'center', fontSize: 7, color: GRIS }}
+            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+          />
+        </View>
+        {/* …y encima, muy tenue (opacidad por trazo: la del Svg no la respeta react-pdf), para que también se aprecie sobre las tarjetas blancas. */}
         <Svg
           fixed
           style={{ position: 'absolute', top: 250, right: -150, width: 560, height: 290 }}
           viewBox="-2 0 58 30"
         >
           {ISOTIPO.map((t, i) => (
-            <Path key={i} d={t.d} fill={INDIGO} fillOpacity={0.045} />
+            <Path key={i} d={t.d} fill={INDIGO} fillOpacity={0.06} />
           ))}
         </Svg>
         {(d.vistaPrevia || d.cancelada) && <MarcaDeAgua texto={d.cancelada ? 'CANCELADA' : 'VISTA PREVIA'} />}
@@ -282,7 +300,8 @@ function Encabezado({ d }: { d: DatosPdf }) {
   const cargo = [d.destinatario.puesto, d.destinatario.empresa].filter((x) => x.trim()).join(' · ');
   return (
     <View style={{ marginTop: -34, height: 198, position: 'relative', fontSize: 9, lineHeight: 1.3 }}>
-      <Svg style={{ position: 'absolute', top: 0, left: 0, width: 612, height: 198 }} viewBox="0 0 612 198">
+      {/* Sangrado: el fondo rebasa 4 pt cada borde para que ningún visor deje una línea blanca (2026-10-13). */}
+      <Svg style={{ position: 'absolute', top: -4, left: -4, width: 620, height: 202 }} viewBox="0 0 620 202">
         <Defs>
           <LinearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={INDIGO} />
@@ -290,7 +309,7 @@ function Encabezado({ d }: { d: DatosPdf }) {
             <Stop offset="1" stopColor={AZUL} />
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="612" height="198" fill="url(#fondo)" />
+        <Rect x="0" y="0" width="620" height="202" fill="url(#fondo)" />
       </Svg>
       <Svg
         style={{ position: 'absolute', top: -26, right: -48, width: 330, height: 172 }}
@@ -358,6 +377,25 @@ function Pie() {
         justifyContent: 'center',
       }}
     >
+      {/* Detalle sutil (2026-10-13): línea degradada en el borde e isotipo pequeño y tenue a la izquierda. */}
+      <Svg
+        style={{ position: 'absolute', top: -0.6, left: 0, width: 612, height: 1.6 }}
+        viewBox="0 0 612 1.6"
+      >
+        <Defs>
+          <LinearGradient id="pie" x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor={INDIGO} stopOpacity={0.5} />
+            <Stop offset="0.5" stopColor={AZUL} stopOpacity={0.35} />
+            <Stop offset="1" stopColor={AZUL} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="612" height="1.6" fill="url(#pie)" />
+      </Svg>
+      <Svg style={{ position: 'absolute', top: 13, left: M, width: 36, height: 19 }} viewBox="-2 0 58 30">
+        {ISOTIPO.map((t, i) => (
+          <Path key={i} d={t.d} fill="#c9cde0" />
+        ))}
+      </Svg>
       <Text style={{ textAlign: 'center', fontSize: 7.5, color: GRIS, lineHeight: 1.4 }}>
         CELMILENIUM S.A. DE C.V. · Plaza Juárez No. 116 Col. Centro, C.P. 42000, Pachuca, Hidalgo, México.
         {'\n'}RFC: CEL1812033U2 · Teléfono: (771) 717 45 00 · www.celmisolutions.com
@@ -882,10 +920,20 @@ const iniciales = (nombre: string) =>
     .map((x) => x[0]?.toUpperCase() ?? '')
     .join('');
 
+/**
+ * Enlace a la conversación de WhatsApp del teléfono (2026-10-13): sólo dígitos; un número de 10 dígitos se toma como
+ * mexicano (+52). Si no parece un teléfono, no hay enlace.
+ */
+export function enlaceWhatsapp(telefono: string): string | null {
+  const digitos = telefono.replace(/\D/g, '');
+  const numero = digitos.length === 10 ? `52${digitos}` : digitos;
+  return numero.length >= 11 && numero.length <= 15 ? `https://wa.me/${numero}` : null;
+}
+
 /** Al final: «ATENTAMENTE» y la tarjeta del ejecutivo de la cuenta (2026-10-13). */
 function TarjetaEjecutivo({ firma }: { firma: DatosPdf['firma'] }) {
   if (!firma.nombre) return null;
-  const contacto = [firma.correo, firma.telefono && `Tel. ${firma.telefono}`].filter(Boolean).join('   ·   ');
+  const whatsapp = enlaceWhatsapp(firma.telefono);
   return (
     <View wrap={false} style={{ marginTop: 22, alignItems: 'center', fontSize: 9, lineHeight: 1.3 }}>
       <Text style={{ letterSpacing: 3, fontSize: 8.5, color: GRIS }}>ATENTAMENTE</Text>
@@ -898,24 +946,29 @@ function TarjetaEjecutivo({ firma }: { firma: DatosPdf['firma'] }) {
           backgroundColor: 'white',
           borderWidth: 0.6,
           borderColor: LINEA,
-          borderLeftWidth: 4,
-          borderLeftColor: AZUL,
           borderRadius: RADIO_CAJA,
           paddingVertical: 12,
           paddingHorizontal: 14,
         }}
       >
-        <View
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: INDIGO,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{iniciales(firma.nombre)}</Text>
+        {/* Iniciales en un círculo dibujado como vector: perfectamente redondo en cualquier visor (2026-10-13). */}
+        <View style={{ width: 42, height: 42, position: 'relative' }}>
+          <Svg style={{ position: 'absolute', top: 0, left: 0, width: 42, height: 42 }} viewBox="0 0 42 42">
+            <Defs>
+              <LinearGradient id="avatar" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={INDIGO} />
+                <Stop offset="1" stopColor={AZUL} />
+              </LinearGradient>
+            </Defs>
+            <Circle cx="21" cy="21" r="21" fill="url(#avatar)" />
+          </Svg>
+          <View
+            style={{ position: 'absolute', top: 0, left: 0, width: 42, height: 42, justifyContent: 'center' }}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>
+              {iniciales(firma.nombre)}
+            </Text>
+          </View>
         </View>
         <View style={{ marginLeft: 12, flex: 1 }}>
           <Etiqueta>SU EJECUTIVO DE CUENTA</Etiqueta>
@@ -923,7 +976,24 @@ function TarjetaEjecutivo({ firma }: { firma: DatosPdf['firma'] }) {
             {firma.nombre}
           </Text>
           {firma.puesto && <Text style={{ fontSize: 8.5, color: '#3a3a44' }}>{firma.puesto}</Text>}
-          {contacto && <Text style={{ fontSize: 8.5, color: AZUL, marginTop: 3 }}>{contacto}</Text>}
+          {(firma.correo || firma.telefono) && (
+            <Text style={{ fontSize: 8.5, color: AZUL, marginTop: 3 }}>
+              {firma.correo && (
+                <Link src={`mailto:${firma.correo}`} style={{ color: AZUL, textDecoration: 'none' }}>
+                  {firma.correo}
+                </Link>
+              )}
+              {firma.correo && firma.telefono && '   ·   '}
+              {firma.telefono &&
+                (whatsapp ? (
+                  <Link src={whatsapp} style={{ color: AZUL, textDecoration: 'none' }}>
+                    {`WhatsApp ${firma.telefono}`}
+                  </Link>
+                ) : (
+                  `Tel. ${firma.telefono}`
+                ))}
+            </Text>
+          )}
         </View>
       </View>
     </View>
