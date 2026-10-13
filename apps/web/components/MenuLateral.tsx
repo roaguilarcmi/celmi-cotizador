@@ -55,7 +55,7 @@ export function MenuLateral({
   return (
     <nav
       aria-label="Principal"
-      className="flex shrink-0 flex-col gap-4 bg-nav px-4 py-4 lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:gap-7 lg:py-6 lg:transition-[width,padding] lg:duration-200 lg:compacto:w-19 lg:compacto:px-3"
+      className="relative z-[45] flex shrink-0 flex-col gap-4 bg-nav px-4 py-4 lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:gap-7 lg:py-6 lg:transition-[width,padding] lg:duration-200 lg:compacto:w-19 lg:compacto:px-3"
     >
       <div className="flex items-center justify-between gap-2 px-2.5 lg:compacto:flex-col lg:compacto:justify-center lg:compacto:px-0">
         <Link href="/" aria-label="CELMI Solutions, inicio" className="lg:compacto:hidden">

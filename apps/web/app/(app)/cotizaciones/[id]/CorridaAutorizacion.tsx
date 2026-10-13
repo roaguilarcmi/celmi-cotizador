@@ -1601,7 +1601,7 @@ export function CorridaAutorizacion({
     <>
       {completa ? (
         // Portal: el contenedor del wizard tiene una animación con transform que encerraría al «fixed».
-        createPortal(<div className="fixed inset-0 z-40 bg-fondo p-2">{contenido}</div>, document.body)
+        createPortal(<div className="fixed inset-0 z-50 bg-fondo p-2">{contenido}</div>, document.body)
       ) : (
         <div ref={area} className="min-h-0">
           {contenido}
