@@ -9,6 +9,8 @@ import type { Notificacion } from '@/lib/datos';
 import { BotonTema } from './BotonTema';
 import { Icon } from './Icon';
 import { Notificaciones } from './Notificaciones';
+import { IndicadorEnVivo } from './tiempo-real/IndicadorEnVivo';
+import { useTiempoReal } from './tiempo-real/Proveedor';
 import { Avatar } from './ui';
 
 /**
@@ -25,7 +27,19 @@ interface Props {
   notificaciones?: Notificacion[];
 }
 
-export function MenuLateral({ usuario, permisos, demo, contadores = {}, notificaciones = [] }: Props) {
+export function MenuLateral({
+  usuario,
+  permisos,
+  demo,
+  contadores: delServidor = {},
+  notificaciones = [],
+}: Props) {
+  // El contador de Autorizaciones se actualiza en vivo (Fase 8).
+  const tr = useTiempoReal();
+  const contadores =
+    tr?.contadorAutorizaciones != null
+      ? { ...delServidor, autorizaciones: tr.contadorAutorizaciones }
+      : delServidor;
   const ruta = usePathname();
   const activo = (slug: string) => (slug === '' ? ruta === '/' : ruta.startsWith(`/${slug}`));
   const [menu, guardarMenu] = usePreferencia('celmi-menu');
@@ -49,7 +63,9 @@ export function MenuLateral({ usuario, permisos, demo, contadores = {}, notifica
           <img src="/logo-celmi-blanco.svg" alt="CELMI Solutions" width={150} height={27} />
         </Link>
         <div className="ml-auto flex items-center gap-1 lg:compacto:ml-0">
-          {!demo && <Notificaciones avisos={notificaciones} />}
+          {!demo && (
+            <Notificaciones avisos={notificaciones} autoriza={permisos.includes('utilidad.autorizar')} />
+          )}
         </div>
         <div className="flex items-center gap-1 lg:hidden">
           <BotonTema />
@@ -106,25 +122,28 @@ export function MenuLateral({ usuario, permisos, demo, contadores = {}, notifica
         })}
       </ul>
 
-      <div className="mt-auto hidden items-center gap-2 rounded-md bg-white/6 p-3 lg:flex lg:compacto:flex-col lg:compacto:p-2">
-        <Avatar iniciales={usuario.iniciales} color="#1D5BD8" tamano={36} />
-        <div className="min-w-0 flex-1 lg:compacto:sr-only">
-          <div className="truncate text-sm font-semibold text-white">{usuario.nombre}</div>
-          <div className="truncate text-xs text-nav-texto">{usuario.rol}</div>
+      <div className="mt-auto flex flex-col gap-2">
+        {!demo && <IndicadorEnVivo />}
+        <div className="hidden items-center gap-2 rounded-md bg-white/6 p-3 lg:flex lg:compacto:flex-col lg:compacto:p-2">
+          <Avatar iniciales={usuario.iniciales} color="#1D5BD8" tamano={36} />
+          <div className="min-w-0 flex-1 lg:compacto:sr-only">
+            <div className="truncate text-sm font-semibold text-white">{usuario.nombre}</div>
+            <div className="truncate text-xs text-nav-texto">{usuario.rol}</div>
+          </div>
+          <BotonTema />
+          {!demo && (
+            <form action={() => cerrarSesion()}>
+              <button
+                type="submit"
+                aria-label="Cerrar sesión"
+                title="Cerrar sesión"
+                className="inline-flex size-10 cursor-pointer items-center justify-center rounded-md text-nav-texto transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <Icon name="salir" />
+              </button>
+            </form>
+          )}
         </div>
-        <BotonTema />
-        {!demo && (
-          <form action={() => cerrarSesion()}>
-            <button
-              type="submit"
-              aria-label="Cerrar sesión"
-              title="Cerrar sesión"
-              className="inline-flex size-10 cursor-pointer items-center justify-center rounded-md text-nav-texto transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <Icon name="salir" />
-            </button>
-          </form>
-        )}
       </div>
     </nav>
   );

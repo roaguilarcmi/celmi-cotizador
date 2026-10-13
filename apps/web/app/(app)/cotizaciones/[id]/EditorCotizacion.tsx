@@ -33,6 +33,7 @@ import { EliminarCotizacion } from './EliminarCotizacion';
 import { EsquemaCotizacion } from './EsquemaCotizacion';
 import { MenuRevisiones } from './MenuRevisiones';
 import { ActividadCotizacion } from '@/components/auditoria/ActividadCotizacion';
+import { EnVivoCotizacion } from '@/components/tiempo-real/EnVivoCotizacion';
 import { CorridaAutorizacion, type ReferenciaCorrida } from './CorridaAutorizacion';
 import { PasoAutorizacion } from './PasoAutorizacion';
 import type { TipoCambioDof } from '@/lib/dof';
@@ -261,6 +262,7 @@ export function EditorCotizacion({
             <span>{cotizacion.folio ?? 'Sin folio (se asigna al emitir)'}</span>
           </p>
         </div>
+        <EnVivoCotizacion cotizacionId={cotizacion.id} />
         <MenuRevisiones
           cotizacionId={cotizacion.id}
           revisiones={cotizacion.revisiones}
@@ -275,6 +277,8 @@ export function EditorCotizacion({
           />
         )}
       </header>
+      {/* Avisos de cambios hechos por otras personas mientras está abierta (Fase 8). */}
+      <div id="franja-en-vivo" />
 
       {cotizacion.revisiones[0] && cotizacion.revisiones[0].numero !== revision.numero && (
         <p className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-info/30 bg-info-suave px-4 py-2.5 text-[13px] text-info">

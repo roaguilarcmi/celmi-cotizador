@@ -74,9 +74,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Todo excepto archivos estáticos e imágenes (el CSP va en las páginas; los estáticos llevan los demás encabezados
+  // Todo excepto archivos estáticos, imágenes y el service worker de avisos (public/sw.js, sin datos) (el CSP va en las páginas; los estáticos llevan los demás encabezados
   // desde next.config.ts).
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sw\\.js$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

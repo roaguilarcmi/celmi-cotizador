@@ -6,13 +6,26 @@ import { marcarNotificacionesLeidas } from '@/lib/acciones-notificaciones';
 import type { Notificacion } from '@/lib/datos';
 import { haceCuanto } from '@/lib/presentacion';
 import { Icon } from './Icon';
+import { MisAvisos } from './tiempo-real/MisAvisos';
+import { useTiempoReal } from './tiempo-real/Proveedor';
+import { VentanaFlotante } from './VentanaFlotante';
 
 /**
  * Avisos dentro de la app (0027), en la campana del menú: p. ej. «cotización retirada para corregir», que llega a
  * quien la capturó y al ejecutivo. Abrir un aviso lo marca como leído.
  */
-export function Notificaciones({ avisos }: { avisos: Notificacion[] }) {
+export function Notificaciones({
+  avisos: iniciales,
+  autoriza = false,
+}: {
+  avisos: Notificacion[];
+  autoriza?: boolean;
+}) {
+  // Con tiempo real (Fase 8) la lista llega en vivo; sin él, la del servidor.
+  const tr = useTiempoReal();
+  const avisos = tr?.avisos ?? iniciales;
   const [abierto, setAbierto] = useState(false);
+  const [preferencias, setPreferencias] = useState(false);
   const [, iniciar] = useTransition();
   const caja = useRef<HTMLDivElement>(null);
   const sinLeer = avisos.filter((a) => !a.leida_en).length;
@@ -33,7 +46,10 @@ export function Notificaciones({ avisos }: { avisos: Notificacion[] }) {
     };
   }, [abierto]);
 
-  const leer = (ids?: string[]) => iniciar(async () => void (await marcarNotificacionesLeidas(ids)));
+  const leer = (ids?: string[]) => {
+    tr?.marcarLeidos(ids);
+    iniciar(async () => void (await marcarNotificacionesLeidas(ids)));
+  };
 
   return (
     <div ref={caja} className="relative">
@@ -61,6 +77,20 @@ export function Notificaciones({ avisos }: { avisos: Notificacion[] }) {
         >
           <div className="flex items-center gap-2 border-b border-borde px-4 py-3">
             <span className="mr-auto text-sm font-bold">Avisos</span>
+            {tr && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false);
+                  setPreferencias(true);
+                }}
+                aria-label="Mis avisos: preferencias"
+                title="Mis avisos"
+                className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-texto-suave hover:bg-superficie-2 hover:text-texto"
+              >
+                <Icon name="herramienta" size={16} />
+              </button>
+            )}
             {sinLeer > 0 && (
               <button
                 type="button"
@@ -110,6 +140,15 @@ export function Notificaciones({ avisos }: { avisos: Notificacion[] }) {
             </ul>
           )}
         </div>
+      )}
+      {preferencias && (
+        <VentanaFlotante
+          titulo="Mis avisos"
+          detalle="Se guardan en tu perfil y aplican en cualquier equipo."
+          onCerrar={() => setPreferencias(false)}
+        >
+          <MisAvisos autoriza={autoriza} />
+        </VentanaFlotante>
       )}
     </div>
   );

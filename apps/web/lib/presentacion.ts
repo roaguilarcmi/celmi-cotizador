@@ -18,6 +18,11 @@ export const tonoEstado = (id: string): Tono => TONOS_ESTADO[id] ?? 'neutro';
 
 const zona = 'America/Mexico_City';
 
+/** ¿Ocurrió hace menos de `minutos`? (p. ej. «Nueva» en la bandeja, Fase 8). */
+export function esReciente(iso: string, minutos: number): boolean {
+  return Date.now() - new Date(iso).getTime() < minutos * 60_000;
+}
+
 export function haceCuanto(fecha: string | Date): string {
   const minutos = Math.round((Date.now() - new Date(fecha).getTime()) / 60_000);
   if (minutos < 1) return 'ahora';

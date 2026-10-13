@@ -7,7 +7,7 @@ import { decimal } from '@/lib/corrida';
 import { textoPorMoneda } from '../cotizaciones/[id]/modelo';
 import { listarBandeja, listarSolicitudesCancelacion, type RevisionBandeja } from '@/lib/datos';
 import { FOLIO_EPOXEMEX } from '@/lib/epoxemex';
-import { haceCuanto } from '@/lib/presentacion';
+import { esReciente, haceCuanto } from '@/lib/presentacion';
 import { exigirPermiso, obtenerSesion } from '@/lib/sesion';
 import { ESTADOS } from '../cotizaciones/estados';
 import { SolicitudesCancelacion } from './SolicitudesCancelacion';
@@ -140,6 +140,11 @@ function Fila({ r, pendiente }: { r: RevisionBandeja; pendiente?: boolean }) {
         <span className="min-w-0 flex-[1_1_260px]">
           <span className="block truncate text-[15px] font-bold">
             {op?.cliente?.razon_social ?? 'Cliente'} · {op?.nombre ?? 'Cotización'}
+            {pendiente && r.enviada_en && esReciente(r.enviada_en, 15) && (
+              <span className="ml-2 align-middle">
+                <Pill tono="info">Nueva</Pill>
+              </span>
+            )}
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[13px] text-texto-suave">
             <span className="font-semibold text-texto">{etiquetaRevision(r.numero)}</span>

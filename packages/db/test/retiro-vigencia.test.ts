@@ -33,14 +33,16 @@ describe('retirar para corregir (0027)', () => {
         motivo_retiro: 'Falta el costo del flete',
         retirada_por: USUARIOS.alejandro.id,
       });
-      // Alejandro no se avisa a sí mismo ni ve los avisos de otros.
-      expect(await filas(db, 'select * from public.notificaciones')).toHaveLength(0);
+      // Alejandro no se avisa a sí mismo ni ve los avisos de otros (desde 0035 sí recibe «enviada a autorización»).
+      expect(
+        await filas(db, "select * from public.notificaciones where tipo = 'revision_retirada'"),
+      ).toHaveLength(0);
 
       // Dentro de la misma transacción (se revierte al terminar): lo que quedó, visto como superusuario.
       await db.exec('reset role');
       const avisos = await filas<{ destinatario_id: string; cuerpo: string; enlace: string }>(
         db,
-        'select destinatario_id, cuerpo, enlace from public.notificaciones order by destinatario_id',
+        "select destinatario_id, cuerpo, enlace from public.notificaciones where tipo = 'revision_retirada' order by destinatario_id",
       );
       expect(avisos.map((x) => x.destinatario_id)).toEqual([USUARIOS.jorge.id, USUARIOS.jhovanny.id]);
       expect(avisos[0]!.cuerpo).toContain('Falta el costo del flete');

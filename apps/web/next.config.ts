@@ -23,7 +23,11 @@ const nextConfig: NextConfig = {
   // No anunciar la tecnología del servidor.
   poweredByHeader: false,
   async headers() {
-    return [{ source: '/:path*', headers: ENCABEZADOS }];
+    return [
+      { source: '/:path*', headers: ENCABEZADOS },
+      // Avisos de Windows (Fase 8): el navegador siempre revisa la versión vigente del service worker.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
+    ];
   },
 };
 
