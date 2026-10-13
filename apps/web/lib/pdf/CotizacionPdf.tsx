@@ -264,20 +264,29 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
 /**
  * Gigantografía del isotipo (2026-10-13): inclinada y con los colores del logo (arco izquierdo azul oscuro, derecho
  * azul como el degradado del encabezado). Va en dos capas: «fondo» con tintes claros sólidos detrás del contenido y
- * «encima» con opacidad por trazo (react-pdf ignora la opacidad del Svg completo).
+ * «encima» con opacidad por trazo (react-pdf ignora la opacidad del Svg completo). Centrada en la hoja carta
+ * (612 × 792): el centro del viewBox (27, 15) es el del isotipo y el del recuadro (2026-10-13, más tenue).
  */
 const ANGULO = -18;
+const ANCHO_GIGANTO = 620;
+const ALTO_GIGANTO = 480;
 function Gigantografia({ capa }: { capa: 'fondo' | 'encima' }) {
-  const colores = capa === 'fondo' ? ['#dddcea', '#d8e5fb'] : [INDIGO, AZUL];
+  const colores = capa === 'fondo' ? ['#e4e4ef', '#e0eafb'] : [INDIGO, AZUL];
   return (
     <Svg
       fixed
-      style={{ position: 'absolute', top: 235, right: -95, width: 620, height: 480 }}
+      style={{
+        position: 'absolute',
+        top: (792 - ALTO_GIGANTO) / 2,
+        left: (612 - ANCHO_GIGANTO) / 2,
+        width: ANCHO_GIGANTO,
+        height: ALTO_GIGANTO,
+      }}
       viewBox="-10 -14 74 58"
     >
       <G transform={`rotate(${ANGULO} 27 15)`}>
         {ISOTIPO.map((t, i) => (
-          <Path key={i} d={t.d} fill={colores[i]} fillOpacity={capa === 'fondo' ? 1 : 0.06} />
+          <Path key={i} d={t.d} fill={colores[i]} fillOpacity={capa === 'fondo' ? 1 : 0.04} />
         ))}
       </G>
     </Svg>
