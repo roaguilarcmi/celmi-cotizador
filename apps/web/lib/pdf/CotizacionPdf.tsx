@@ -1,15 +1,28 @@
 import { formatearMXN } from '@celmi/core';
-import { Document, Font, Page, Path, Polygon, StyleSheet, Svg, Text, View } from '@react-pdf/renderer';
+import {
+  Defs,
+  Document,
+  Font,
+  LinearGradient,
+  Page,
+  Path,
+  Rect,
+  Stop,
+  StyleSheet,
+  Svg,
+  Text,
+  View,
+} from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import type { ReactNode } from 'react';
 import type { DatosPdf, LineaPdf, OpcionPdf, PropuestaPdf } from './datos-pdf';
 import { LOGO_CELMI } from './logo';
 
 /**
- * PDF de la cotización (Fase 4 · C; diseño B aprobado 2026-10-12, ajustes 2026-10-13). Todo es texto real (Helvetica,
- * fuente estándar de PDF: se puede seleccionar y buscar) y el logo es vector. Membrete como el formato de CELMI:
- * franja índigo con el extremo inclinado y triángulo azul de dos tonos en la esquina (arriba a la derecha y, al
- * revés, abajo a la izquierda), arco tenue del logotipo al fondo y pie con los datos de la empresa en cada hoja.
+ * PDF de la cotización (Fase 4 · C). Diseño C elegido por Rodrigo (2026-10-13): encabezado con degradado índigo → azul
+ * con el logo en blanco, el isotipo translúcido y el destinatario; el contenido en tarjetas blancas sobre fondo gris
+ * claro; la gigantografía del isotipo como marca de agua; la tarjeta del ejecutivo, centrada, al final; el pie con los
+ * datos de la empresa y el número de hoja en cada hoja. Todo es texto real (Helvetica) y el logo es vector.
  */
 
 // Sin guiones de división de palabras («HÁ-BILES»): las palabras pasan completas a la siguiente línea.
@@ -18,7 +31,6 @@ Font.registerHyphenationCallback((palabra) => [palabra]);
 const INDIGO = '#29235C';
 const INDIGO_MEDIO = '#3E3880';
 const AZUL = '#0064EC';
-const AZUL_CLARO = '#3D8DFF';
 const GRIS = '#6b6b75';
 const LINEA = '#dcdce6';
 const CEBRA = '#f7f7fb';
@@ -27,13 +39,15 @@ const RADIO = 4;
 
 const s = StyleSheet.create({
   pagina: {
-    paddingTop: 122,
-    paddingBottom: 96,
-    paddingHorizontal: 46,
+    paddingTop: 34,
+    paddingBottom: 70,
+    paddingHorizontal: 0,
+    backgroundColor: '#f4f5fa',
     fontFamily: 'Helvetica',
     fontSize: 9,
     color: '#1d1d1f',
-    lineHeight: 1.3,
+    // Sin lineHeight aquí: heredado de la hoja, react-pdf deja de dibujar el número de página (texto dinámico).
+    // Se aplica en las tarjetas, el encabezado y la tarjeta del ejecutivo.
   },
   derecha: { textAlign: 'right' },
   centro: { textAlign: 'center' },
@@ -120,14 +134,80 @@ const ENCABEZADOS = [
   'SUBTOTAL SIN IVA',
 ];
 
+// ───────────── Tarjetas (diseño C) ─────────────
+
+/** Margen lateral de las tarjetas y relleno interior. */
+const M = 34;
+const PAD = 14;
+const RADIO_CAJA = 8;
+const ISOTIPO = LOGO_CELMI.slice(-2);
+
+/**
+ * Tramo de una tarjeta blanca. Cada tramo se corta de página por sí solo (react-pdf movía los contenedores grandes
+ * completos a la hoja siguiente): el primero lleva el borde y las esquinas de arriba, el último los de abajo.
+ */
+function Caja({
+  children,
+  inicio,
+  fin,
+  separar = 12,
+  arriba,
+}: {
+  children: ReactNode;
+  inicio?: boolean;
+  fin?: boolean;
+  /** Espacio antes de la tarjeta (sólo en su primer tramo). */
+  separar?: number;
+  /** Margen superior propio (la primera tarjeta se monta sobre el encabezado). */
+  arriba?: number;
+}) {
+  return (
+    <View
+      wrap={false}
+      style={{
+        marginHorizontal: M,
+        paddingHorizontal: PAD,
+        backgroundColor: 'white',
+        // El interlineado se calcula con el tamaño de letra del contenedor: se declaran juntos.
+        fontSize: 9,
+        lineHeight: 1.3,
+        borderLeftWidth: 0.6,
+        borderRightWidth: 0.6,
+        borderColor: LINEA,
+        ...(inicio && {
+          marginTop: arriba ?? separar,
+          paddingTop: 12,
+          borderTopWidth: 0.6,
+          borderTopLeftRadius: RADIO_CAJA,
+          borderTopRightRadius: RADIO_CAJA,
+        }),
+        ...(fin && {
+          paddingBottom: 12,
+          borderBottomWidth: 0.6,
+          borderBottomLeftRadius: RADIO_CAJA,
+          borderBottomRightRadius: RADIO_CAJA,
+        }),
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+const Etiqueta = ({ children, color = GRIS }: { children: ReactNode; color?: string }) => (
+  <Text style={{ fontSize: 7, letterSpacing: 1.4, color, fontWeight: 'bold' }}>{children}</Text>
+);
+
 export function CotizacionPdf({ d }: { d: DatosPdf }) {
   const principales = d.propuestas.filter((p) => !p.esAdicional);
   const adicionales = d.propuestas.filter((p) => p.esAdicional);
-  const destinatario = [
-    [d.destinatario.tratamiento, d.destinatario.nombre].filter(Boolean).join(' '),
-    d.destinatario.puesto,
-    d.destinatario.empresa,
-  ].filter((x) => x.trim().length > 0);
+  const todas = [
+    ...principales.map((p, i) => ({
+      p,
+      titulo: principales.length > 1 ? `PROPUESTA ${i + 1} · ${p.nombre.toUpperCase()}` : null,
+    })),
+    ...adicionales.map((p) => ({ p, titulo: (p.nombre || 'Adicionales').toUpperCase() })),
+  ];
   return (
     <Document
       title={d.folio ? `Cotización ${d.folio}` : 'Vista previa de cotización'}
@@ -137,49 +217,42 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
       language="es-MX"
     >
       <Page size="LETTER" style={s.pagina}>
-        <Membrete />
-        {(d.vistaPrevia || d.cancelada) && <MarcaDeAgua texto={d.cancelada ? 'CANCELADA' : 'VISTA PREVIA'} />}
+        <LineaSuperior />
+        <Encabezado d={d} />
 
-        <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
-          <Text>{d.lugarFecha}</Text>
-          <Text>
-            COTIZACIÓN: <Text style={s.negrita}>{d.folio ?? 'se asigna al emitir'}</Text>
-          </Text>
-        </View>
+        {todas.map(({ p, titulo }, i) => (
+          <Propuesta key={i} p={p} titulo={titulo} d={d} primera={i === 0} />
+        ))}
 
-        <View style={{ marginBottom: 12 }}>
-          {destinatario.map((x) => (
-            <Text key={x} style={s.negrita}>
-              {x.toUpperCase()}
-            </Text>
+        <Condiciones condiciones={d.condiciones} />
+        <TarjetaEjecutivo firma={d.firma} />
+
+        <Pie />
+        {/* Número de hoja (2026-10-13): hijo directo de la hoja; dentro de un componente react-pdf no lo dibuja. */}
+        <Text
+          fixed
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            right: M,
+            width: 90,
+            textAlign: 'right',
+            fontSize: 7.5,
+            color: GRIS,
+          }}
+          render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+        />
+        {/* Gigantografía del isotipo como marca de agua (como el formato actual), encima y muy tenue. */}
+        <Svg
+          fixed
+          style={{ position: 'absolute', top: 250, right: -150, width: 560, height: 290 }}
+          viewBox="-2 0 58 30"
+        >
+          {ISOTIPO.map((t, i) => (
+            <Path key={i} d={t.d} fill={INDIGO} fillOpacity={0.045} />
           ))}
-          {/* Separado del destinatario con más interlineado (2026-10-13). */}
-          <Text style={[s.negrita, { letterSpacing: 2, marginTop: 7 }]}>PRESENTE</Text>
-        </View>
-
-        <Text style={{ marginBottom: 10 }}>
-          Por medio de la presente, ponemos a su amable consideración la siguiente cotización
-          {d.marcas.length ? (
-            <>
-              {' de los equipos de la marca '}
-              <Text style={s.negrita}>{unir(d.marcas)}</Text>
-            </>
-          ) : null}
-          , la cual ha sido elaborada conforme a sus requerimientos y necesidades.
-        </Text>
-
-        {principales.map((p, i) => (
-          <Propuesta
-            key={i}
-            p={p}
-            titulo={principales.length > 1 ? `Propuesta ${i + 1} · ${p.nombre}` : null}
-          />
-        ))}
-        {adicionales.map((p, i) => (
-          <Propuesta key={`a${i}`} p={p} titulo={p.nombre || 'Adicionales'} />
-        ))}
-
-        <Condiciones condiciones={d.condiciones} firma={d.firma} />
+        </Svg>
+        {(d.vistaPrevia || d.cancelada) && <MarcaDeAgua texto={d.cancelada ? 'CANCELADA' : 'VISTA PREVIA'} />}
       </Page>
     </Document>
   );
@@ -188,60 +261,108 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
 const unir = (xs: string[]) =>
   xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} y ${xs.at(-1)}`;
 
-/** Membrete fijo en cada hoja, con las formas del formato actual de CELMI (2026-10-13). Hoja carta: 612 × 792 pt. */
-function Membrete() {
-  // Arco derecho del isotipo (el último trazo del logo), muy tenue, como fondo.
-  const arco = LOGO_CELMI.at(-1);
+/** Línea con degradado en el borde superior de cada hoja (en la primera la cubre el encabezado). */
+function LineaSuperior() {
   return (
-    <>
-      {arco && (
-        <Svg
-          fixed
-          style={{ position: 'absolute', top: 300, right: -70, width: 300, height: 290 }}
-          viewBox="23 0 31 30"
-        >
-          <Path d={arco.d} fill="#edf1f9" />
-        </Svg>
-      )}
-      <Svg
-        fixed
-        style={{ position: 'absolute', top: 0, left: 0, width: 612, height: 84 }}
-        viewBox="0 0 612 84"
-      >
-        {/* Franja índigo con el extremo inclinado. */}
-        <Polygon points="0,0 470,0 498,22 0,22" fill={INDIGO} />
-        {/* Triángulo azul de dos tonos en la esquina. */}
-        <Polygon points="486,0 612,0 612,84" fill={AZUL} />
-        <Polygon points="486,0 524,0 612,58 612,84" fill={AZUL_CLARO} />
+    <Svg fixed style={{ position: 'absolute', top: 0, left: 0, width: 612, height: 5 }} viewBox="0 0 612 5">
+      <Defs>
+        <LinearGradient id="linea" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0" stopColor={INDIGO} />
+          <Stop offset="1" stopColor={AZUL} />
+        </LinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="612" height="5" fill="url(#linea)" />
+    </Svg>
+  );
+}
+
+/** Encabezado de la primera hoja: degradado índigo → azul, logo en blanco, isotipo translúcido y destinatario. */
+function Encabezado({ d }: { d: DatosPdf }) {
+  const persona = [d.destinatario.tratamiento, d.destinatario.nombre].filter(Boolean).join(' ');
+  const cargo = [d.destinatario.puesto, d.destinatario.empresa].filter((x) => x.trim()).join(' · ');
+  return (
+    <View style={{ marginTop: -34, height: 198, position: 'relative', fontSize: 9, lineHeight: 1.3 }}>
+      <Svg style={{ position: 'absolute', top: 0, left: 0, width: 612, height: 198 }} viewBox="0 0 612 198">
+        <Defs>
+          <LinearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={INDIGO} />
+            <Stop offset="0.55" stopColor="#2b2f8f" />
+            <Stop offset="1" stopColor={AZUL} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="612" height="198" fill="url(#fondo)" />
       </Svg>
       <Svg
-        fixed
-        style={{ position: 'absolute', bottom: 0, left: 0, width: 612, height: 84 }}
-        viewBox="0 0 612 84"
+        style={{ position: 'absolute', top: -26, right: -48, width: 330, height: 172 }}
+        viewBox="-2 0 58 30"
       >
-        {/* Lo mismo, girado: triángulo abajo a la izquierda y franja hacia la derecha. */}
-        <Polygon points="612,84 142,84 114,62 612,62" fill={INDIGO} />
-        <Polygon points="126,84 0,84 0,0" fill={AZUL} />
-        <Polygon points="126,84 88,84 0,26 0,0" fill={AZUL_CLARO} />
+        {ISOTIPO.map((t, i) => (
+          <Path key={i} d={t.d} fill="white" fillOpacity={0.13} />
+        ))}
       </Svg>
-      <View fixed style={{ position: 'absolute', top: 38, left: 46 }}>
-        <Svg viewBox="0 0 168 30" style={{ width: 186, height: 33 }}>
-          {LOGO_CELMI.map((p, i) => (
-            <Path key={i} d={p.d} fill={p.fill} />
-          ))}
-        </Svg>
-        <Text style={{ marginTop: 5, fontSize: 7.5, color: INDIGO }}>
+      <View style={{ paddingHorizontal: M + 4, paddingTop: 28 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Svg viewBox="0 0 168 30" style={{ width: 170, height: 30 }}>
+            {LOGO_CELMI.map((t, i) => (
+              <Path key={i} d={t.d} fill="white" />
+            ))}
+          </Svg>
+          <Text style={{ fontSize: 8.5, color: 'white', opacity: 0.85 }}>{d.lugarFecha}</Text>
+        </View>
+        <Text style={{ fontSize: 7.5, color: 'white', opacity: 0.75, marginTop: 4 }}>
           Integramos Soluciones, Transformamos Empresas y Entidades Gubernamentales.
         </Text>
-      </View>
-      <View fixed style={{ position: 'absolute', bottom: 30, left: 0, right: 0 }}>
-        <Text style={{ textAlign: 'center', fontSize: 7.5, color: GRIS, lineHeight: 1.35 }}>
-          CELMILENIUM S.A. DE C.V.{'\n'}Plaza Juárez No. 116 Col. Centro, C.P. 42000, Pachuca, Hidalgo,
-          México.
-          {'\n'}RFC: CEL1812033U2 / Teléfono: (771) 717 45 00 · www.celmisolutions.com
+        <Text style={{ marginTop: 22, fontSize: 8, letterSpacing: 1.6, color: 'white', opacity: 0.75 }}>
+          COTIZACIÓN{' '}
+          <Text style={{ fontWeight: 'bold', opacity: 1 }}>{d.folio ?? 'SE ASIGNA AL EMITIR'}</Text>
+        </Text>
+        <Text style={{ marginTop: 6, fontSize: 18, lineHeight: 1.25, fontWeight: 'bold', color: 'white' }}>
+          {persona || d.destinatario.empresa}
+        </Text>
+        {cargo && (
+          <Text style={{ marginTop: 2, fontSize: 10.5, lineHeight: 1.3, color: 'white', opacity: 0.9 }}>
+            {cargo}
+          </Text>
+        )}
+        <Text
+          style={{
+            marginTop: 7,
+            fontSize: 7.5,
+            letterSpacing: 3,
+            color: 'white',
+            opacity: 0.7,
+            fontWeight: 'bold',
+          }}
+        >
+          PRESENTE
         </Text>
       </View>
-    </>
+    </View>
+  );
+}
+
+/** Pie fijo: franja blanca con los datos de la empresa. */
+function Pie() {
+  return (
+    <View
+      fixed
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 44,
+        backgroundColor: 'white',
+        borderTopWidth: 0.6,
+        borderColor: LINEA,
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ textAlign: 'center', fontSize: 7.5, color: GRIS, lineHeight: 1.4 }}>
+        CELMILENIUM S.A. DE C.V. · Plaza Juárez No. 116 Col. Centro, C.P. 42000, Pachuca, Hidalgo, México.
+        {'\n'}RFC: CEL1812033U2 · Teléfono: (771) 717 45 00 · www.celmisolutions.com
+      </Text>
+    </View>
   );
 }
 
@@ -263,37 +384,72 @@ function MarcaDeAgua({ texto }: { texto: string }) {
   );
 }
 
-function Propuesta({ p, titulo }: { p: PropuestaPdf; titulo: string | null }) {
-  // Sin contenedor: cada pieza (tabla, totales, financiamiento) se corta de página por sí sola; dentro de un View
-  // react-pdf llegaba a mover toda la propuesta a la hoja siguiente.
+/** Tarjeta de una propuesta: datos, párrafo, tabla, totales y total con letra; luego su financiamiento. */
+function Propuesta({
+  p,
+  titulo,
+  d,
+  primera,
+}: {
+  p: PropuestaPdf;
+  titulo: string | null;
+  d: DatosPdf;
+  primera: boolean;
+}) {
+  const tipoModalidad = [
+    p.tipo && `TIPO: ${p.tipo.toUpperCase()}`,
+    p.modalidad && `MODALIDAD: ${p.modalidad.toUpperCase()}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <>
-      {titulo && (
-        <Text style={{ fontSize: 11, fontWeight: 'bold', color: INDIGO, marginBottom: 4 }}>{titulo}</Text>
-      )}
-      {!p.esAdicional && (
-        <Text style={{ marginBottom: 4 }}>
-          {[p.tipo && `Tipo: ${p.tipo}.`, p.modalidad && `Modalidad: ${p.modalidad}.`]
-            .filter(Boolean)
-            .join(' ')}
-        </Text>
-      )}
-      <View style={{ flexDirection: 'row' }} wrap={false}>
-        {ENCABEZADOS.map((h, i) => (
-          <Th key={h} ancho={COLS[i] ?? 0} primera={i === 0} ultima={i === ENCABEZADOS.length - 1}>
-            {h}
-          </Th>
-        ))}
-      </View>
+      <Caja inicio arriba={primera ? -26 : 16}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Etiqueta color={titulo ? INDIGO : GRIS}>{titulo ?? tipoModalidad}</Etiqueta>
+          <Etiqueta>VIGENCIA {d.vigencia.toUpperCase()}</Etiqueta>
+        </View>
+        {titulo && !p.esAdicional && tipoModalidad && (
+          <View style={{ marginTop: 2 }}>
+            <Etiqueta>{tipoModalidad}</Etiqueta>
+          </View>
+        )}
+        {primera && (
+          <Text style={{ marginTop: 8, fontSize: 9, lineHeight: 1.45 }}>
+            Por medio de la presente, ponemos a su amable consideración la siguiente cotización
+            {d.marcas.length ? (
+              <>
+                {' de los equipos de la marca '}
+                <Text style={s.negrita}>{unir(d.marcas)}</Text>
+              </>
+            ) : null}
+            , la cual ha sido elaborada conforme a sus requerimientos y necesidades.
+          </Text>
+        )}
+        <View style={{ flexDirection: 'row', marginTop: 10 }}>
+          {ENCABEZADOS.map((h, i) => (
+            <Th key={h} ancho={COLS[i] ?? 0} primera={i === 0} ultima={i === ENCABEZADOS.length - 1}>
+              {h}
+            </Th>
+          ))}
+        </View>
+      </Caja>
       {p.lineas.map((l, i) => (
-        <FilaBien key={i} l={l} cebra={i % 2 === 1} ultima={i === p.lineas.length - 1} />
+        <Caja key={i}>
+          <FilaBien l={l} cebra={i % 2 === 1} ultima={i === p.lineas.length - 1} />
+        </Caja>
       ))}
-      <Totales p={p} />
-      <Text style={{ marginTop: 8, textAlign: 'center', fontSize: 8 }}>
-        TOTAL CON LETRA: {p.totalConLetra}
-      </Text>
-      {p.financiamiento.length > 0 && <Financiamiento p={p} />}
-      <View style={{ height: 14 }} />
+      <Caja fin>
+        <Totales p={p} />
+        <Text style={{ marginTop: 8, textAlign: 'center', fontSize: 8 }}>
+          TOTAL CON LETRA: {p.totalConLetra}
+        </Text>
+      </Caja>
+      {p.financiamiento.length > 0 && (
+        <Caja inicio fin>
+          <Financiamiento p={p} />
+        </Caja>
+      )}
     </>
   );
 }
@@ -687,11 +843,11 @@ function Tarjeta({ o }: { o: OpcionPdf }) {
   );
 }
 
-// ───────────── Condiciones y firma ─────────────
+// ───────────── Condiciones y ejecutivo ─────────────
 
 function Condicion({ c }: { c: unknown }) {
   return (
-    <View style={{ flexDirection: 'row', marginBottom: 2 }} wrap={false}>
+    <View style={{ flexDirection: 'row', marginBottom: 2 }}>
       <Text style={{ width: 10 }}>•</Text>
       <View style={{ flex: 1 }}>
         <Enriquecido contenido={c} respaldo="" tamano={8.5} />
@@ -700,31 +856,74 @@ function Condicion({ c }: { c: unknown }) {
   );
 }
 
-function Condiciones({ condiciones, firma }: { condiciones: unknown[]; firma: DatosPdf['firma'] }) {
+/** Tarjeta de términos y condiciones: el título viaja con la primera condición. */
+function Condiciones({ condiciones }: { condiciones: unknown[] }) {
+  if (!condiciones.length) return null;
   return (
-    <View style={{ marginTop: 6 }}>
-      {condiciones.length > 0 && (
-        <>
-          {/* El título viaja con la primera condición: nunca queda solo al pie de la hoja. */}
-          <View wrap={false}>
-            <Text style={{ color: AZUL, fontSize: 10, marginBottom: 4 }}>Términos y Condiciones</Text>
-            {condiciones.slice(0, 1).map((c, i) => (
-              <Condicion key={i} c={c} />
-            ))}
-          </View>
-          {condiciones.slice(1).map((c, i) => (
-            <Condicion key={i} c={c} />
-          ))}
-        </>
-      )}
-      {/* Firma del ejecutivo de la cuenta (2026-10-13). */}
-      <View style={{ marginTop: 28, alignItems: 'center' }} wrap={false}>
-        <Text style={{ letterSpacing: 2 }}>ATENTAMENTE</Text>
-        <View style={{ marginTop: 34, width: 230, borderTopWidth: 0.8, borderColor: '#000', paddingTop: 3 }}>
-          <Text style={[s.negrita, s.centro]}>{firma.nombre}</Text>
-          {firma.puesto && <Text style={[s.negrita, s.centro]}>{firma.puesto.toUpperCase()}</Text>}
-          {firma.correo && <Text style={[s.centro, { fontSize: 8.5 }]}>{firma.correo}</Text>}
-          {firma.telefono && <Text style={[s.centro, { fontSize: 8.5 }]}>Tel. {firma.telefono}</Text>}
+    <>
+      <Caja inicio fin={condiciones.length === 1}>
+        <Text style={[s.tituloSeccion, { color: AZUL }]}>Términos y Condiciones</Text>
+        <Condicion c={condiciones[0]} />
+      </Caja>
+      {condiciones.slice(1).map((c, i) => (
+        <Caja key={i} fin={i === condiciones.length - 2}>
+          <Condicion c={c} />
+        </Caja>
+      ))}
+    </>
+  );
+}
+
+const iniciales = (nombre: string) =>
+  nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((x) => x[0]?.toUpperCase() ?? '')
+    .join('');
+
+/** Al final: «ATENTAMENTE» y la tarjeta del ejecutivo de la cuenta (2026-10-13). */
+function TarjetaEjecutivo({ firma }: { firma: DatosPdf['firma'] }) {
+  if (!firma.nombre) return null;
+  const contacto = [firma.correo, firma.telefono && `Tel. ${firma.telefono}`].filter(Boolean).join('   ·   ');
+  return (
+    <View wrap={false} style={{ marginTop: 22, alignItems: 'center', fontSize: 9, lineHeight: 1.3 }}>
+      <Text style={{ letterSpacing: 3, fontSize: 8.5, color: GRIS }}>ATENTAMENTE</Text>
+      <View
+        style={{
+          marginTop: 10,
+          width: 330,
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: 'white',
+          borderWidth: 0.6,
+          borderColor: LINEA,
+          borderLeftWidth: 4,
+          borderLeftColor: AZUL,
+          borderRadius: RADIO_CAJA,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+        }}
+      >
+        <View
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            backgroundColor: INDIGO,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>{iniciales(firma.nombre)}</Text>
+        </View>
+        <View style={{ marginLeft: 12, flex: 1 }}>
+          <Etiqueta>SU EJECUTIVO DE CUENTA</Etiqueta>
+          <Text style={{ fontSize: 12, lineHeight: 1.3, fontWeight: 'bold', color: INDIGO, marginTop: 2 }}>
+            {firma.nombre}
+          </Text>
+          {firma.puesto && <Text style={{ fontSize: 8.5, color: '#3a3a44' }}>{firma.puesto}</Text>}
+          {contacto && <Text style={{ fontSize: 8.5, color: AZUL, marginTop: 3 }}>{contacto}</Text>}
         </View>
       </View>
     </View>

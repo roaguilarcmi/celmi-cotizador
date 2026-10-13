@@ -10,7 +10,7 @@ import {
 } from '@/lib/datos';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { TIPOS_OPORTUNIDAD } from '@/lib/tipos-oportunidad';
-import { conVigencia } from '@/lib/vigencia';
+import { conVigencia, textoVigencia } from '@/lib/vigencia';
 
 /**
  * Todo lo que lleva el PDF de la cotización (Fase 4 · C), ya calculado y en texto. Se lee con la sesión de quien lo
@@ -26,6 +26,8 @@ export interface DatosPdf {
   condiciones: unknown[];
   vistaPrevia: boolean;
   cancelada: boolean;
+  /** «20 de octubre de 2026, 16:30 h» (la fija quien autoriza). */
+  vigencia: string;
   /** Firma: el ejecutivo de la cuenta (2026-10-13). */
   firma: { nombre: string; puesto: string; correo: string; telefono: string };
 }
@@ -271,6 +273,7 @@ export async function armarDatosPdf(
       condiciones: condiciones.map((c) =>
         limpiarContenido(conVigencia(c.contenido, revision.vigencia_hasta)),
       ),
+      vigencia: textoVigencia(revision.vigencia_hasta),
       firma: {
         nombre: aWinAnsi(op?.ejecutivo?.nombre ?? ''),
         puesto: aWinAnsi(op?.ejecutivo?.puesto ?? ''),
