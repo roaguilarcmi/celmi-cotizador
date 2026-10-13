@@ -12,6 +12,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'Alejandro Bonilla Becerril',
     correo: 'alejandro.bonilla@celmi.com.mx',
     puesto: 'Gerente General',
+    telefono: '',
     rolId: 'administrador',
     activo: true,
     con2fa: true,
@@ -22,6 +23,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'Rodrigo Rivera Aguilar',
     correo: 'rodrigo.aguilar@celmi.com.mx',
     puesto: 'Preventa',
+    telefono: '',
     rolId: 'administrador',
     activo: true,
     con2fa: true,
@@ -32,6 +34,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'Jorge Luis Salguero Ramírez',
     correo: 'jorge.salguero@celmi.com.mx',
     puesto: 'Preventa',
+    telefono: '',
     rolId: 'ejecutivo',
     activo: true,
     con2fa: true,
@@ -42,6 +45,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'Fabiola Reyes Hernández',
     correo: 'fabiola.reyes@celmi.com.mx',
     puesto: 'Desarrollo de negocios',
+    telefono: '',
     rolId: 'ejecutivo',
     activo: true,
     con2fa: false,
@@ -52,6 +56,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'Jhovanny Sánchez Nicolás',
     correo: 'jhovanny.sanchez@celmi.com.mx',
     puesto: 'Desarrollo de negocios',
+    telefono: '',
     rolId: 'cotizador',
     activo: true,
     con2fa: true,
@@ -62,6 +67,7 @@ const DEMO: FilaUsuario[] = [
     nombre: 'César Mendoza Ramos',
     correo: 'cesar.mendoza@celmi.com.mx',
     puesto: 'Desarrollo de negocios',
+    telefono: '',
     rolId: 'ejecutivo',
     activo: false,
     con2fa: false,
@@ -91,7 +97,7 @@ export default async function Usuarios() {
 
   const supabase = await clienteServidor();
   const [perfiles, roles, accesos] = await Promise.all([
-    supabase.from('perfiles').select('id, nombre, correo, puesto, rol_id, activo').order('nombre'),
+    supabase.from('perfiles').select('id, nombre, correo, puesto, telefono, rol_id, activo').order('nombre'),
     supabase.from('roles').select('id, nombre').order('nombre'),
     supabase
       .from('accesos')
@@ -112,6 +118,7 @@ export default async function Usuarios() {
     nombre: string;
     correo: string;
     puesto: string;
+    telefono: string;
     rol_id: string;
     activo: boolean;
   }[];
@@ -124,6 +131,7 @@ export default async function Usuarios() {
         nombre: p.nombre,
         correo: p.correo,
         puesto: p.puesto,
+        telefono: p.telefono,
         rolId: p.rol_id,
         activo: p.activo,
         con2fa: (data?.factors ?? []).some((f) => f.status === 'verified'),

@@ -6,24 +6,29 @@ import type { DatosPdf, LineaPdf, OpcionPdf, PropuestaPdf } from './datos-pdf';
 import { LOGO_CELMI } from './logo';
 
 /**
- * PDF de la cotización (Fase 4 · C; diseño B aprobado 2026-10-12). Todo es texto real (Helvetica, fuente estándar
- * de PDF: se puede seleccionar y buscar) y el logo es vector. Membrete del formato de CELMI: franjas índigo arriba y
- * abajo, triángulos azules en las esquinas y pie con los datos de la empresa en cada hoja.
+ * PDF de la cotización (Fase 4 · C; diseño B aprobado 2026-10-12, ajustes 2026-10-13). Todo es texto real (Helvetica,
+ * fuente estándar de PDF: se puede seleccionar y buscar) y el logo es vector. Membrete como el formato de CELMI:
+ * franja índigo con el extremo inclinado y triángulo azul de dos tonos en la esquina (arriba a la derecha y, al
+ * revés, abajo a la izquierda), arco tenue del logotipo al fondo y pie con los datos de la empresa en cada hoja.
  */
 
 // Sin guiones de división de palabras («HÁ-BILES»): las palabras pasan completas a la siguiente línea.
 Font.registerHyphenationCallback((palabra) => [palabra]);
 
 const INDIGO = '#29235C';
+const INDIGO_MEDIO = '#3E3880';
 const AZUL = '#0064EC';
+const AZUL_CLARO = '#3D8DFF';
 const GRIS = '#6b6b75';
-const LINEA = '#d9d9e3';
-const SUAVE = '#f3f3f7';
+const LINEA = '#dcdce6';
+const CEBRA = '#f7f7fb';
+const RESALTE = '#EAF1FE';
+const RADIO = 4;
 
 const s = StyleSheet.create({
   pagina: {
-    paddingTop: 118,
-    paddingBottom: 92,
+    paddingTop: 122,
+    paddingBottom: 96,
     paddingHorizontal: 46,
     fontFamily: 'Helvetica',
     fontSize: 9,
@@ -33,25 +38,96 @@ const s = StyleSheet.create({
   derecha: { textAlign: 'right' },
   centro: { textAlign: 'center' },
   negrita: { fontWeight: 'bold' },
-  th: {
-    backgroundColor: INDIGO,
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 7,
-    textAlign: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 3,
-  },
-  td: { paddingVertical: 4, paddingHorizontal: 4, fontSize: 8, borderBottomWidth: 0.6, borderColor: LINEA },
   leyenda: { marginTop: 6, textAlign: 'center', fontSize: 8, fontWeight: 'bold' },
+  tituloSeccion: { fontSize: 10, fontWeight: 'bold', color: INDIGO, marginBottom: 5 },
+});
+
+// ───────────── Tabla con el mismo estilo en precios, totales y financiamiento (2026-10-13) ─────────────
+
+/** Celda de encabezado: índigo, texto blanco centrado en ambos sentidos. */
+function Th({
+  children,
+  ancho,
+  primera,
+  ultima,
+  fondo = INDIGO,
+  tam = 7,
+  radio = true,
+}: {
+  children: ReactNode;
+  ancho: string | number;
+  primera?: boolean;
+  ultima?: boolean;
+  fondo?: string;
+  tam?: number;
+  /** Esquinas superiores redondeadas (sólo el primer renglón de encabezado). */
+  radio?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        width: ancho,
+        backgroundColor: fondo,
+        justifyContent: 'center',
+        paddingVertical: 4,
+        paddingHorizontal: 3,
+        borderRightWidth: ultima ? 0 : 0.6,
+        borderColor: '#ffffff55',
+        borderTopLeftRadius: radio && primera ? RADIO : 0,
+        borderTopRightRadius: radio && ultima ? RADIO : 0,
+      }}
+    >
+      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: tam, textAlign: 'center' }}>
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+/** Renglón del cuerpo: bordes sutiles a los lados y abajo; cebra opcional; esquinas redondeadas en el último. */
+const renglon = (cebra: boolean, ultimo: boolean): Style => ({
+  flexDirection: 'row',
+  borderLeftWidth: 0.6,
+  borderRightWidth: 0.6,
+  borderBottomWidth: 0.6,
+  borderColor: LINEA,
+  backgroundColor: cebra ? CEBRA : 'white',
+  borderBottomLeftRadius: ultimo ? RADIO : 0,
+  borderBottomRightRadius: ultimo ? RADIO : 0,
+});
+
+/** Celda del cuerpo con separador vertical sutil. */
+const td = (ancho: string | number, ultima = false, extra: Style = {}): Style => ({
+  width: ancho,
+  paddingVertical: 4,
+  paddingHorizontal: 5,
+  fontSize: 8,
+  borderRightWidth: ultima ? 0 : 0.6,
+  borderColor: LINEA,
+  justifyContent: 'center',
+  ...extra,
 });
 
 /** Ancho de cada columna de la tabla de bienes (suma 100 %). */
 const COLS = ['40%', '9%', '11%', '7%', '8%', '12.5%', '12.5%'] as const;
+const ENCABEZADOS = [
+  'DESCRIPCIÓN',
+  'MARCA',
+  'TIEMPO DE ENTREGA',
+  'UNIDAD',
+  'CANTIDAD',
+  'PRECIO UNITARIO SIN IVA',
+  'SUBTOTAL SIN IVA',
+];
 
 export function CotizacionPdf({ d }: { d: DatosPdf }) {
   const principales = d.propuestas.filter((p) => !p.esAdicional);
   const adicionales = d.propuestas.filter((p) => p.esAdicional);
+  const destinatario = [
+    [d.destinatario.tratamiento, d.destinatario.nombre].filter(Boolean).join(' '),
+    d.destinatario.puesto,
+    d.destinatario.empresa,
+  ].filter((x) => x.trim().length > 0);
   return (
     <Document
       title={d.folio ? `Cotización ${d.folio}` : 'Vista previa de cotización'}
@@ -71,19 +147,14 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
           </Text>
         </View>
 
-        <View style={{ marginBottom: 10 }}>
-          {[
-            [d.destinatario.tratamiento, d.destinatario.nombre].filter(Boolean).join(' '),
-            d.destinatario.puesto,
-            d.destinatario.empresa,
-          ]
-            .filter((x) => x.trim().length > 0)
-            .map((x) => (
-              <Text key={x} style={s.negrita}>
-                {x.toUpperCase()}
-              </Text>
-            ))}
-          <Text style={[s.negrita, { letterSpacing: 2 }]}>PRESENTE</Text>
+        <View style={{ marginBottom: 12 }}>
+          {destinatario.map((x) => (
+            <Text key={x} style={s.negrita}>
+              {x.toUpperCase()}
+            </Text>
+          ))}
+          {/* Separado del destinatario con más interlineado (2026-10-13). */}
+          <Text style={[s.negrita, { letterSpacing: 2, marginTop: 7 }]}>PRESENTE</Text>
         </View>
 
         <Text style={{ marginBottom: 10 }}>
@@ -108,7 +179,7 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
           <Propuesta key={`a${i}`} p={p} titulo={p.nombre || 'Adicionales'} />
         ))}
 
-        <Condiciones condiciones={d.condiciones} />
+        <Condiciones condiciones={d.condiciones} firma={d.firma} />
       </Page>
     </Document>
   );
@@ -117,42 +188,52 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
 const unir = (xs: string[]) =>
   xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} y ${xs.at(-1)}`;
 
-/** Franjas, triángulos, logo y pie: fijos en cada hoja. */
+/** Membrete fijo en cada hoja, con las formas del formato actual de CELMI (2026-10-13). Hoja carta: 612 × 792 pt. */
 function Membrete() {
+  // Arco derecho del isotipo (el último trazo del logo), muy tenue, como fondo.
+  const arco = LOGO_CELMI.at(-1);
   return (
     <>
-      <View
-        fixed
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 16, backgroundColor: INDIGO }}
-      />
+      {arco && (
+        <Svg
+          fixed
+          style={{ position: 'absolute', top: 300, right: -70, width: 300, height: 290 }}
+          viewBox="23 0 31 30"
+        >
+          <Path d={arco.d} fill="#edf1f9" />
+        </Svg>
+      )}
       <Svg
         fixed
-        style={{ position: 'absolute', top: 0, right: 0, width: 110, height: 66 }}
-        viewBox="0 0 110 66"
+        style={{ position: 'absolute', top: 0, left: 0, width: 612, height: 84 }}
+        viewBox="0 0 612 84"
       >
-        <Polygon points="20,0 110,0 110,66" fill={AZUL} />
+        {/* Franja índigo con el extremo inclinado. */}
+        <Polygon points="0,0 470,0 498,22 0,22" fill={INDIGO} />
+        {/* Triángulo azul de dos tonos en la esquina. */}
+        <Polygon points="486,0 612,0 612,84" fill={AZUL} />
+        <Polygon points="486,0 524,0 612,58 612,84" fill={AZUL_CLARO} />
       </Svg>
-      <View fixed style={{ position: 'absolute', top: 34, left: 46 }}>
-        <Svg viewBox="0 0 168 30" style={{ width: 180, height: 32 }}>
+      <Svg
+        fixed
+        style={{ position: 'absolute', bottom: 0, left: 0, width: 612, height: 84 }}
+        viewBox="0 0 612 84"
+      >
+        {/* Lo mismo, girado: triángulo abajo a la izquierda y franja hacia la derecha. */}
+        <Polygon points="612,84 142,84 114,62 612,62" fill={INDIGO} />
+        <Polygon points="126,84 0,84 0,0" fill={AZUL} />
+        <Polygon points="126,84 88,84 0,26 0,0" fill={AZUL_CLARO} />
+      </Svg>
+      <View fixed style={{ position: 'absolute', top: 38, left: 46 }}>
+        <Svg viewBox="0 0 168 30" style={{ width: 186, height: 33 }}>
           {LOGO_CELMI.map((p, i) => (
             <Path key={i} d={p.d} fill={p.fill} />
           ))}
         </Svg>
-        <Text style={{ marginTop: 4, fontSize: 7.5, color: INDIGO }}>
+        <Text style={{ marginTop: 5, fontSize: 7.5, color: INDIGO }}>
           Integramos Soluciones, Transformamos Empresas y Entidades Gubernamentales.
         </Text>
       </View>
-      <Svg
-        fixed
-        style={{ position: 'absolute', bottom: 0, left: 0, width: 110, height: 66 }}
-        viewBox="0 0 110 66"
-      >
-        <Polygon points="0,0 90,66 0,66" fill={AZUL} />
-      </Svg>
-      <View
-        fixed
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 16, backgroundColor: INDIGO }}
-      />
       <View fixed style={{ position: 'absolute', bottom: 30, left: 0, right: 0 }}>
         <Text style={{ textAlign: 'center', fontSize: 7.5, color: GRIS, lineHeight: 1.35 }}>
           CELMILENIUM S.A. DE C.V.{'\n'}Plaza Juárez No. 116 Col. Centro, C.P. 42000, Pachuca, Hidalgo,
@@ -198,42 +279,16 @@ function Propuesta({ p, titulo }: { p: PropuestaPdf; titulo: string | null }) {
         </Text>
       )}
       <View style={{ flexDirection: 'row' }} wrap={false}>
-        {[
-          'DESCRIPCIÓN',
-          'MARCA',
-          'TIEMPO DE ENTREGA',
-          'UNIDAD',
-          'CANTIDAD',
-          'PRECIO UNITARIO SIN IVA',
-          'SUBTOTAL SIN IVA',
-        ].map((h, i) => (
-          <Text
-            key={h}
-            style={[s.th, { width: COLS[i], borderLeftWidth: i ? 0.6 : 0, borderColor: 'white' }]}
-          >
+        {ENCABEZADOS.map((h, i) => (
+          <Th key={h} ancho={COLS[i] ?? 0} primera={i === 0} ultima={i === ENCABEZADOS.length - 1}>
             {h}
-          </Text>
+          </Th>
         ))}
       </View>
       {p.lineas.map((l, i) => (
-        <FilaBien key={i} l={l} />
+        <FilaBien key={i} l={l} cebra={i % 2 === 1} ultima={i === p.lineas.length - 1} />
       ))}
-      <View style={{ alignItems: 'flex-end', marginTop: 2 }} wrap={false}>
-        {(
-          [
-            ['SUBTOTAL', p.subtotal],
-            ['IVA', p.iva],
-            ['TOTAL', p.total],
-          ] as const
-        ).map(([n, v]) => (
-          <View key={n} style={{ flexDirection: 'row' }}>
-            <Text style={[s.td, s.negrita, s.centro, { width: 70 }]}>{n}</Text>
-            <Text style={[s.td, s.derecha, { width: 86 }, n === 'TOTAL' ? s.negrita : {}]}>
-              {formatearMXN(v)}
-            </Text>
-          </View>
-        ))}
-      </View>
+      <Totales p={p} />
       <Text style={{ marginTop: 8, textAlign: 'center', fontSize: 8 }}>
         TOTAL CON LETRA: {p.totalConLetra}
       </Text>
@@ -243,11 +298,12 @@ function Propuesta({ p, titulo }: { p: PropuestaPdf; titulo: string | null }) {
   );
 }
 
-function FilaBien({ l }: { l: LineaPdf }) {
-  const celda = (i: number, extra: Style = {}) => [s.td, { width: COLS[i] }, extra];
+function FilaBien({ l, cebra, ultima }: { l: LineaPdf; cebra: boolean; ultima: boolean }) {
+  const ultimaCol = COLS.length - 1;
+  const celda = (i: number, extra: Style = {}) => td(COLS[i] ?? 0, i === ultimaCol, extra);
   return (
-    <View style={{ flexDirection: 'row' }} wrap={false}>
-      <View style={celda(0)}>
+    <View style={renglon(cebra, ultima)} wrap={false}>
+      <View style={celda(0, { justifyContent: 'flex-start' })}>
         <Enriquecido
           contenido={l.descripcion}
           respaldo={l.descripcionTexto}
@@ -255,24 +311,120 @@ function FilaBien({ l }: { l: LineaPdf }) {
           tamano={8}
         />
       </View>
-      <Text style={celda(1, s.centro)}>{l.marca}</Text>
-      <Text style={celda(2, s.centro)}>{l.entrega}</Text>
-      <Text style={celda(3, s.centro)}>{l.unidad}</Text>
-      <Text style={celda(4, s.centro)}>{l.cantidad}</Text>
-      <Text style={celda(5, s.derecha)}>{formatearMXN(l.unitario)}</Text>
-      <Text style={celda(6, s.derecha)}>{formatearMXN(l.importe)}</Text>
+      <View style={celda(1)}>
+        <Text style={s.centro}>{l.marca}</Text>
+      </View>
+      <View style={celda(2)}>
+        <Text style={s.centro}>{l.entrega}</Text>
+      </View>
+      <View style={celda(3)}>
+        <Text style={s.centro}>{l.unidad}</Text>
+      </View>
+      <View style={celda(4)}>
+        <Text style={s.centro}>{l.cantidad}</Text>
+      </View>
+      <View style={celda(5)}>
+        <Text style={s.derecha}>{formatearMXN(l.unitario)}</Text>
+      </View>
+      <View style={celda(6)}>
+        <Text style={s.derecha}>{formatearMXN(l.importe)}</Text>
+      </View>
     </View>
   );
 }
 
-const montoOGuion = (v: bigint | null) => (v === null ? '—' : formatearMXN(v));
+/** Subtotal, IVA y total: mismo estilo que la tabla, alineados con las dos últimas columnas. */
+function Totales({ p }: { p: PropuestaPdf }) {
+  const filas = [
+    ['SUBTOTAL', p.subtotal],
+    ['IVA', p.iva],
+    ['TOTAL', p.total],
+  ] as const;
+  return (
+    <View style={{ alignItems: 'flex-end', marginTop: 6 }} wrap={false}>
+      <View style={{ width: '25%', borderWidth: 0.6, borderColor: LINEA, borderRadius: RADIO }}>
+        {filas.map(([n, v], i) => {
+          const total = n === 'TOTAL';
+          return (
+            <View
+              key={n}
+              style={{
+                flexDirection: 'row',
+                borderBottomWidth: i < filas.length - 1 ? 0.6 : 0,
+                borderColor: LINEA,
+                backgroundColor: total ? INDIGO : i % 2 ? CEBRA : 'white',
+                borderBottomLeftRadius: total ? RADIO : 0,
+                borderBottomRightRadius: total ? RADIO : 0,
+                borderTopLeftRadius: i === 0 ? RADIO : 0,
+                borderTopRightRadius: i === 0 ? RADIO : 0,
+              }}
+            >
+              <Text
+                style={{
+                  width: '50%',
+                  paddingVertical: 4,
+                  paddingHorizontal: 5,
+                  fontSize: 8,
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  color: total ? 'white' : '#1d1d1f',
+                  borderRightWidth: 0.6,
+                  borderColor: total ? '#ffffff55' : LINEA,
+                }}
+              >
+                {n}
+              </Text>
+              <Text
+                style={{
+                  width: '50%',
+                  paddingVertical: 4,
+                  paddingHorizontal: 5,
+                  fontSize: 8,
+                  textAlign: 'right',
+                  fontWeight: total ? 'bold' : 'normal',
+                  color: total ? 'white' : '#1d1d1f',
+                }}
+              >
+                {formatearMXN(v)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ───────────── Financiamiento ─────────────
+
+const NADA = '—';
+const montoOGuion = (v: bigint | null) => (v === null ? NADA : formatearMXN(v));
+
+const FILAS_FIN: [string, (o: OpcionPdf) => string][] = [
+  ['Financiera', (o) => o.financiera || NADA],
+  ['Gastos iniciales', (o) => montoOGuion(o.gastosIniciales)],
+  ['Pago de los equipos', (o) => montoOGuion(o.pago)],
+  ['Seguro', (o) => montoOGuion(o.seguro)],
+  ['Factor', (o) => o.factor ?? NADA],
+  [
+    'Opción de compra',
+    (o) =>
+      o.opcionCompra
+        ? `${formatearMXN(o.opcionCompra.monto)}${o.opcionCompra.pct ? ` (${o.opcionCompra.pct} %)` : ''}`
+        : NADA,
+  ],
+  ['Tasa anual', (o) => o.tasa ?? NADA],
+];
+
+/** Sólo los conceptos que aparecen en al menos una opción (2026-10-13). */
+const filasConDatos = (ops: OpcionPdf[]) => FILAS_FIN.filter(([, v]) => ops.some((o) => v(o) !== NADA));
 
 /** Diseño B: tabla comparativa con 2 o más opciones; diseño C (tarjeta) con una sola (2026-10-12). */
 function Financiamiento({ p }: { p: PropuestaPdf }) {
   const ops = p.financiamiento;
   return (
     <View style={{ marginTop: 12 }} wrap={false}>
-      <Text style={{ fontSize: 10, fontWeight: 'bold', color: INDIGO, marginBottom: 5 }}>
+      <Text style={s.tituloSeccion}>
         Opciones de financiamiento · valor de los equipos {formatearMXN(p.valorEquipos)} sin IVA
       </Text>
       {ops.length === 1 && ops[0] ? <Tarjeta o={ops[0]} /> : <Comparativo ops={ops} />}
@@ -284,110 +436,141 @@ function Financiamiento({ p }: { p: PropuestaPdf }) {
   );
 }
 
-const FILAS_FIN: [string, (o: OpcionPdf) => string][] = [
-  ['Financiera', (o) => o.financiera || '—'],
-  ['Gastos iniciales', (o) => montoOGuion(o.gastosIniciales)],
-  ['Pago de los equipos', (o) => montoOGuion(o.pago)],
-  ['Seguro', (o) => montoOGuion(o.seguro)],
-  ['Factor', (o) => o.factor ?? '—'],
-  [
-    'Opción de compra',
-    (o) =>
-      o.opcionCompra
-        ? `${formatearMXN(o.opcionCompra.monto)}${o.opcionCompra.pct ? ` (${o.opcionCompra.pct} %)` : ''}`
-        : '—',
-  ],
-  ['Tasa anual', (o) => o.tasa ?? '—'],
-];
+const TIPO_CORTO: Record<string, string> = { vjm: 'Puro (VJM)', fpo: 'Financiero (FPO)' };
+/** Dentro de cada plazo, primero el puro y luego el financiero (como el formato actual). */
+const ORDEN_TIPO = (t: string | null) => (t === 'vjm' ? 0 : t === 'fpo' ? 1 : 2);
 
-function Comparativo({ ops }: { ops: OpcionPdf[] }) {
-  const ancho = `${(100 - 24) / ops.length}%`;
+/**
+ * Comparativa con el estilo de la tabla de precios, **agrupada por plazo** (2026-10-13): un encabezado por plazo que
+ * abarca sus opciones, un separador más marcado entre plazos y un tinte alterno por grupo, para comparar peras con
+ * peras.
+ */
+function Comparativo({ ops: originales }: { ops: OpcionPdf[] }) {
+  const ops = [...originales].sort(
+    (a, b) => a.plazoMeses - b.plazoMeses || ORDEN_TIPO(a.tipo) - ORDEN_TIPO(b.tipo),
+  );
+  const grupos = [...new Set(ops.map((o) => o.plazoMeses))].map((plazo) => ({
+    plazo,
+    ops: ops.filter((o) => o.plazoMeses === plazo),
+  }));
+  const filas = filasConDatos(ops);
+  const etiqueta = 22;
+  const ancho = (100 - etiqueta) / ops.length;
   const tam = ops.length > 4 ? 7 : 8;
+  // Por cada opción: si empieza un grupo (separador) y si su grupo va tintado.
+  const meta = grupos.flatMap((g, gi) =>
+    g.ops.map((o, j) => ({ o, inicio: j === 0 && gi > 0, tinte: gi % 2 === 1 })),
+  );
+  const separador = (inicio: boolean): Style =>
+    inicio ? { borderLeftWidth: 1.6, borderLeftColor: '#b9b9cc' } : {};
+
   return (
-    <View wrap={false}>
+    <View>
+      {/* Encabezado por plazo. */}
       <View style={{ flexDirection: 'row' }}>
-        <View style={{ width: '24%' }} />
-        {ops.map((o, i) => (
-          <View
-            key={i}
-            style={{
-              width: ancho,
-              backgroundColor: INDIGO,
-              padding: 4,
-              borderLeftWidth: 1.5,
-              borderColor: 'white',
-            }}
-          >
-            <Text style={{ color: 'white', fontSize: tam, textAlign: 'center' }}>{o.titulo}</Text>
-            <Text style={{ color: 'white', fontSize: tam + 2, fontWeight: 'bold', textAlign: 'center' }}>
-              {o.plazo}
-            </Text>
+        <Th ancho={`${etiqueta}%`} primera fondo={INDIGO}>
+          PLAZO
+        </Th>
+        {grupos.map((g, gi) => (
+          <Th key={g.plazo} ancho={`${ancho * g.ops.length}%`} ultima={gi === grupos.length - 1} tam={9}>
+            {`${g.plazo} MESES`}
+          </Th>
+        ))}
+      </View>
+      {/* Encabezado por opción (esquema). */}
+      <View style={{ flexDirection: 'row' }}>
+        <Th ancho={`${etiqueta}%`} fondo={INDIGO_MEDIO} radio={false}>
+          ESQUEMA
+        </Th>
+        {meta.map(({ o, inicio }, i) => (
+          <View key={i} style={[{ width: `${ancho}%` }, separador(inicio)]}>
+            <Th ancho="100%" ultima={i === meta.length - 1} fondo={INDIGO_MEDIO} radio={false}>
+              {(o.tipo && TIPO_CORTO[o.tipo]) || o.titulo}
+            </Th>
           </View>
         ))}
       </View>
-      {FILAS_FIN.map(([n, v]) => (
-        <View key={n} style={{ flexDirection: 'row' }}>
-          <Text style={[s.td, s.negrita, { width: '24%', fontSize: tam }]}>{n}</Text>
-          {ops.map((o, i) => (
-            <Text key={i} style={[s.td, s.centro, { width: ancho, fontSize: tam }]}>
-              {v(o)}
-            </Text>
+      {filas.map(([n, v], r) => (
+        <View key={n} style={renglon(r % 2 === 1, false)}>
+          <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
+            <Text style={[s.negrita, { fontSize: tam }]}>{n}</Text>
+          </View>
+          {meta.map(({ o, inicio, tinte }, i) => (
+            <View
+              key={i}
+              style={[
+                td(`${ancho}%`, i === meta.length - 1, { backgroundColor: tinte ? '#f2f5fc' : undefined }),
+                separador(inicio),
+              ]}
+            >
+              <Text style={[s.centro, { fontSize: tam }]}>{v(o)}</Text>
+            </View>
           ))}
         </View>
       ))}
-      <View style={{ flexDirection: 'row' }}>
-        <Text style={[s.td, s.negrita, { width: '24%', fontSize: tam, borderBottomWidth: 0 }]}>
-          Pago {ops[0]?.frecuencia ?? 'mensual'} total
-        </Text>
-        {ops.map((o, i) => (
-          <Text
+      <View style={renglon(false, true)}>
+        <View style={td(`${etiqueta}%`, false, { backgroundColor: CEBRA })}>
+          <Text style={[s.negrita, { fontSize: tam }]}>Pago {ops[0]?.frecuencia ?? 'mensual'} total</Text>
+        </View>
+        {meta.map(({ o, inicio }, i) => (
+          <View
             key={i}
-            style={[
-              s.td,
-              s.centro,
-              {
-                width: ancho,
-                fontSize: tam + 2,
-                fontWeight: 'bold',
-                color: AZUL,
-                backgroundColor: '#E8F0FD',
-                borderBottomWidth: 0,
-              },
-            ]}
+            style={[td(`${ancho}%`, i === meta.length - 1, { backgroundColor: RESALTE }), separador(inicio)]}
           >
-            {o.total === null ? '—' : `${formatearMXN(o.total)} + IVA`}
-          </Text>
+            <Text style={[s.centro, { fontSize: tam + 1.5, fontWeight: 'bold', color: AZUL }]}>
+              {o.total === null ? NADA : formatearMXN(o.total)}
+            </Text>
+            {o.total !== null && <Text style={[s.centro, { fontSize: tam - 1, color: GRIS }]}>+ IVA</Text>}
+          </View>
         ))}
       </View>
     </View>
   );
 }
 
+/** Una sola opción: tarjeta con la mensualidad en grande y su detalle (mismos bordes que las tablas). */
 function Tarjeta({ o }: { o: OpcionPdf }) {
+  const filas = filasConDatos([o]);
+  const mitad = Math.ceil(filas.length / 2);
   return (
-    <View
-      style={{
-        borderWidth: 0.8,
-        borderColor: LINEA,
-      }}
-    >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 7, paddingBottom: 2 }}>
-        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{o.titulo}</Text>
-        <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{o.plazo}</Text>
+    <View style={{ borderWidth: 0.6, borderColor: LINEA, borderRadius: RADIO }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          backgroundColor: INDIGO,
+          paddingVertical: 5,
+          paddingHorizontal: 8,
+          borderTopLeftRadius: RADIO,
+          borderTopRightRadius: RADIO,
+        }}
+      >
+        <Text style={{ fontSize: 9, fontWeight: 'bold', color: 'white' }}>{o.titulo}</Text>
+        <Text style={{ fontSize: 9, fontWeight: 'bold', color: 'white' }}>{o.plazo}</Text>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 7, paddingBottom: 6 }}>
+      <View
+        style={{ flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingVertical: 6 }}
+      >
         <Text style={{ fontSize: 16, fontWeight: 'bold', color: AZUL }}>
-          {o.total === null ? '—' : formatearMXN(o.total)}
+          {o.total === null ? NADA : formatearMXN(o.total)}
         </Text>
         <Text style={{ color: GRIS, marginLeft: 4, marginBottom: 2 }}>
           + IVA de pago {o.frecuencia} (equipos + seguro)
         </Text>
       </View>
       {/* Detalle en renglones de anchos fijos (los renglones flexibles confunden el corte de página de react-pdf). */}
-      <View style={{ borderTopWidth: 0.6, borderColor: LINEA, padding: 7, backgroundColor: SUAVE }}>
-        {[0, 1, 2, 3].map((r) => (
+      <View
+        style={{
+          borderTopWidth: 0.6,
+          borderColor: LINEA,
+          paddingVertical: 5,
+          paddingHorizontal: 8,
+          backgroundColor: CEBRA,
+        }}
+      >
+        {Array.from({ length: mitad }, (_, r) => (
           <View key={r} style={{ flexDirection: 'row', paddingVertical: 1.5 }}>
-            {[FILAS_FIN[r], FILAS_FIN[r + 4]].map((fila, c) =>
+            {[filas[r], filas[r + mitad]].map((fila, c) =>
               fila ? (
                 <View
                   key={c}
@@ -412,7 +595,9 @@ function Tarjeta({ o }: { o: OpcionPdf }) {
   );
 }
 
-function Condiciones({ condiciones }: { condiciones: unknown[] }) {
+// ───────────── Condiciones y firma ─────────────
+
+function Condiciones({ condiciones, firma }: { condiciones: unknown[]; firma: DatosPdf['firma'] }) {
   return (
     <View style={{ marginTop: 6 }}>
       {condiciones.length > 0 && (
@@ -430,11 +615,14 @@ function Condiciones({ condiciones }: { condiciones: unknown[] }) {
           ))}
         </>
       )}
+      {/* Firma del ejecutivo de la cuenta (2026-10-13). */}
       <View style={{ marginTop: 28, alignItems: 'center' }} wrap={false}>
         <Text style={{ letterSpacing: 2 }}>ATENTAMENTE</Text>
-        <View style={{ marginTop: 34, width: 200, borderTopWidth: 0.8, borderColor: '#000', paddingTop: 3 }}>
-          <Text style={[s.negrita, s.centro]}>Alejandro Bonilla Becerril</Text>
-          <Text style={[s.negrita, s.centro]}>GERENTE CELMISOLUTIONS</Text>
+        <View style={{ marginTop: 34, width: 230, borderTopWidth: 0.8, borderColor: '#000', paddingTop: 3 }}>
+          <Text style={[s.negrita, s.centro]}>{firma.nombre}</Text>
+          {firma.puesto && <Text style={[s.negrita, s.centro]}>{firma.puesto.toUpperCase()}</Text>}
+          {firma.correo && <Text style={[s.centro, { fontSize: 8.5 }]}>{firma.correo}</Text>}
+          {firma.telefono && <Text style={[s.centro, { fontSize: 8.5 }]}>Tel. {firma.telefono}</Text>}
         </View>
       </View>
     </View>
@@ -479,6 +667,22 @@ function enLinea(nodos: Nodo[] | undefined): ReactNode[] {
   );
 }
 
+/** Viñeta escrita a mano al inicio del párrafo (pegada de Excel o Word: «▪ », «• », «- »…). */
+const VINETA = /^\s*[•·\-–]\s+/;
+
+/**
+ * Un párrafo que empieza con una viñeta escrita se presenta como elemento de lista, con la misma sangría que las
+ * viñetas del editor (2026-10-13: antes la viñeta pegada movía el texto).
+ */
+function sinVineta(n: Nodo): Nodo | null {
+  const primero = n.content?.[0];
+  if (primero?.type !== 'text' || !VINETA.test(primero.text ?? '')) return null;
+  return {
+    ...n,
+    content: [{ ...primero, text: (primero.text ?? '').replace(VINETA, '') }, ...(n.content ?? []).slice(1)],
+  };
+}
+
 /** El sufijo (el SKU en corchetes) se agrega en negritas al final del primer párrafo: el título. */
 function Enriquecido({
   contenido,
@@ -502,27 +706,34 @@ function Enriquecido({
     );
   // El título es el primer párrafo de primer nivel.
   const titulo = bloques.find((b) => b.type === 'paragraph' || b.type === 'heading');
+  const vineta = (contenido: ReactNode, clave: number | string, marca = '•') => (
+    <View key={clave} style={{ flexDirection: 'row', marginLeft: 2 }}>
+      <Text style={{ width: 9, fontSize: tamano }}>{marca}</Text>
+      <View style={{ flex: 1 }}>{contenido}</View>
+    </View>
+  );
   const bloque = (n: Nodo, i: number, nivel = 0): ReactNode => {
     if (n.type === 'paragraph' || n.type === 'heading') {
       const conSufijo = n === titulo && sufijo;
-      return (
+      const limpio = n === titulo ? null : sinVineta(n);
+      const parrafo = (
         <Text key={i} style={{ fontSize: tamano }}>
-          {enLinea(n.content)}
+          {enLinea((limpio ?? n).content)}
           {conSufijo && <Text style={s.negrita}>{sufijo}</Text>}
         </Text>
       );
+      return limpio ? vineta(parrafo, i) : parrafo;
     }
     if (n.type === 'bulletList' || n.type === 'orderedList') {
       return (
-        <View key={i} style={{ marginLeft: nivel ? 8 : 2 }}>
-          {(n.content ?? []).map((item, j) => (
-            <View key={j} style={{ flexDirection: 'row' }}>
-              <Text style={{ width: 9, fontSize: tamano }}>
-                {n.type === 'orderedList' ? `${j + 1}.` : '•'}
-              </Text>
-              <View style={{ flex: 1 }}>{(item.content ?? []).map((c, k) => bloque(c, k, nivel + 1))}</View>
-            </View>
-          ))}
+        <View key={i} style={{ marginLeft: nivel ? 8 : 0 }}>
+          {(n.content ?? []).map((item, j) =>
+            vineta(
+              (item.content ?? []).map((c, k) => bloque(c, k, nivel + 1)),
+              j,
+              n.type === 'orderedList' ? `${j + 1}.` : '•',
+            ),
+          )}
         </View>
       );
     }

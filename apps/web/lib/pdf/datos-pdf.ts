@@ -26,6 +26,8 @@ export interface DatosPdf {
   condiciones: unknown[];
   vistaPrevia: boolean;
   cancelada: boolean;
+  /** Firma: el ejecutivo de la cuenta (2026-10-13). */
+  firma: { nombre: string; puesto: string; correo: string; telefono: string };
 }
 
 export interface LineaPdf {
@@ -43,6 +45,9 @@ export interface LineaPdf {
 export interface OpcionPdf {
   titulo: string;
   plazo: string;
+  /** Para agrupar la comparativa por plazo (2026-10-13). */
+  plazoMeses: number;
+  tipo: 'vjm' | 'fpo' | null;
   financiera: string;
   gastosIniciales: Centavos | null;
   pago: Centavos | null;
@@ -66,6 +71,55 @@ export interface PropuestaPdf {
   totalConLetra: string;
   valorEquipos: Centavos;
   financiamiento: OpcionPdf[];
+}
+
+/**
+ * Texto apto para Helvetica (codificación WinAnsi de los PDF): las viñetas pegadas de Excel o Word («▪», «■», «●»…)
+ * salían como «ª». Se cambian por «•» y se quitan los caracteres que la fuente no tiene (2026-10-13).
+ */
+const EXTRA_WINANSI = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const EQUIVALENTES: Record<string, string> = {
+  '▪': '•',
+  '■': '•',
+  '●': '•',
+  '◾': '•',
+  '◼': '•',
+  '▫': '•',
+  '◦': '•',
+  '○': '•',
+  '➢': '•',
+  '►': '•',
+  '✓': '•',
+  '✔': '•',
+  '→': '->',
+  '≤': '<=',
+  '≥': '>=',
+  '\t': ' ',
+  '\u00a0': ' ',
+};
+export function aWinAnsi(texto: string): string {
+  let r = '';
+  for (const c of texto) {
+    const eq = EQUIVALENTES[c];
+    if (eq !== undefined) r += eq;
+    else if (c.charCodeAt(0) <= 0xff || EXTRA_WINANSI.includes(c)) r += c;
+  }
+  return r;
+}
+
+/** Copia del texto con formato (JSON de Tiptap) con todos sus textos aptos para la fuente. */
+export function limpiarContenido<T>(doc: T): T {
+  const recorrer = (n: unknown): unknown => {
+    if (Array.isArray(n)) return n.map(recorrer);
+    if (n && typeof n === 'object') {
+      const copia: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(n as Record<string, unknown>))
+        copia[k] = k === 'text' && typeof v === 'string' ? aWinAnsi(v) : recorrer(v);
+      return copia;
+    }
+    return n;
+  };
+  return recorrer(doc) as T;
 }
 
 const fechaLarga = new Intl.DateTimeFormat('es-MX', {
@@ -118,6 +172,7 @@ export async function armarDatosPdf(
       oportunidad: {
         cliente: { razon_social: string } | null;
         contacto: { tratamiento: string; nombre: string; puesto: string } | null;
+        ejecutivo: { nombre: string; puesto: string; correo: string; telefono: string } | null;
       } | null;
     }
   ).oportunidad;
@@ -140,11 +195,11 @@ export async function armarDatosPdf(
     const lineas: LineaPdf[] = pres.lineas.map((l) => {
       const pa = partidaDe.get(l.partidaId);
       return {
-        descripcion: pa?.descripcion_contenido ?? null,
-        descripcionTexto: pa?.descripcion ?? '',
-        sku: pa?.sku ?? '',
-        marca: (pa?.marca ?? '').toUpperCase(),
-        entrega: entregaPdf(pa?.entrega ?? ''),
+        descripcion: limpiarContenido(pa?.descripcion_contenido ?? null),
+        descripcionTexto: aWinAnsi(pa?.descripcion ?? ''),
+        sku: aWinAnsi(pa?.sku ?? ''),
+        marca: aWinAnsi((pa?.marca ?? '').toUpperCase()),
+        entrega: aWinAnsi(entregaPdf(pa?.entrega ?? '')),
         unidad: (pa?.unidad_id && unidad.get(pa.unidad_id)) || '',
         cantidad: l.cantidad,
         unitario: l.precioUnitario,
@@ -161,7 +216,9 @@ export async function armarDatosPdf(
         return {
           titulo: f.tipo_arrendamiento ? (TIPOS_ARRENDAMIENTO[f.tipo_arrendamiento] ?? '') : modalidad,
           plazo: `${f.plazo_meses} meses`,
-          financiera: (f.financiera_id && nombreFinanciera.get(f.financiera_id)) || '',
+          plazoMeses: f.plazo_meses,
+          tipo: f.tipo_arrendamiento,
+          financiera: aWinAnsi((f.financiera_id && nombreFinanciera.get(f.financiera_id)) || ''),
           gastosIniciales: centavos(f.gastos_apertura),
           pago,
           seguro,
@@ -178,9 +235,9 @@ export async function armarDatosPdf(
     const t = pres.totales;
     return [
       {
-        nombre: p.nombre,
+        nombre: aWinAnsi(p.nombre),
         esAdicional: p.es_adicional,
-        tipo: p.tipo,
+        tipo: aWinAnsi(p.tipo),
         modalidad,
         lineas,
         subtotal: t.subtotal,
@@ -204,14 +261,22 @@ export async function armarDatosPdf(
       folio: revision.folio,
       lugarFecha: `Pachuca de Soto, Hidalgo, a ${fechaLarga.format(fecha)}`,
       destinatario: {
-        tratamiento: contacto?.tratamiento ?? '',
-        nombre: contacto?.nombre ?? '',
-        puesto: contacto?.puesto ?? '',
-        empresa: op?.cliente?.razon_social ?? '',
+        tratamiento: aWinAnsi(contacto?.tratamiento ?? ''),
+        nombre: aWinAnsi(contacto?.nombre ?? ''),
+        puesto: aWinAnsi(contacto?.puesto ?? ''),
+        empresa: aWinAnsi(op?.cliente?.razon_social ?? ''),
       },
       marcas,
       propuestas,
-      condiciones: condiciones.map((c) => conVigencia(c.contenido, revision.vigencia_hasta)),
+      condiciones: condiciones.map((c) =>
+        limpiarContenido(conVigencia(c.contenido, revision.vigencia_hasta)),
+      ),
+      firma: {
+        nombre: aWinAnsi(op?.ejecutivo?.nombre ?? ''),
+        puesto: aWinAnsi(op?.ejecutivo?.puesto ?? ''),
+        correo: aWinAnsi(op?.ejecutivo?.correo ?? ''),
+        telefono: aWinAnsi(op?.ejecutivo?.telefono ?? ''),
+      },
       vistaPrevia: revision.estado !== 'emitida',
       cancelada: Boolean(revision.cancelada_en),
     },

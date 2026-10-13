@@ -4,7 +4,9 @@ import { useEffect, useState, useTransition, type FormEvent } from 'react';
 import { BotonEnviar, Campo, Mensaje } from '@/components/formulario';
 import { Icon, type IconName } from '@/components/Icon';
 import { Avatar, Boton, Pill, Tarjeta, Titulo2 } from '@/components/ui';
+import { VentanaFlotante, useVentana } from '@/components/VentanaFlotante';
 import {
+  actualizarDatos,
   cambiarEstado,
   cambiarRol,
   darDeAlta,
@@ -18,6 +20,7 @@ export interface FilaUsuario {
   nombre: string;
   correo: string;
   puesto: string;
+  telefono: string;
   rolId: string;
   activo: boolean;
   con2fa: boolean;
@@ -49,6 +52,7 @@ export function UsuariosAdmin({
   demo: boolean;
 }) {
   const [altaAbierta, setAltaAbierta] = useState(false);
+  const [editando, setEditando] = useState<FilaUsuario | null>(null);
   const [resultado, setResultado] = useState<Resultado>({});
   const [pendiente, iniciar] = useTransition();
 
@@ -108,6 +112,12 @@ export function UsuariosAdmin({
             <Campo etiqueta="Nombre completo" name="nombre" required autoComplete="off" />
             <Campo etiqueta="Correo corporativo" name="correo" type="email" required autoComplete="off" />
             <Campo etiqueta="Puesto" name="puesto" autoComplete="off" />
+            <Campo
+              etiqueta="Teléfono (para la firma de cotizaciones)"
+              name="telefono"
+              type="tel"
+              autoComplete="off"
+            />
             <div className="flex flex-col gap-1.5">
               <label htmlFor="rol-alta" className="text-[13px] font-semibold">
                 Rol
@@ -196,6 +206,7 @@ export function UsuariosAdmin({
                           <div className="truncate text-[13px] text-texto-suave">
                             {u.correo}
                             {u.puesto && ` · ${u.puesto}`}
+                            {u.telefono && ` · ${u.telefono}`}
                           </div>
                         </div>
                       </div>
@@ -229,6 +240,12 @@ export function UsuariosAdmin({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex justify-end gap-1.5">
+                        <BotonIcono
+                          icono="herramienta"
+                          etiqueta={`Editar nombre, puesto y teléfono de ${u.nombre} (firma de cotizaciones)`}
+                          deshabilitado={pendiente || demo}
+                          onClick={() => setEditando(u)}
+                        />
                         {!soyYo && (
                           <>
                             <BotonIcono
@@ -266,7 +283,70 @@ export function UsuariosAdmin({
       <p className="mt-3 text-xs text-texto-suave">
         Cada alta, enlace, restablecimiento y cambio de estado queda registrado con quién lo hizo.
       </p>
+
+      {editando && (
+        <VentanaFlotante
+          titulo={`Datos de ${editando.nombre}`}
+          detalle="Aparecen en la firma de las cotizaciones de las que es ejecutivo."
+          esEdicion
+          onCerrar={() => setEditando(null)}
+        >
+          <FormularioDatos
+            usuario={editando}
+            onListo={(r) => {
+              setResultado(r);
+              setEditando(null);
+            }}
+          />
+        </VentanaFlotante>
+      )}
     </div>
+  );
+}
+
+/** Nombre completo, puesto y teléfono: aparecen en la firma de las cotizaciones de la persona (2026-10-13). */
+function FormularioDatos({ usuario, onListo }: { usuario: FilaUsuario; onListo: (r: Resultado) => void }) {
+  const ventana = useVentana();
+  const [error, setError] = useState<string | null>(null);
+  const [pendiente, iniciar] = useTransition();
+  const enviar = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const datos = new FormData(e.currentTarget);
+    iniciar(async () => {
+      const r = await actualizarDatos(usuario.id, datos);
+      if (r.error) setError(r.error);
+      else onListo(r);
+    });
+  };
+  return (
+    <form onSubmit={enviar} className="grid gap-4">
+      <Campo
+        etiqueta="Nombre completo"
+        name="nombre"
+        required
+        defaultValue={usuario.nombre}
+        autoComplete="off"
+      />
+      <Campo etiqueta="Puesto" name="puesto" defaultValue={usuario.puesto} autoComplete="off" />
+      <Campo
+        etiqueta="Teléfono"
+        name="telefono"
+        type="tel"
+        defaultValue={usuario.telefono}
+        autoComplete="off"
+      />
+      {error && <p className="text-xs font-semibold text-peligro">{error}</p>}
+      <div className="flex gap-2.5">
+        <Boton type="submit" variante="primario" icono="guardado" disabled={pendiente}>
+          {pendiente ? 'Guardando…' : 'Guardar'}
+        </Boton>
+        {ventana && (
+          <Boton variante="fantasma" onClick={ventana.intentarCerrar}>
+            Cancelar
+          </Boton>
+        )}
+      </div>
+    </form>
   );
 }
 

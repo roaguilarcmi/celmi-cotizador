@@ -27,7 +27,15 @@ export const altaUsuarioSchema = z.object({
   correo: z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido')),
   nombre: z.string().trim().min(3, 'Escribe el nombre completo').max(120),
   puesto: z.string().trim().max(80).default(''),
+  telefono: z.string().trim().max(40, 'El teléfono es demasiado largo').default(''),
   rol: z.string().trim().min(1, 'Elige un rol'),
+});
+
+/** Datos de la persona que aparecen en la firma de sus cotizaciones (2026-10-13). */
+export const datosUsuarioSchema = z.object({
+  nombre: z.string().trim().min(3, 'Escribe el nombre completo').max(120),
+  puesto: z.string().trim().max(80).default(''),
+  telefono: z.string().trim().max(40, 'El teléfono es demasiado largo').default(''),
 });
 
 export type AltaUsuario = z.infer<typeof altaUsuarioSchema>;

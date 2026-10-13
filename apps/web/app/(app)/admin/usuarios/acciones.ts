@@ -1,6 +1,6 @@
 'use server';
 
-import { altaUsuarioSchema } from '@celmi/validation';
+import { altaUsuarioSchema, datosUsuarioSchema } from '@celmi/validation';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { registrarAcceso } from '@/lib/accesos';
@@ -40,7 +40,7 @@ export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Re
   if (sesion.demo) return { error: 'Disponible al conectar Supabase.' };
   const leido = altaUsuarioSchema.safeParse(Object.fromEntries(datos));
   if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa los datos.' };
-  const { correo, nombre, puesto, rol } = leido.data;
+  const { correo, nombre, puesto, telefono, rol } = leido.data;
   // Antes de crear la cuenta: si no se puede armar el enlace, no se crea.
   const base = await baseDelSitio();
   if (!base) return { error: SIN_SITIO };
@@ -59,7 +59,7 @@ export async function darDeAlta(_previo: Resultado, datos: FormData): Promise<Re
   const supabase = await clienteServidor();
   const { error: e2 } = await supabase
     .from('perfiles')
-    .insert({ id: data.user.id, nombre, correo, puesto, rol_id: rol });
+    .insert({ id: data.user.id, nombre, correo, puesto, telefono, rol_id: rol });
   if (e2) {
     await admin.auth.admin.deleteUser(data.user.id);
     return { error: 'No se pudo registrar el perfil. No se creó la cuenta.' };
@@ -131,4 +131,17 @@ export async function cambiarRol(usuarioId: string, rol: string): Promise<Result
   if (error) return { error: 'No se pudo cambiar el rol.' };
   revalidatePath('/admin/usuarios');
   return { ok: 'Rol actualizado.' };
+}
+
+/** Nombre completo, puesto y teléfono: los datos de la firma de sus cotizaciones (2026-10-13). */
+export async function actualizarDatos(usuarioId: string, datos: FormData): Promise<Resultado> {
+  const sesion = await exigirPermiso(PERMISO);
+  if (sesion.demo) return { error: 'Disponible al conectar Supabase.' };
+  const leido = datosUsuarioSchema.safeParse(Object.fromEntries(datos));
+  if (!leido.success) return { error: leido.error.issues[0]?.message ?? 'Revisa los datos.' };
+  const supabase = await clienteServidor();
+  const { data, error } = await supabase.from('perfiles').update(leido.data).eq('id', usuarioId).select('id');
+  if (error || !data?.length) return { error: 'No se pudieron guardar los datos.' };
+  revalidatePath('/admin/usuarios');
+  return { ok: `Datos de ${leido.data.nombre} guardados.` };
 }
