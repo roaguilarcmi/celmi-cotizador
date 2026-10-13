@@ -4,6 +4,7 @@ import {
   Defs,
   Document,
   Font,
+  G,
   LinearGradient,
   Link,
   Page,
@@ -220,16 +221,8 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
     >
       <Page size="LETTER" style={s.pagina}>
         <LineaSuperior />
-        {/* Gigantografía del isotipo (2026-10-13): detrás, en color sólido claro, para que se vea en cualquier visor. */}
-        <Svg
-          fixed
-          style={{ position: 'absolute', top: 250, right: -150, width: 560, height: 290 }}
-          viewBox="-2 0 58 30"
-        >
-          {ISOTIPO.map((t, i) => (
-            <Path key={i} d={t.d} fill="#e2e5f1" />
-          ))}
-        </Svg>
+        {/* Gigantografía del isotipo: detrás, en colores sólidos claros (visible en cualquier visor). */}
+        <Gigantografia capa="fondo" />
         <Encabezado d={d} />
 
         {todas.map(({ p, titulo }, i) => (
@@ -260,19 +253,34 @@ export function CotizacionPdf({ d }: { d: DatosPdf }) {
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
           />
         </View>
-        {/* …y encima, muy tenue (opacidad por trazo: la del Svg no la respeta react-pdf), para que también se aprecie sobre las tarjetas blancas. */}
-        <Svg
-          fixed
-          style={{ position: 'absolute', top: 250, right: -150, width: 560, height: 290 }}
-          viewBox="-2 0 58 30"
-        >
-          {ISOTIPO.map((t, i) => (
-            <Path key={i} d={t.d} fill={INDIGO} fillOpacity={0.06} />
-          ))}
-        </Svg>
+        {/* …y encima, muy tenue, para que también se aprecie sobre las tarjetas blancas. */}
+        <Gigantografia capa="encima" />
         {(d.vistaPrevia || d.cancelada) && <MarcaDeAgua texto={d.cancelada ? 'CANCELADA' : 'VISTA PREVIA'} />}
       </Page>
     </Document>
+  );
+}
+
+/**
+ * Gigantografía del isotipo (2026-10-13): inclinada y con los colores del logo (arco izquierdo azul oscuro, derecho
+ * azul como el degradado del encabezado). Va en dos capas: «fondo» con tintes claros sólidos detrás del contenido y
+ * «encima» con opacidad por trazo (react-pdf ignora la opacidad del Svg completo).
+ */
+const ANGULO = -18;
+function Gigantografia({ capa }: { capa: 'fondo' | 'encima' }) {
+  const colores = capa === 'fondo' ? ['#dddcea', '#d8e5fb'] : [INDIGO, AZUL];
+  return (
+    <Svg
+      fixed
+      style={{ position: 'absolute', top: 235, right: -95, width: 620, height: 480 }}
+      viewBox="-10 -14 74 58"
+    >
+      <G transform={`rotate(${ANGULO} 27 15)`}>
+        {ISOTIPO.map((t, i) => (
+          <Path key={i} d={t.d} fill={colores[i]} fillOpacity={capa === 'fondo' ? 1 : 0.06} />
+        ))}
+      </G>
+    </Svg>
   );
 }
 
