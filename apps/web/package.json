@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "verificar:consultas": "node --env-file=.env.local scripts/verificar-consultas.ts",
-    "test": "vitest run --dir lib"
+    "test": "vitest run --dir lib",
+    "gen:plantillas": "node scripts/plantillas-excel.ts"
   },
   "dependencies": {
     "@celmi/core": "*",

@@ -433,7 +433,13 @@ export async function listarSolicitudesCancelacion(
 }
 
 export interface CatalogosCotizacion {
-  mayoristas: { id: string; nombre: string; trabaja_arrendamiento: boolean }[];
+  mayoristas: {
+    id: string;
+    nombre: string;
+    trabaja_arrendamiento: boolean;
+    /** Formato para pedir la corrida (2026-10-23); null = formato de CELMI. */
+    formato_arrendamiento: 'ct' | 'ingram' | null;
+  }[];
   unidades: { id: string; nombre: string; abreviatura: string | null }[];
   monedas: { codigo: string; nombre: string }[];
 }

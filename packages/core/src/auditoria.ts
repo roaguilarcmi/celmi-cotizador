@@ -111,6 +111,7 @@ export const MODULOS_AUDITORIA = {
       'revision_tipos_cambio',
       'propuesta_financiamientos',
       'solicitudes_cancelacion',
+      'solicitudes_corrida',
     ],
   },
   oportunidades: {
@@ -133,6 +134,7 @@ export const MODULOS_AUDITORIA = {
       'paquetes_condiciones',
       'paquete_condiciones',
       'configuracion',
+      'categorias_producto',
     ],
   },
 } as const;
@@ -173,6 +175,8 @@ const ENUMS: Record<string, Record<string, string>> = {
     incluida: 'Incluido en el precio',
     prorrateada: 'Cargo prorrateado',
   },
+  formato: { ct: 'Formato de CT', ingram: 'Formato de Ingram', celmi: 'Formato de CELMI' },
+  formato_arrendamiento: { ct: 'CT', ingram: 'Ingram' },
   transaccion_alcance: { todas: 'Todas las partidas', diferentes: 'Sólo las de otro proveedor' },
   residual_capturado: { pct: 'En %', monto: 'En monto' },
   frecuencia: {
@@ -306,6 +310,8 @@ const CAMPOS: Record<string, string> = {
   trabaja_arrendamiento: 'Trabaja arrendamiento',
   aseguradoras: 'Aseguradoras',
   valor: 'Valor',
+  categoria: 'Categoría',
+  formato_arrendamiento: 'Formato de solicitud de arrendamiento',
 };
 
 /** Etiquetas que dependen de la tabla. */
@@ -587,6 +593,7 @@ const CATALOGOS_CON_ARTICULO: Record<string, string> = {
   esquemas_adquisicion: 'el esquema',
   condiciones_comerciales: 'la condición',
   financieras: 'la financiera',
+  categorias_producto: 'la categoría del número de parte',
 };
 
 function etiquetaTabla(tabla: string): string {
@@ -765,6 +772,23 @@ export function narrarAccion(
     });
   if (es('revision_tipos_cambio'))
     return a({ tipo: 'autorizacion', tono: 'neutro', verbo: 'fijó el tipo de cambio de la', objeto: rev });
+  const pedido = es('solicitudes_corrida', 'INSERT');
+  if (pedido) {
+    const plazos = Array.isArray(pedido.despues?.plazos) ? (pedido.despues.plazos as number[]) : [];
+    return a({
+      tipo: 'financiamiento',
+      tono: 'info',
+      verbo: 'generó la solicitud de corrida de la',
+      objeto: rev,
+      contexto: [
+        folioCliente,
+        valorAuditoria('formato', pedido.despues?.formato),
+        plazos.length ? `${plazos.join(', ')} meses` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    });
+  }
   if (revUpd)
     return a({ tipo: 'cotizacion', tono: 'neutro', verbo: 'actualizó los datos de la', objeto: rev });
 
@@ -915,7 +939,7 @@ export function narrarAccion(
   const cat = filas.find((f) => moduloDeTabla(f.tabla) === 'catalogos');
   if (cat) {
     const r = cat.despues ?? cat.antes ?? {};
-    const nombre = String(r.nombre ?? r.codigo ?? r.id ?? '');
+    const nombre = String(r.nombre ?? r.sku ?? r.codigo ?? r.id ?? '');
     const activo = cambio(cat, 'activo') ?? cambio(cat, 'activa');
     const soloOrden = cat.accion === 'UPDATE' && !base.cambios.length && cambio(cat, 'orden');
     const verbo =

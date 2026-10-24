@@ -19,6 +19,8 @@ import {
 import { obtenerSesion } from '@/lib/sesion';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { EditorCotizacion, type Paso } from './EditorCotizacion';
+import { aplicaSolicitud } from '@/lib/solicitud-corrida';
+import { datosPasoSolicitud } from '@/lib/solicitud-corrida-datos';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,17 +30,18 @@ const PASOS: Record<string, Paso> = {
   costos: 1,
   condiciones: 2,
   autorizacion: 3,
-  financiamiento: 4,
-  'vista-previa': 5,
-  emision: 6,
+  solicitud: 4,
+  financiamiento: 5,
+  'vista-previa': 6,
+  emision: 7,
 };
 /** Paso inicial según el estado: capturando, esperando autorización o ya autorizada (financiamiento). */
 const PASO_POR_ESTADO: Record<string, Paso> = {
   borrador: 1,
   rechazada: 1,
   pendiente_autorizacion: 3,
-  autorizada: 4,
-  emitida: 6,
+  autorizada: 5,
+  emitida: 7,
 };
 
 export default async function PaginaCotizacion({
@@ -144,6 +147,17 @@ export default async function PaginaCotizacion({
     }
   }
 
+  // Solicitud de corrida (2026-10-23): arrendamiento y crédito simple con precios autorizados.
+  const datosSolicitud = aplicaSolicitud(revision) ? await datosPasoSolicitud(cotizacion.id, revision) : null;
+  const pedido = paso ? PASOS[paso] : undefined;
+  const pasoInicial: Paso =
+    (pedido === 4 && !datosSolicitud ? 5 : pedido) ??
+    // Recién autorizada: primero la solicitud de corrida (si aún no se ha generado ninguna).
+    (revision.estado === 'autorizada' && datosSolicitud && datosSolicitud.solicitudes.length === 0
+      ? 4
+      : PASO_POR_ESTADO[revision.estado]) ??
+    1;
+
   return (
     <EditorCotizacion
       cotizacion={cotizacion}
@@ -170,6 +184,7 @@ export default async function PaginaCotizacion({
       solicitudesCancelacion={solicitudesCancelacion}
       puedeCancelar={sesion.permisos.has('utilidad.autorizar')}
       veAuditoria={sesion.permisos.has('auditoria.ver')}
+      solicitud={datosSolicitud && { datos: datosSolicitud, puedeGenerar: sesion.permisos.has('costos.ver') }}
       autorizacion={
         utilidades
           ? {
@@ -182,7 +197,7 @@ export default async function PaginaCotizacion({
           : null
       }
       tipoOportunidad={cotizacion.oportunidad?.tipo ?? 'arrendamiento'}
-      pasoInicial={PASOS[paso ?? ''] ?? PASO_POR_ESTADO[revision.estado] ?? 1}
+      pasoInicial={pasoInicial}
     />
   );
 }

@@ -83,6 +83,8 @@ export const PASOS_WIZARD = [
   // después de autorizada.
   { corto: 'Condiciones', largo: 'Condiciones comerciales' },
   { corto: 'Autorización', largo: 'Margen y autorización' },
+  // Con los precios autorizados, el formato para pedir la corrida al mayorista del arrendamiento (2026-10-23).
+  { corto: 'Solicitud', largo: 'Solicitud de corrida' },
   // Después de autorizar precios, los esquemas de financiamiento por propuesta (2026-10-05).
   { corto: 'Financiamiento', largo: 'Propuesta de financiamiento' },
   { corto: 'Vista previa', largo: 'Vista previa' },

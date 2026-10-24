@@ -8,3 +8,4 @@ apps/mobile/dist
 apps/mobile/AGENTS.md
 .claude
 apps/web/next-env.d.ts
+apps/web/lib/excel/plantillas.generado.ts

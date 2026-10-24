@@ -372,3 +372,13 @@ describe('detalles de narración', () => {
     expect(orden!.verbo).toBe('reordenó la condición');
   });
 });
+
+describe('solicitud de corrida en la auditoría', () => {
+  it('se narra con su formato y plazos', () => {
+    const [a] = agruparAuditoria([
+      fila({ tabla: 'solicitudes_corrida', accion: 'INSERT', despues: { formato: 'ct', plazos: [36, 48] } }),
+    ]);
+    expect(a).toMatchObject({ verbo: 'generó la solicitud de corrida de la', objeto: 'Rev A' });
+    expect(a!.contexto).toBe('CELMISOLUTIONS-2026001271 · LYON DIGITAL · Formato de CT · 36, 48 meses');
+  });
+});

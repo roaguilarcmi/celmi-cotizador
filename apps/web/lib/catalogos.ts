@@ -1,6 +1,6 @@
 /** Definición de los catálogos editables: misma configuración para la pantalla y para la validación del servidor. */
 
-export type TipoCampo = 'texto' | 'entero' | 'si_no' | 'lista_enteros' | 'lista_textos';
+export type TipoCampo = 'texto' | 'entero' | 'si_no' | 'lista_enteros' | 'lista_textos' | 'opcion';
 
 export interface CampoCatalogo {
   id: string;
@@ -11,6 +11,8 @@ export interface CampoCatalogo {
   ayuda?: string;
   /** Largo máximo del texto (120 por omisión). */
   max?: number;
+  /** Tipo «opcion»: valores permitidos; «» (sin valor) se guarda como null. */
+  opciones?: { valor: string; texto: string }[];
 }
 
 export interface DefinicionCatalogo {
@@ -54,6 +56,18 @@ export const CATALOGOS: DefinicionCatalogo[] = [
         etiqueta: 'Arrendamiento',
         tipo: 'si_no',
         ayuda: 'Trabajamos arrendamientos con él',
+      },
+      // 2026-10-23: formato con el que se le pide la corrida financiera (sin valor, el formato propio de CELMI).
+      {
+        id: 'formato_arrendamiento',
+        etiqueta: 'Formato de solicitud',
+        tipo: 'opcion',
+        ancho: 'w-40',
+        opciones: [
+          { valor: '', texto: 'CELMI' },
+          { valor: 'ct', texto: 'CT' },
+          { valor: 'ingram', texto: 'Ingram' },
+        ],
       },
     ],
   },

@@ -9,3 +9,4 @@ export * from './vigencia';
 export * from './financiamiento';
 export * from './corrida-financiera';
 export * from './auditoria';
+export * from './solicitud-corrida';

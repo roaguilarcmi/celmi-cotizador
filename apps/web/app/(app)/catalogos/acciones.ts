@@ -22,6 +22,12 @@ function leerCampos(tabla: string, valores: Record<string, string | boolean>) {
       continue;
     }
     const texto = String(v ?? '').trim();
+    if (c.tipo === 'opcion') {
+      if (!(c.opciones ?? []).some((o) => o.valor === texto))
+        return { error: `«${c.etiqueta}» no es válido.` };
+      fila[c.id] = texto || null;
+      continue;
+    }
     if (c.requerido && !texto) return { error: `Falta «${c.etiqueta}».` };
     if (c.tipo === 'entero') {
       if (!/^\d{1,4}$/.test(texto)) return { error: `«${c.etiqueta}» debe ser un número entero.` };

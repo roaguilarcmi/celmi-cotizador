@@ -176,6 +176,8 @@ function FilaRegistro({
                 No
               </Pill>
             )
+          ) : c.tipo === 'opcion' ? (
+            ((c.opciones ?? []).find((o) => o.valor === String(v))?.texto ?? '—')
           ) : (
             String(v) || '—'
           )}
@@ -196,6 +198,19 @@ function FilaRegistro({
             onChange={(e) => setValores((s) => ({ ...s, [c.id]: e.target.checked }))}
             className="size-5 align-middle accent-[var(--c-acento)]"
           />
+        ) : c.tipo === 'opcion' ? (
+          <select
+            id={`${def.tabla}-${clave ?? 'nuevo'}-${c.id}`}
+            value={String(v)}
+            onChange={(e) => setValores((s) => ({ ...s, [c.id]: e.target.value }))}
+            className={`h-10 rounded-sm border border-borde bg-superficie px-2.5 text-sm text-texto outline-none focus:border-acento ${c.ancho ?? 'w-full min-w-40'}`}
+          >
+            {(c.opciones ?? []).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.texto}
+              </option>
+            ))}
+          </select>
         ) : (
           <input
             id={`${def.tabla}-${clave ?? 'nuevo'}-${c.id}`}

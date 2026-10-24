@@ -40,6 +40,8 @@ import type { TipoCambioDof } from '@/lib/dof';
 import { PasoCondiciones } from './PasoCondiciones';
 import { PasoEmision, PasoVistaPrevia } from './PasoEmision';
 import { PasoFinanciamiento } from './PasoFinanciamiento';
+import { PasoSolicitudCorrida } from './PasoSolicitudCorrida';
+import type { DatosPasoSolicitud } from '@/lib/solicitud-corrida-datos';
 import { VentanaPartida } from './FormularioPartida';
 import { PegarExcel } from './PegarExcel';
 import { TablaPartidas } from './TablaPartidas';
@@ -48,7 +50,7 @@ import { TablaPartidas } from './TablaPartidas';
  * Pasos del wizard propios de la cotización (decisiones 2026-10-05): 1 Partidas y costos · 2 Condiciones ·
  * 3 Autorización · 4 Financiamiento · 5 Vista previa · 6 Emisión (Fase 4). (0 es la oportunidad.)
  */
-export type Paso = 1 | 2 | 3 | 4 | 5 | 6;
+export type Paso = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const fechaRetiro = new Intl.DateTimeFormat('es-MX', {
   dateStyle: 'medium',
@@ -72,6 +74,7 @@ export function EditorCotizacion({
   solicitudesCancelacion,
   puedeCancelar,
   veAuditoria,
+  solicitud,
   tipoOportunidad,
   autorizacion,
 }: {
@@ -92,6 +95,8 @@ export function EditorCotizacion({
   puedeCancelar: boolean;
   /** Con auditoria.ver: enlace al expediente completo desde «Actividad». */
   veAuditoria: boolean;
+  /** Paso «Solicitud de corrida» (arrendamiento y crédito simple autorizados); null si no aplica. */
+  solicitud: { datos: DatosPasoSolicitud; puedeGenerar: boolean } | null;
   tipoOportunidad: TipoOportunidad;
   /** Sólo para quien ve la utilidad: la corrida de precios (Fase 3C). */
   autorizacion: {
@@ -295,10 +300,11 @@ export function EditorCotizacion({
         <PasosWizard
           actual={paso}
           // Vista previa y emisión, cuando los precios están autorizados (Fase 4).
+          // Solicitud de corrida (4): sólo arrendamiento y crédito simple con precios autorizados (2026-10-23).
           disponibles={
             revision.estado === 'autorizada' || revision.estado === 'emitida'
-              ? [1, 2, 3, 4, 5, 6]
-              : [1, 2, 3, 4]
+              ? [1, 2, 3, ...(solicitud ? [4] : []), 5, 6, 7]
+              : [1, 2, 3, 5]
           }
           alElegir={(p) => irA(p as Paso)}
         />
@@ -489,7 +495,17 @@ export function EditorCotizacion({
           paquetes={paquetes}
         />
       )}
-      {paso === 4 && (
+      {paso === 4 && solicitud && (
+        <PasoSolicitudCorrida
+          revision={revision}
+          cotizacionId={cotizacion.id}
+          catalogos={catalogos}
+          datos={solicitud.datos}
+          puedeGenerar={solicitud.puedeGenerar}
+          onSiguiente={() => irA(5)}
+        />
+      )}
+      {paso === 5 && (
         <PasoFinanciamiento
           revision={revision}
           cotizacionId={cotizacion.id}
@@ -500,8 +516,8 @@ export function EditorCotizacion({
           tipoOportunidad={revision.esquema ?? tipoOportunidad}
         />
       )}
-      {paso === 5 && <PasoVistaPrevia revision={revision} cotizacionId={cotizacion.id} />}
-      {paso === 6 && (
+      {paso === 6 && <PasoVistaPrevia revision={revision} cotizacionId={cotizacion.id} />}
+      {paso === 7 && (
         <PasoEmision
           cotizacion={cotizacion}
           revision={revision}
@@ -511,10 +527,10 @@ export function EditorCotizacion({
           puedeAutorizar={puedeCancelar}
         />
       )}
-      {(paso === 4 || paso === 5) && (revision.estado === 'autorizada' || revision.estado === 'emitida') && (
+      {(paso === 5 || paso === 6) && (revision.estado === 'autorizada' || revision.estado === 'emitida') && (
         <div className="mt-4 flex justify-end">
           <Boton variante="paso" iconoFinal="derecha" onClick={() => irA((paso + 1) as Paso)}>
-            {paso === 4 ? 'Siguiente: Vista previa' : 'Siguiente: Emisión'}
+            {paso === 5 ? 'Siguiente: Vista previa' : 'Siguiente: Emisión'}
           </Boton>
         </div>
       )}

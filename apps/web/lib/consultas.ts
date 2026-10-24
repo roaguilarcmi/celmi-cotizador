@@ -45,7 +45,7 @@ export const CONSULTAS = {
       ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(nombre))),
     propuestas(id, partidas(id, cantidad, partida_padre_id, presentacion,
       costo:partida_costos(costo_unitario, moneda)))`,
-  mayoristas: 'id, nombre, activo, trabaja_arrendamiento',
+  mayoristas: 'id, nombre, activo, trabaja_arrendamiento, formato_arrendamiento',
   unidades: 'id, nombre, abreviatura, activa',
   monedas: 'codigo, nombre, activa',
   condiciones: 'id, nombre, contenido, orden, activa',
@@ -64,6 +64,12 @@ export const CONSULTAS = {
     solicitante:perfiles!solicitudes_cancelacion_solicitada_por_fkey(nombre),
     revision:revisiones(folio, cotizacion_id,
       cotizacion:cotizaciones(oportunidad:oportunidades(nombre, cliente:clientes(razon_social))))`,
+  cotizacionSolicitud: `id, folio,
+    oportunidad:oportunidades(nombre, estado_entrega, cliente:clientes(razon_social, rfc),
+      ejecutivo:perfiles!oportunidades_ejecutivo_id_fkey(nombre, puesto, correo, telefono))`,
+  solicitudesCorrida: `id, propuesta_id, formato, plazos, esquemas, presentacion, generada_en,
+    autor:perfiles!solicitudes_corrida_generada_por_fkey(nombre)`,
+  categorias: 'sku, categoria',
 } as const;
 
 /** Tabla de cada consulta (para la verificación). */
@@ -93,4 +99,7 @@ export const TABLA_DE_CONSULTA: Record<keyof typeof CONSULTAS, string> = {
   notificaciones: 'notificaciones',
   cotizacionPdf: 'cotizaciones',
   solicitudesCancelacion: 'solicitudes_cancelacion',
+  cotizacionSolicitud: 'cotizaciones',
+  solicitudesCorrida: 'solicitudes_corrida',
+  categorias: 'categorias_producto',
 };
