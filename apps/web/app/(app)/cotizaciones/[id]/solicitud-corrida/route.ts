@@ -10,6 +10,7 @@ import {
 import { CONSULTAS } from '@/lib/consultas';
 import { listarCatalogosCotizacion, listarTiposCambio, obtenerRevision } from '@/lib/datos';
 import { excelCelmi, excelCt, excelIngram, type DatosExcel } from '@/lib/excel/formatos';
+import { mismoOrigen } from '@/lib/peticiones';
 import { exigirPermiso } from '@/lib/sesion';
 import {
   aplicaSolicitud,
@@ -78,9 +79,10 @@ const disposicion = (nombre: string) =>
 
 export async function POST(peticion: Request, { params }: { params: Promise<{ id: string }> }) {
   const sesion = await exigirPermiso('costos.ver');
-  // Sólo desde el propio cotizador (las acciones con cookies no se aceptan desde otros sitios).
-  const origen = peticion.headers.get('origin');
-  if (!origen || origen !== new URL(peticion.url).origin) return error('Solicitud no permitida', 403);
+  // Sólo desde el propio cotizador (las acciones con cookies no se aceptan desde otros sitios). Se compara con el
+  // servidor al que llegó la petición (Host): `peticion.url` de Next.js dice «localhost» aunque se entre por
+  // 127.0.0.1, y en Netlify el dominio público llega en x-forwarded-host.
+  if (!mismoOrigen(peticion)) return error('Solicitud no permitida', 403);
   const { id } = await params;
   const pedido = leerPedido(await peticion.json().catch(() => null));
   if (!esUuid(id) || !pedido) return error('Datos de la solicitud no válidos');
